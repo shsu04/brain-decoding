@@ -1,0 +1,12 @@
+name: brain
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.11.7
+  - pytorch=2.1.0=*cuda*
+  - pytorch-cuda=11.8
+  - torchvision
+  - torchaudio
+  - bitsandbytes>=0.41.1
