@@ -1,152 +1,184 @@
-# from itertools import product
-# import json
-# import os
-# import pandas as pd
-# import mne_bids
-# import copy
-# import mne
-# from warnings import filterwarnings
+from itertools import product
+import json
+import os
+import pandas as pd
+import mne_bids
+import copy
+import mne
+from warnings import filterwarnings
+import shutil
 
-# from studies.study import Study
+from studies.study import Study
+
+filterwarnings("ignore")
 
 
-# class Schoffelen(Study):
+class Schoffelen(Study):
 
-#     def __init__(self, path: str = "data/schoffelen"):
-#         root_dir = os.path.join(os.getcwd(), path)
-#         assert os.path.exists(root_dir), f"{root_dir} does not exist"
+    def __init__(self, path: str = "data/schoffelen"):
+        root_dir = os.path.join(os.getcwd(), path)
+        assert os.path.exists(root_dir), f"{root_dir} does not exist"
 
-#         self.root_dir = root_dir
-#         self.subjects_info = pd.read_csv(
-#             os.path.join(self.root_dir, "participants.tsv"), sep="\t"
-#         )
+        self.root_dir = root_dir
+        self.cache_dir = os.path.join(os.getcwd(), "cache", "schoffelen")
 
-#         # Subject IDs list in string form, e.g. 000, 001, etc.
-#         self.subjects_list = (
-#             self.subjects_info["participant_id"].str.split("-").str[1].tolist()
-#         )
+        # Clear cache
+        if os.path.exists(self.cache_dir):
+            shutil.rmtree(self.cache_dir)
 
-#         self.sessions = ["compr"]
-#         self.tasks = [
-#             "001",
-#             "002",
-#             "003",
-#             "004",
-#             "005",
-#             "006",
-#             "007",
-#             "008",
-#             "009",
-#             "010",
-#         ]
+        # Create cache directory
+        if not os.path.exists(self.cache_dir):
+            os.makedirs(self.cache_dir)
 
-#         self.recordings = {f"{i}": [[] for _ in range(10)] for i in self.subjects_list}
+        self.subjects_info = pd.read_csv(
+            os.path.join(self.root_dir, "participants.tsv"), sep="\t"
+        )
+        # Subject IDs list in string form, e.g. 000, 001, etc.
+        self.subjects_list = (
+            self.subjects_info["participant_id"].str.split("-").str[1].tolist()
+        )
 
-#         for subject, session, task in product(
-#             self.subjects_list, self.sessions, self.tasks
-#         ):
-#             # Task and session are swapped in the BIDSPath, since in
-#             # this study the naming convention is swapped
+        self.sessions = ["compr"]  # Not taking empty room
+        self.tasks = [
+            "001",
+            "002",
+            "003",
+            "004",
+            "005",
+            "006",
+            "007",
+            "008",
+            "009",
+            "010",
+        ]
 
-#             bids_path = mne_bids.BIDSPath(
-#                 subject=subject,
-#                 session=task,
-#                 task=session,
-#                 root=self.root_dir,
-#             )
+        self.recordings = [
+            [[] for _ in range(len(self.tasks))] for i in range(len(self.subjects_list))
+        ]
 
-#             if not bids_path.fpath.exists():
-#                 raise FileNotFoundError(f"{bids_path.fpath} does not exist")
+        for subject, task, session in product(
+            [i for i in range(len(self.subjects_list))],
+            [i for i in range(len(self.tasks))],
+            [i for i in range(len(self.sessions))],
+        ):
+            # Task and session are swapped in the BIDSPath, since in
+            # this study the naming convention is swapped
 
-#             self.recordings[subject][int(task) - 1].append(bids_path)
+            bids_path = mne_bids.BIDSPath(
+                subject=self.subjects_list[subject],
+                session=self.tasks[task],
+                task=self.sessions[session],
+                root=self.root_dir,
+            )
 
-#         # The only valid channel types in this study
-#         self.types = [
-#             "MLC",
-#             "MLF",
-#             "MLO",
-#             "MLP",
-#             "MLT",
-#             "MRC",
-#             "MRF",
-#             "MRO",
-#             "MRP",
-#             "MRT",
-#             "MZC",
-#             "MZF",
-#             "MZO",
-#             "MZP",
-#         ]
+            if not bids_path.fpath.exists():
+                raise FileNotFoundError(f"{bids_path.fpath} does not exist")
 
-#         self.stimuli_type = "audio"
-#         self.source_link = "https://www.nature.com/articles/s41597-022-01382-7"
-#         super(Schoffelen, self).__init__()
+            self.recordings[subject][task].append(bids_path)
 
-#     def clean_recording(
-#         self, subject: str, task: int, session, n_jobs: int = None,
-#     ) -> tuple[pd.DataFrame, pd.DataFrame]:
-#         """Returns the clean recording containing MEG channels and the relevant events.
+        # The only valid channel types in this study
+        self.types = [
+            "MLC",
+            "MLF",
+            "MLO",
+            "MLP",
+            "MLT",
+            "MRC",
+            "MRF",
+            "MRO",
+            "MRP",
+            "MRT",
+            "MZC",
+            "MZF",
+            "MZO",
+            "MZP",
+        ]
 
-#         Arguments:
-#             subject -- subject ID (e.g. '01')
-#             task -- task number (e.g. 0)
-#             session -- session number (e.g. 0)
+        self.stimuli_type = "audio"
+        self.source_link = "https://www.nature.com/articles/s41597-022-01382-7"
+        super(Schoffelen, self).__init__()
 
-#         Returns:
-#             tuple of:
-#                 raw -- mne.io.Raw containing the MEG data, notch filtered at 50, 100, 150, 200, 300, 400 Hz
-#                 word_events -- DataFrame containing the word events. Columns are 'onset', 'duration', 'word'
-#                 sound_events -- DataFrame containing the sound events. Columns are 'onset', 'sound', 'start'
-#                     onset is event marker in the brain data, start is the onset in the audio file
-#         """
-#         # Schoffelen has only one session
-#         bids_path = self.recordings[subject][task][0]
-#         raw = mne.read_raw(bids_path, verbose=False)
-#         # plot psd
-#         raw.compute_psd().plot()
+    def clean_recording(
+        self,
+        subject: int,
+        task: int,
+        session,
+        n_jobs: int = None,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Returns the clean recording containing MEG channels and the relevant events.
 
-#         if not hasattr(self, "old_sample_rate"):
-#             self.old_sample_rate = raw.info["sfreq"]
-#         if not hasattr(self, "info"):
-#             self.info = raw.info
+        Arguments:
+            subject -- subject number (e.g. 0)
+            task -- task number (e.g. 0)
+            session -- session number (e.g. 0)
 
-#         if not hasattr(self, "channel_names"):
-#             self.channel_names = [
-#                 channel
-#                 for channel in raw.ch_names
-#                 if any([type in channel for type in self.types])
-#             ]
+        Returns:
+            tuple of:
+                raw -- mne.io.Raw containing the MEG data, notch filtered at 50, 100, 150, 200, 300, 400 Hz
+                word_events -- DataFrame containing the word events. Columns are 'onset', 'duration', 'word'
+                sound_events -- DataFrame containing the sound events. Columns are 'onset', 'sound', 'end'
+                    onset is event marker in the brain data, start is the onset in the audio file
+        """
+        bids_path = self.recordings[subject][task][session]
+        raw = mne_bids.read_raw_bids(bids_path, verbose=False)
 
-#         raw = raw.pick(picks=self.channel_names, verbose=False).load_data(verbose=False)
-# # Determined by visual inspection of the data
-# raw = raw.notch_filter(
-#     freqs=[50, 100, 150, 200, 300, 400], verbose=False, n_jobs=n_jobs
-# )
-# # The time columns
-# time = pd.Series(raw.times, name="time")
-# # Filter to only contain relevant channels, reshape df from [Ch, Time] to [Time, Ch]
-# raw_df = pd.concat(
-#     [time, pd.DataFrame(raw.get_data(picks=self.channel_names)).T], axis=1
-# )
+        if not hasattr(self, "old_sample_rate"):
+            self.old_sample_rate = raw.info["sfreq"]
+        if not hasattr(self, "info"):
+            self.info = raw.info
+        # Not all channels are relevant in this study
+        if not hasattr(self, "channel_names"):
+            self.channel_names = [
+                channel
+                for channel in raw.ch_names
+                if any([type in channel for type in self.types])
+            ]
 
-# events_path = bids_path.copy().update(suffix="events", extension=".tsv")
+        # Filter to only contain relevant channels
+        raw = raw.load_data(verbose=False)
+        # Determined by visual inspection of the data, exclude powerline noise
+        raw = raw.notch_filter(
+            freqs=[50, 100, 150, 200, 300, 400], verbose=False, n_jobs=n_jobs
+        )
+        raw = raw.pick(picks=self.channel_names, verbose=False)
 
-# # We do this since this study does not have complete events from the mne.Raw object
-# annotations_df = pd.read_csv(
-#     str(events_path.directory) + "/meg/" + events_path.basename, sep="\t"
-# )
-# # Filter out phonemes and other irrelevant annotations
-# annotations_df = annotations_df[
-#     annotations_df["type"].str.contains("word_onset")
-# ].drop(columns=["sample", "type"])
+        # We do this since this study does not have complete events from the mne.Raw object
+        events_path = bids_path.copy().update(suffix="events", extension=".tsv")
+        annotations_df = pd.read_csv(
+            str(events_path.directory) + "/meg/" + events_path.basename, sep="\t"
+        )
+        word_events, sound_events = copy.deepcopy(annotations_df), copy.deepcopy(
+            annotations_df
+        )
 
-# # Rename to match GWilliams
-# annotations_df.columns = ["onset", "duration", "word"]
+        # Filter out phonemes and other irrelevant annotations
+        word_events = word_events[word_events["type"].str.contains("word_onset")].drop(
+            columns=["sample", "type"]
+        )
 
-# annotations_df["word"] = annotations_df["word"].apply(lambda x: x.lower())
-# # 'sp' is recurrent, but author did not provide explaination
-# annotations_df = annotations_df[annotations_df["word"] != "sp"].reset_index(
-#     drop=True
-# )
+        # Rename to match GWilliams
+        word_events.columns = ["onset", "duration", "word"]
 
-# return raw_df, annotations_df
+        word_events["word"] = word_events["word"].apply(lambda x: x.lower())
+        # 'sp' is recurrent, but author did not provide explaination
+        word_events = word_events[word_events["word"] != "sp"].reset_index(drop=True)
+
+        # Start of audio and keep only valid audio files
+        sound_events = sound_events[
+            (sound_events["type"].str.contains("wav_onset"))
+            & (sound_events["value"] != str(100))
+        ].drop(columns=["duration", "sample", "type"])
+        # Phoneme onset where the next row is wav onset (end time of audio file)
+        end_times = annotations_df[
+            annotations_df["type"].str.contains("phoneme_onset")
+            & annotations_df["type"].shift(-1).str.contains("wav_onset")
+        ]
+        # So that columns are onset, sound, end
+        sound_events["end"] = end_times["onset"].values
+        # stimuli/{tasknum}_{num}.wav is the path to the audio file
+        sound_events["sound"] = sound_events["value"].apply(
+            lambda x: f"stimuli/{self.tasks[task][1:]}_{x[0]}.wav"
+        )
+        sound_events = sound_events.drop(columns=["value"])
+
+        return raw, word_events, sound_events

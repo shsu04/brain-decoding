@@ -8,4 +8,5 @@ data/*
 downloaded_data/*
 compressed_data/*
 decompressed_data/*
+cache/*
 saves/*
