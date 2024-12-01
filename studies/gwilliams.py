@@ -102,15 +102,16 @@ class GWilliams(Study):
                 channel for channel in raw.ch_names if any(["MEG" in channel])
             ]
 
+        # Filter to only contain relevant channels
+        raw = raw.pick(picks="meg", verbose=False)
+        if self.channel_names != raw.ch_names:
+            self.channel_names = raw.ch_names
         raw = raw.load_data(verbose=False)
+
         # Determined by visual inspection of the data, exclude powerline noise
         raw = raw.notch_filter(
             freqs=[50, 100, 150, 200, 300, 400], verbose=False, n_jobs=n_jobs
         )
-        raw = raw.pick(picks="meg", verbose=False)
-
-        if self.channel_names != raw.ch_names:
-            self.channel_names = raw.ch_names
 
         annotations_df = pd.DataFrame(raw.annotations)
         word_events, sound_events = copy.deepcopy(annotations_df), copy.deepcopy(

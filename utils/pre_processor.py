@@ -3,8 +3,8 @@ import numpy as np
 from transformers import AutoProcessor
 import librosa
 import torch
-import matplotlib.pyplot as plt
 import mne
+import typing as tp
 
 
 class PreProcessor:
@@ -28,6 +28,8 @@ class PreProcessor:
         super(PreProcessor, self).__init__()
         # Brain
         self.new_freq = brain_sample_rate
+        self.invalid_channel_names: tp.Set[str] = set()
+        self.INVALID = -0.1
 
         # Audio
         self.audio_model = audio_model
@@ -117,6 +119,47 @@ class PreProcessor:
             results[band] = raw_copy
 
         return results
+
+    def get_sensor_layout(self, raw: mne.io.Raw) -> torch.Tensor:
+        """Returns the mix-max scaled sensor locations of the neural recording.
+
+        Returns:
+            positions of the sensors in 2D space. Dim = [C, 2]
+        """
+        info = raw.info
+        layout = mne.find_layout(info)
+        indexes: tp.List[int] = []
+        valid_indexes: tp.List[int] = []
+
+        # Separate valid from invalid channels
+        for meg_index, name in enumerate(info.ch_names):
+            name = name.rsplit("-", 1)[0]
+            try:
+                indexes.append(layout.names.index(name))
+            except ValueError:
+                if name not in self.invalid_channel_names:
+                    print(
+                        f"Channels {name} not in layout",
+                    )
+                    self.invalid_channel_names.add(name)
+            else:
+                valid_indexes.append(meg_index)
+
+        # [C, 2]
+        positions = torch.full(size=(len(info.ch_names), 2), fill_value=self.INVALID)
+        # The unit-normalized channel position in 2d (x, y, width, height)
+        x, y = layout.pos[indexes, :2].T  # [2, C]
+
+        # Scale again relative to valid channels
+        x = (x - x.min()) / (x.max() - x.min())
+        y = (y - y.min()) / (y.max() - y.min())
+
+        x = torch.from_numpy(x).float()
+        y = torch.from_numpy(y).float()
+        positions[valid_indexes, 0] = x
+        positions[valid_indexes, 1] = y
+
+        return positions
 
     def pre_process_audio(
         self,

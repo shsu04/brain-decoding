@@ -9,4 +9,5 @@ dependencies:
   - pytorch-cuda=11.8
   - torchvision
   - torchaudio
+  - librosa
   - bitsandbytes>=0.41.1

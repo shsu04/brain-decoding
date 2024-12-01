@@ -120,7 +120,7 @@ class Schoffelen(Study):
                     onset is event marker in the brain data, start is the onset in the audio file
         """
         bids_path = self.recordings[subject][task][session]
-        raw = mne_bids.read_raw_bids(bids_path, verbose=False)
+        raw = mne.io.read_raw(bids_path, verbose=False)
 
         if not hasattr(self, "old_sample_rate"):
             self.old_sample_rate = raw.info["sfreq"]
@@ -135,12 +135,13 @@ class Schoffelen(Study):
             ]
 
         # Filter to only contain relevant channels
+        raw = raw.pick(picks=self.channel_names, verbose=False)
         raw = raw.load_data(verbose=False)
+
         # Determined by visual inspection of the data, exclude powerline noise
         raw = raw.notch_filter(
             freqs=[50, 100, 150, 200, 300, 400], verbose=False, n_jobs=n_jobs
         )
-        raw = raw.pick(picks=self.channel_names, verbose=False)
 
         # We do this since this study does not have complete events from the mne.Raw object
         events_path = bids_path.copy().update(suffix="events", extension=".tsv")
