@@ -12,10 +12,10 @@ dependencies:
   - scikit-learn=1.4.1
   
   # Data handling and compression
-  - zstandard=0.22.0  # Added this for data compression
-  - pyarrow=14.0.2    # Added explicitly since it's used with datasets
+  - zstandard=0.22.0 
+  - pyarrow=14.0.2   
   
-  # Audio processing (direct if you're doing audio work)
+  # Audio processing
   - librosa=0.10.1
   
   # Development environment (direct)

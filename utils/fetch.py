@@ -103,7 +103,7 @@ def fetch_audio_and_brain_pairs(
         n_channels = data[band].shape[0]
         brain_segments[band] = torch.zeros(
             (n_windows, n_channels, window_size * pre_processor.new_freq),
-            dtype=data[band].dtype,
+            dtype=torch.float32,
         )
 
     # Extract windows for all bands

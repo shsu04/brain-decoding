@@ -64,7 +64,7 @@ class PreProcessor:
 
             raw_copy = raw.copy() if frequency_bands.__len__() > 1 else raw
 
-            # Band pass filter 0.5-100 Hz
+            # Band pass filter
             raw_copy = raw_copy.filter(
                 picks=channel_names,
                 l_freq=low,
@@ -78,7 +78,7 @@ class PreProcessor:
                 sfreq=self.new_freq, verbose=False, n_jobs=n_jobs
             )
 
-            # Baseline correction  by first 0.5 secs
+            # Baseline correction by first 0.5 secs
             raw_copy = raw_copy.apply_function(
                 lambda x: x - np.mean(x[: int(0.5 * self.new_freq)]),
                 picks=channel_names,
