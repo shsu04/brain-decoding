@@ -131,7 +131,7 @@ class GWilliams(Study):
 
         # Filter out events description to only contain sound and its onset in audio file
         sound_events["sound"] = sound_events["description"].apply(
-            lambda x: json.loads(x.replace("'", '"'))["sound"]
+            lambda x: json.loads(x.replace("'", '"'))["sound"].lower()
         )
         # So we only keep the path name in 'sound' column
         sound_events = sound_events[

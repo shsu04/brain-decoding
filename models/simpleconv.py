@@ -7,7 +7,6 @@
 from functools import partial
 import random
 import typing as tp
-from sympy import false
 import torch
 from config import SimpleConvConfig
 
