@@ -152,6 +152,7 @@ def decompress_directories(
     source_path: str,
     destination_path: str,
     checksum_file_name: str,
+    delete_compressed_files: bool = False,
     num_workers: int = None,
 ):
     """Decompresses directories from the source_path to the destination_path.
@@ -160,6 +161,7 @@ def decompress_directories(
     Parameters:
         source_path (str): The path containing compressed files and checksum file.
         destination_path (str): The path where decompressed files will be stored.
+        delete_compressed_files (bool): Whether to delete the compressed files after decompression, if successful.
         checksum_file_name (str): The name of the checksum file.
         num_workers (int or str, optional): Number of worker processes to use. If 'mac', multiprocessing is disabled.
 
@@ -251,3 +253,6 @@ def decompress_directories(
             print(f"{filename}: {error}")
     else:
         print("All files decompressed successfully.")
+        if delete_compressed_files:
+            print("Deleting compressed files...")
+            shutil.rmtree(source_path)
