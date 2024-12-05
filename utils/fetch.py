@@ -11,11 +11,13 @@ def fetch_audio_and_brain_pairs(
     subject: int,
     task: int,
     session: int,
-    max_random_shift: int,
+    max_random_shift: float,
     window_size: int,
+    window_stride: int,
     study: Study,
     pre_processor: PreProcessor,
     frequency_bands: dict = {"all": (0.5, 100)},
+    brain_clipping: int = 20,
     audio_sample_rate: int = 16000,
     hop_length: int = 160,
     n_jobs: int = -1,
@@ -30,6 +32,9 @@ def fetch_audio_and_brain_pairs(
     Keyword Arguments:
         frequency_bands -- dictionary of frequency bands tuple,
             brain segements will be returned for each band in the dictionary
+        brain_clipping -- standard deviation to clip the brain data to
+        audio_sample_rate -- sample rate for the audio data
+        hop_length -- hop length for the audio data
 
     Raises:
         ValueError: Number of brain and audio windows do not match. Skip batch.
@@ -80,7 +85,7 @@ def fetch_audio_and_brain_pairs(
                     start_time + window_size - audio_start_time,
                 )
             )
-            start_time += np.random.uniform(1, 1 + max_random_shift)  # some randomness
+            start_time += np.random.uniform(window_stride, window_stride + max_random_shift)  # some randomness
 
     # BRAIN
     results = pre_processor.pre_process_brain(
@@ -88,7 +93,7 @@ def fetch_audio_and_brain_pairs(
         channel_names=study.channel_names,
         n_jobs=n_jobs,
         frequency_bands=frequency_bands,
-        brain_clipping=20,
+        brain_clipping=brain_clipping,
     )
     # np array of time stamps corresponsing to brain data
     times = torch.from_numpy(results[list(frequency_bands.keys())[0]].times)
