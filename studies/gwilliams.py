@@ -74,6 +74,7 @@ class GWilliams(Study):
         subject: int,
         task: int,
         session: int,
+        notch_filter: bool = False,
         n_jobs: int = None,
     ) -> tuple[mne.io.Raw, pd.DataFrame, pd.DataFrame]:
         """Returns the clean recording containing MEG channels and the relevant events.
@@ -82,6 +83,7 @@ class GWilliams(Study):
             subject -- subject number (e.g. 0)
             task -- task number (e.g. 0)
             session -- session number (e.g. 0)
+            notch_filter -- whether to apply notch filter to the raw data to remove powerline
 
         Returns:
             tuple of:
@@ -108,10 +110,11 @@ class GWilliams(Study):
             self.channel_names = raw.ch_names
         raw = raw.load_data(verbose=False)
 
-        # Determined by visual inspection of the data, exclude powerline noise
-        raw = raw.notch_filter(
-            freqs=[50, 100, 150, 200, 300, 400], verbose=False, n_jobs=n_jobs
-        )
+        if notch_filter:
+            # Determined by visual inspection of the data, exclude powerline noise
+            raw = raw.notch_filter(
+                freqs=[50, 100, 150, 200, 300, 400], verbose=False, n_jobs=n_jobs
+            )
 
         annotations_df = pd.DataFrame(raw.annotations)
         word_events, sound_events = copy.deepcopy(annotations_df), copy.deepcopy(

@@ -103,6 +103,7 @@ class Schoffelen(Study):
         subject: int,
         task: int,
         session,
+        notch_filter: bool = False,
         n_jobs: int = None,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Returns the clean recording containing MEG channels and the relevant events.
@@ -111,6 +112,7 @@ class Schoffelen(Study):
             subject -- subject number (e.g. 0)
             task -- task number (e.g. 0)
             session -- session number (e.g. 0)
+            notch_filter -- whether to apply notch filter
 
         Returns:
             tuple of:
@@ -138,10 +140,11 @@ class Schoffelen(Study):
         raw = raw.pick(picks=self.channel_names, verbose=False)
         raw = raw.load_data(verbose=False)
 
-        # Determined by visual inspection of the data, exclude powerline noise
-        raw = raw.notch_filter(
-            freqs=[50, 100, 150, 200, 300, 400], verbose=False, n_jobs=n_jobs
-        )
+        if notch_filter:
+            # Determined by visual inspection of the data, exclude powerline noise
+            raw = raw.notch_filter(
+                freqs=[50, 100, 150, 200, 300, 400], verbose=False, n_jobs=n_jobs
+            )
 
         # We do this since this study does not have complete events from the mne.Raw object
         events_path = bids_path.copy().update(suffix="events", extension=".tsv")

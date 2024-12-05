@@ -18,6 +18,7 @@ def fetch_audio_and_brain_pairs(
     pre_processor: PreProcessor,
     frequency_bands: dict = {"all": (0.5, 100)},
     brain_clipping: int = 20,
+    notch_filter=False,
     audio_sample_rate: int = 16000,
     hop_length: int = 160,
     n_jobs: int = -1,
@@ -33,6 +34,7 @@ def fetch_audio_and_brain_pairs(
         frequency_bands -- dictionary of frequency bands tuple,
             brain segements will be returned for each band in the dictionary
         brain_clipping -- standard deviation to clip the brain data to
+        notch_filter -- whether to apply notch filter to the raw data to remove powerline
         audio_sample_rate -- sample rate for the audio data
         hop_length -- hop length for the audio data
 
@@ -53,7 +55,7 @@ def fetch_audio_and_brain_pairs(
 
     # Get attributes for the recording
     raw, word_events, sound_events = study.clean_recording(
-        subject, task, session, n_jobs=n_jobs
+        subject, task, session, n_jobs=n_jobs, notch_filter=notch_filter
     )
     layout = pre_processor.get_sensor_layout(raw)  # [C, 2]
 

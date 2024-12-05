@@ -40,6 +40,7 @@ class PreProcessor:
         channel_names: list[str],
         frequency_bands: dict = {"all": (0.5, 100)},
         brain_clipping: int = 20,
+        baseline_window: float = 0.5,
         n_jobs: int = None,
     ) -> dict[str, mne.io.Raw]:
         """
@@ -51,6 +52,7 @@ class PreProcessor:
             channel_names -- list of channel names to be used for pre-processing
             frequency_bands -- dictionary of frequency bands to filter to (default: {"all": (0.5, 100)})
             brain_clipping -- standard deviation to clip the brain data to (default: {20})
+            baseline_window -- window size for baseline correction in seconds (default: {0.5})
             n_jobs -- number of jobs to run in parallel
 
         Returns:
@@ -78,14 +80,15 @@ class PreProcessor:
                 sfreq=self.new_freq, verbose=False, n_jobs=n_jobs
             )
 
-            # Baseline correction by first 0.5 secs
-            raw_copy = raw_copy.apply_function(
-                lambda x: x - np.mean(x[: int(0.5 * self.new_freq)]),
-                picks=channel_names,
-                channel_wise=True,
-                verbose=False,
-                n_jobs=n_jobs,
-            )
+            if baseline_window:
+                # Baseline correction by first 0.5 secs
+                raw_copy = raw_copy.apply_function(
+                    lambda x: x - np.mean(x[: int(baseline_window * self.new_freq)]),
+                    picks=channel_names,
+                    channel_wise=True,
+                    verbose=False,
+                    n_jobs=n_jobs,
+                )
 
             # Robust scaling
             raw_copy = raw_copy.apply_function(
@@ -104,17 +107,17 @@ class PreProcessor:
                 verbose=False,
                 n_jobs=n_jobs,
             )
-
-            # Clamping
-            raw_copy = raw_copy.apply_function(
-                lambda x: np.clip(
-                    x, -brain_clipping, brain_clipping
-                ),  # Clip by multiples of standard deviations
-                picks=channel_names,
-                channel_wise=True,
-                verbose=False,
-                n_jobs=n_jobs,
-            )
+            if brain_clipping:
+                # Clipping
+                raw_copy = raw_copy.apply_function(
+                    lambda x: np.clip(
+                        x, -brain_clipping, brain_clipping
+                    ),  # Clip by multiples of standard deviations
+                    picks=channel_names,
+                    channel_wise=True,
+                    verbose=False,
+                    n_jobs=n_jobs,
+                )
 
             results[band] = raw_copy
 
