@@ -5,6 +5,7 @@ import torch
 import copy
 import numpy as np
 import os
+from transformers import WhisperFeatureExtractor
 
 
 def fetch_audio_and_brain_pairs(
@@ -18,9 +19,12 @@ def fetch_audio_and_brain_pairs(
     pre_processor: PreProcessor,
     frequency_bands: dict = {"all": (0.5, 100)},
     brain_clipping: int = 20,
+    baseline_window: float = 0.5,
+    new_freq: int = 100,
     notch_filter=False,
     audio_sample_rate: int = 16000,
     hop_length: int = 160,
+    audio_processor: str = "openai/whisper-large-v3",
     n_jobs: int = -1,
 ) -> tuple[dict[torch.Tensor], torch.Tensor, torch.Tensor]:
     """Fetches and pre-processes audio and brain data for a given subject,
@@ -37,6 +41,7 @@ def fetch_audio_and_brain_pairs(
         notch_filter -- whether to apply notch filter to the raw data to remove powerline
         audio_sample_rate -- sample rate for the audio data
         hop_length -- hop length for the audio data
+        audio_processor -- model to use for audio processing
 
     Raises:
         ValueError: Number of brain and audio windows do not match. Skip batch.
@@ -46,7 +51,9 @@ def fetch_audio_and_brain_pairs(
         audio_segments -- audio segments for the session [B, mel_bins, T]
         layout -- sensor layout for the session [C, 2]
     """
-    assert audio_sample_rate // hop_length == pre_processor.new_freq
+    assert audio_sample_rate // hop_length == new_freq
+
+    audio_processor = WhisperFeatureExtractor.from_pretrained(audio_processor)
 
     # See if cached
     if os.path.exists(f"{study.cache_dir}/{subject}_{task}_{session}.pt"):
@@ -87,15 +94,19 @@ def fetch_audio_and_brain_pairs(
                     start_time + window_size - audio_start_time,
                 )
             )
-            start_time += np.random.uniform(window_stride, window_stride + max_random_shift)  # some randomness
+            start_time += np.random.uniform(
+                window_stride, window_stride + max_random_shift
+            )  # some randomness
 
     # BRAIN
     results = pre_processor.pre_process_brain(
         raw,
         channel_names=study.channel_names,
-        n_jobs=n_jobs,
         frequency_bands=frequency_bands,
         brain_clipping=brain_clipping,
+        baseline_window=baseline_window,
+        new_freq=new_freq,
+        n_jobs=n_jobs,
     )
     # np array of time stamps corresponsing to brain data
     times = torch.from_numpy(results[list(frequency_bands.keys())[0]].times)
@@ -109,7 +120,7 @@ def fetch_audio_and_brain_pairs(
         data[band] = torch.from_numpy(results[band].get_data())  # [C, T]
         n_channels = data[band].shape[0]
         brain_segments[band] = torch.zeros(
-            (n_windows, n_channels, window_size * pre_processor.new_freq),
+            (n_windows, n_channels, window_size * new_freq),
             dtype=torch.float32,
         )
 
@@ -121,7 +132,7 @@ def fetch_audio_and_brain_pairs(
         for band in frequency_bands.keys():
             window = data[band][:, mask]  # Extract window
             brain_segments[band][i] = window[
-                :, : window_size * pre_processor.new_freq
+                :, : window_size * new_freq
             ]  # Truncate to [C, T]
 
     # AUDIO
@@ -130,10 +141,12 @@ def fetch_audio_and_brain_pairs(
     for sound_file in sorted(sound_events["sound"].unique()):
 
         audio_segment = pre_processor.pre_process_audio(
-            path=os.path.join(study.root_dir, sound_file),
+            audio=study.audio_cache[sound_file],
             window_size=window_size,
+            audio_processor=audio_processor,
             hop_length=hop_length,
             time_stamps=audio_window_timestamps[sound_file],
+            audio_sample_rate=audio_sample_rate,
         )  # [B, mel_bins, T]
         audio_segment = audio_segment[
             :, :, : int(window_size * audio_sample_rate / hop_length)

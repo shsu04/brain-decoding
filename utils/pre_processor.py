@@ -1,6 +1,5 @@
 from sklearn.preprocessing import RobustScaler, StandardScaler
 import numpy as np
-from transformers import AutoProcessor
 import librosa
 import torch
 import mne
@@ -10,10 +9,6 @@ import typing as tp
 class PreProcessor:
     def __init__(
         self,
-        # Brain
-        brain_sample_rate: int = 100,
-        # Audio
-        audio_model: str = "openai/whisper-large-v3",
     ):
         """Pre-processes the brain and target data type.
 
@@ -26,13 +21,7 @@ class PreProcessor:
             audio_hop_length -- hop length for the audio data (default: {160})
         """
         super(PreProcessor, self).__init__()
-        # Brain
-        self.new_freq = brain_sample_rate
-        self.invalid_channel_names: tp.Set[str] = set()
         self.INVALID = -0.1
-
-        # Audio
-        self.audio_model = audio_model
 
     def pre_process_brain(
         self,
@@ -41,6 +30,7 @@ class PreProcessor:
         frequency_bands: dict = {"all": (0.5, 100)},
         brain_clipping: int = 20,
         baseline_window: float = 0.5,
+        new_freq: int = 100,
         n_jobs: int = None,
     ) -> dict[str, mne.io.Raw]:
         """
@@ -53,6 +43,7 @@ class PreProcessor:
             frequency_bands -- dictionary of frequency bands to filter to (default: {"all": (0.5, 100)})
             brain_clipping -- standard deviation to clip the brain data to (default: {20})
             baseline_window -- window size for baseline correction in seconds (default: {0.5})
+            new_freq -- new frequency to downsample the data to (default: {100})
             n_jobs -- number of jobs to run in parallel
 
         Returns:
@@ -76,14 +67,12 @@ class PreProcessor:
             )
 
             # Downsample
-            raw_copy = raw_copy.resample(
-                sfreq=self.new_freq, verbose=False, n_jobs=n_jobs
-            )
+            raw_copy = raw_copy.resample(sfreq=new_freq, verbose=False, n_jobs=n_jobs)
 
             if baseline_window:
                 # Baseline correction by first 0.5 secs
                 raw_copy = raw_copy.apply_function(
-                    lambda x: x - np.mean(x[: int(baseline_window * self.new_freq)]),
+                    lambda x: x - np.mean(x[: int(baseline_window * new_freq)]),
                     picks=channel_names,
                     channel_wise=True,
                     verbose=False,
@@ -140,11 +129,9 @@ class PreProcessor:
             try:
                 indexes.append(layout.names.index(name))
             except ValueError:
-                if name not in self.invalid_channel_names:
-                    print(
-                        f"Channels {name} not in layout",
-                    )
-                    self.invalid_channel_names.add(name)
+                print(
+                    f"Channels {name} not in layout",
+                )
             else:
                 valid_indexes.append(meg_index)
 
@@ -166,20 +153,22 @@ class PreProcessor:
 
     def pre_process_audio(
         self,
-        path: str,
+        audio: np.ndarray,
+        audio_processor,
         window_size: int = 4,
         hop_length: int = 160,
         audio_sample_rate: int = 16000,
         time_stamps: list[tuple[float, float]] = [(0.5, 1.5)],
     ) -> dict[str, torch.Tensor]:
-        """Pre-processes the audio data by loading the audio file, segmenting
-        it based on time stamps, returns Mel spectrogram features.
-        Number of time steps will be window_size * sample_rate / hop_length.
+        """Pre-processes the audio data by segmenting it based on time stamps,
+        returns Mel spectrogram features. Number of time steps will be
+        window_size * sample_rate / hop_length.
 
         Arguments:
-            path -- path to the audio file
+            audio -- audio data to be pre-processed
 
         Keyword Arguments:
+            audio_processor -- to obtain the mel spectrogram.
             time_stamps -- list of tuples containing the start and end time
             window_size -- window size for the audio data in seconds (default: {4})
             audio_sample_rate -- sample rate for the audio data (default: {16000})
@@ -189,13 +178,6 @@ class PreProcessor:
         Returns:
             inputs -- pre-processed audio data, size [B, mel_bins, T]
         """
-        # Only initialize the processor if this function is called for the first time
-        if not hasattr(self, "audio_processor"):
-            self.audio_processor = AutoProcessor.from_pretrained(self.audio_model)
-
-        audio, _ = librosa.load(path, sr=audio_sample_rate)
-        audio = audio.astype(np.float32)
-
         audio_segments = []
 
         # Get the audio segments based on the time stamps and sample rate
@@ -204,7 +186,7 @@ class PreProcessor:
             audio_segments.append(audio[start:end])
 
         # Batch process the audio segments
-        inputs = self.audio_processor(
+        inputs = audio_processor(
             audio_segments,
             sampling_rate=audio_sample_rate,
             return_tensors="pt",

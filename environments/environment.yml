@@ -33,4 +33,5 @@ dependencies:
     - tokenizers==0.15.2
     - mne==1.6.1  # Only if you're doing EEG/MEG analysis
     - mne-bids==0.14  # Only if you're doing EEG/MEG analysis
+    - ray
 
