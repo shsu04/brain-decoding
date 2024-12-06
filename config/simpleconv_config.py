@@ -35,8 +35,8 @@ class SimpleConvConfig(Config):
         # Dual path RNN
         dual_path: int = 0,
         # Dropouts, BN, activations
-        conv_dropout: float = 0.3,
-        dropout_input: float = 0.3,
+        conv_dropout: float = 0.2,
+        dropout_input: float = 0.2,
         batch_norm: bool = True,
         relu_leakiness: float = 0.0,
         # Subject specific settings

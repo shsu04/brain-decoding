@@ -20,6 +20,8 @@ class DataBatch:
 
 @ray.remote
 class DataFetcher:
+    """Fetches a single recording from an audio and brain pair dataset."""
+
     def __init__(
         self,
         studies: dict[str, Study],
@@ -193,7 +195,7 @@ class ParallelDataLoader:
         self.fetch_thread.start()
 
     def get_recording(self) -> Optional[DataBatch]:
-        """Get the next batch from the queue.
+        """Get the next recording from the queue.
 
         Returns:
             DataBatch or None if queue is empty and fetching is complete

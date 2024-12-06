@@ -154,26 +154,25 @@ class PreProcessor:
     def pre_process_audio(
         self,
         audio: np.ndarray,
+        time_stamps: list[tuple[float, float]],
         audio_processor,
         window_size: int = 4,
         hop_length: int = 160,
         audio_sample_rate: int = 16000,
-        time_stamps: list[tuple[float, float]] = [(0.5, 1.5)],
     ) -> dict[str, torch.Tensor]:
         """Pre-processes the audio data by segmenting it based on time stamps,
         returns Mel spectrogram features. Number of time steps will be
         window_size * sample_rate / hop_length.
 
         Arguments:
-            audio -- audio data to be pre-processed
+            audio -- audio data to be pre-processed: [T * sample_rate]
 
         Keyword Arguments:
-            audio_processor -- to obtain the mel spectrogram.
-            time_stamps -- list of tuples containing the start and end time
-            window_size -- window size for the audio data in seconds (default: {4})
-            audio_sample_rate -- sample rate for the audio data (default: {16000})
-            hop_length -- hop length for the audio data in time
-            stamps (default: {[(0.5, 1.5)]})
+            audio_processor -- Transforms the audio data into mel spectrogram
+            time_stamps -- list of tuples containing the start and end time of segments
+            window_size -- window size for the audio segments in seconds (default: {4})
+            audio_sample_rate -- sample rate for the audio (default: {16000})
+            hop_length -- hop length for the audio data in samples (default: {160})
 
         Returns:
             inputs -- pre-processed audio data, size [B, mel_bins, T]

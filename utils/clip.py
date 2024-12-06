@@ -13,7 +13,7 @@ class CLIPLoss(nn.module):
 
         Returns:
             clip_loss: torch.Tensor, shape [B]
-
+            metrics: dict[str, float]
         """
         assert x_1.size() == x_2.size()
 
@@ -27,9 +27,9 @@ class CLIPLoss(nn.module):
         targets = torch.arange(x_1.size(0), device=x_1.device)
 
         # Symmetric loss
-        x_1_loss = self.cross_entropy(logits, targets, reduction="mean")
-        x_2_loss = self.cross_entropy(logits.T, targets.T, reduction="mean")
-        clip_loss = (x_1_loss + x_2_loss) / 2  # Shape [B]
+        x_1_loss = self.cross_entropy(logits, targets, reduction="mean")  # [B]
+        x_2_loss = self.cross_entropy(logits.T, targets.T, reduction="mean")  # [B]
+        clip_loss = (x_1_loss + x_2_loss) / 2  # [B]
 
         return {
             "loss": clip_loss.mean(),  # Still on device
@@ -37,6 +37,18 @@ class CLIPLoss(nn.module):
         }
 
     def cross_entropy(self, preds, targets, reduction="none"):
+        """Computes cross entropy loss between preds and targets.
+
+        Arguments:
+            preds -- [B, B] tensor of predictions
+            targets -- [B] tensor of targets.
+
+        Keyword Arguments:
+            reduction -- "none" or "mean" (default: {"none"})
+
+        Returns:
+            loss -- [B] tensor of losses
+        """
         log_softmax = nn.LogSoftmax(dim=-1)
         loss = (-targets * log_softmax(preds)).sum(1)
         if reduction == "none":
@@ -48,9 +60,19 @@ class CLIPLoss(nn.module):
         self,
         logits: torch.Tensor,
     ) -> dict[str, float]:
-        """Gives evaluation metrics using CLIP loss logits. Top% correct.
-        Accuracy computed by total correct predictions / total predictions outside
-        of the function.
+        """
+        Gives evaluation metrics using CLIP loss logits. Top % correct.
+        Accuracy computed by total correct predictions / total predictions
+        outside of this function for precision reasons.
+
+        Brain prediction can be hard to classify, need more relaxed metrics
+        to track progress during training.
+
+        Args:
+            logits: torch.Tensor, shape [B, B]
+
+        Returns:
+            metrics: dict[str, float]
         """
 
         # Metrics

@@ -1,3 +1,7 @@
+"""
+Only need to call the function compress_directories and decompress_directories
+"""
+
 import os
 import zstandard as zstd
 from hashlib import sha256
