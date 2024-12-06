@@ -52,7 +52,7 @@ class DataFetcher:
         self.hop_length = hop_length
         self.n_jobs = n_jobs
 
-    def fetch_batch(
+    def fetch_recording(
         self, study_name: str, subject: int, task: int, session: int
     ) -> DataBatch:
 
@@ -171,7 +171,9 @@ class ParallelDataLoader:
                 self.current_worker = (self.current_worker + 1) % len(self.fetchers)
 
                 # launch fetch and store future
-                future = worker.fetch_batch.remote(study_name, subject, task, session)
+                future = worker.fetch_recording.remote(
+                    study_name, subject, task, session
+                )
                 self.pending_futures.append(future)
 
                 # Wait if buffer full
@@ -190,7 +192,7 @@ class ParallelDataLoader:
         self.fetch_thread = threading.Thread(target=_fetch_worker)
         self.fetch_thread.start()
 
-    def get_batch(self) -> Optional[DataBatch]:
+    def get_recording(self) -> Optional[DataBatch]:
         """Get the next batch from the queue.
 
         Returns:

@@ -30,6 +30,10 @@ class Study(ABC):
             raise AttributeError("Study must have a stimuli type attribute.")
         if not hasattr(self, "source_link"):
             raise AttributeError("Study must have a source_link attribute.")
+        if not hasattr(self, "channel_names"):
+            raise AttributeError(
+                "Study must have channel names for filtering and sensor position"
+            )
 
     @abstractmethod
     def clean_recording(
