@@ -31,7 +31,8 @@ dependencies:
   - pip:
     - datasets==2.17.0
     - tokenizers==0.15.2
-    - mne==1.6.1  # Only if you're doing EEG/MEG analysis
-    - mne-bids==0.14  # Only if you're doing EEG/MEG analysis
+    - mne==1.6.1 
+    - mne-bids==0.14 
     - ray
+    - ipywidgets
 
