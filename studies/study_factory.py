@@ -1,10 +1,10 @@
-from .gwilliams import GWilliams
-from .schoffelen import Schoffelen
+from .gwilliams2023 import GWilliams2023
+from .schoffelen2022 import Schoffelen2022
 from .study import Study
 
 STUDIES = {
-    "gwilliams": GWilliams,
-    "schoffelen": Schoffelen,
+    "gwilliams": GWilliams2023,
+    "schoffelen": Schoffelen2022,
 }
 
 
