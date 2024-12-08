@@ -2,16 +2,18 @@
 General parallel data loader for any DataBatch type.
 """
 
+from calendar import c
 import os
-import random
 import threading
 from queue import Queue
 from typing import Optional
 from librosa import ex
 import ray
+import multiprocessing
 
-from .batch import Batch, BatchFetcher
-from .audio_batch import AudioBatchFetcher, AudioBatch
+
+from .batch import Batch
+from .audio_batch import AudioBatchFetcher
 from studies import Recording
 
 # String names have to match recording types
@@ -78,8 +80,17 @@ class DataLoader:
         # Must've been created by the study
         assert os.path.exists(cache_dir), "Cache directory does not exist"
 
-        if not ray.is_initialized():
-            ray.init()
+        # If batch sizes total workers exceed cpu, reduce proportionally
+        actual_workers, requested_workers = multiprocessing.cpu_count(), sum(
+            batch_types.values()
+        )
+        if requested_workers > actual_workers:
+            ratio = actual_workers / requested_workers
+            print(
+                f"Total batch workers exceed resources. Reducing by ratio {ratio:.2f}"
+            )
+            for k in batch_types.keys():
+                batch_types[k] = int(batch_types[k] * ratio)
 
         self.buffer_size = buffer_size
         self.queue = Queue(maxsize=buffer_size)

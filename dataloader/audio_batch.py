@@ -22,7 +22,7 @@ from .batch import Batch, BatchFetcher
 class AudioBatch(Batch):
     brain_segments: dict[str, torch.Tensor]
     audio_segments: torch.Tensor
-    metadata: Recording
+    recording: Recording
 
 
 @ray.remote
