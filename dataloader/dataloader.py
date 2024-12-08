@@ -34,7 +34,7 @@ class DataLoader:
     def __init__(
         self,
         buffer_size: int,
-        max_cache_size: int,
+        max_cache_size_gb: float,
         cache_dir: str,
         # Common brain params shared by all batch types
         notch_filter: bool,
@@ -51,7 +51,7 @@ class DataLoader:
 
         Args:
             buffer_size -- size of the queue to store fetched data
-            max_cache_size -- maximum size of the cache in bytes
+            max_cache_size_gb -- maximum size of the cache in bytes
             cache_dir -- directory to store the cache
             notch_filter -- whether to apply notch filter to the raw data to remove powerline
             frequency_bands -- dictionary of frequency bands tuple,
@@ -76,7 +76,7 @@ class DataLoader:
         if batch_types.keys() != batch_kwargs.keys():
             raise ValueError("batch_types and batch_kwargs keys must match")
         assert buffer_size > 0, "Buffer size must be greater than 0"
-        assert max_cache_size > 30, "Max cache size must be greater than 30"
+        assert max_cache_size_gb > 30, "Max cache size must be greater than 30"
         # Must've been created by the study
         assert os.path.exists(cache_dir), "Cache directory does not exist"
 
@@ -95,7 +95,7 @@ class DataLoader:
         self.buffer_size = buffer_size
         self.queue = Queue(maxsize=buffer_size)
         self.stop_event = threading.Event()
-        self.max_cache_size = max_cache_size
+        self.max_cache_size_gb = max_cache_size_gb
         self.cache_dir = cache_dir
 
         # Dictionary of batch type to list of fetchers
@@ -151,7 +151,7 @@ class DataLoader:
                 current_cache_size = self.get_approximate_cache_size(self.cache_dir)
                 cache_flag = cache
 
-                if current_cache_size >= self.max_cache_size:
+                if current_cache_size >= self.max_cache_size_gb:
                     cache_flag = False
 
                 try:

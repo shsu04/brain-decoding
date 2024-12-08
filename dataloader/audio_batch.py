@@ -99,7 +99,7 @@ class AudioBatchFetcher(BatchFetcher):
             return AudioBatch(
                 brain_segments=loaded["brain"],
                 audio_segments=loaded["audio"],
-                metadata=recording,
+                recording=recording,
             )
 
         # Load the raw data
@@ -149,7 +149,7 @@ class AudioBatchFetcher(BatchFetcher):
             return AudioBatch(
                 brain_segments=brain_segments,
                 audio_segments=audio_segments,
-                metadata=recording,
+                recording=recording,
             )
 
         except Exception as e:
