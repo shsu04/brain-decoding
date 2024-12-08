@@ -1,4 +1,3 @@
-from abc import ABC
 import threading
 import os
 
@@ -6,7 +5,7 @@ import librosa
 import numpy as np
 
 
-class Stimuli(ABC):
+class Stimuli:
     """
     Thread-safe central manager, each study holds an instance of this class to avoid
     deadlock when each recording fetches stimuli, and to avoid duplicate caching.

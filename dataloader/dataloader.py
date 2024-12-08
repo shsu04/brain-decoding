@@ -137,12 +137,11 @@ class DataLoader:
                     continue
 
                 # Check cache size and adjust the cache flag
-                current_cache_size = get_cache_size(self.cache_dir)
+                current_cache_size = self.get_approximate_cache_size(self.cache_dir)
                 cache_flag = cache
 
-                while current_cache_size >= self.max_cache_size:
-                    delete_random_file(self.cache_dir)
-                    current_cache_size = get_cache_size(self.cache_dir)
+                if current_cache_size >= self.max_cache_size:
+                    cache_flag = False
 
                 try:
                     # Circular queue
@@ -151,12 +150,12 @@ class DataLoader:
                         self.fetchers[recording.type]
                     )
                     # launch fetch and store future
-                    future = worker.fetch.remote(recording, cache)
+                    future = worker.fetch.remote(recording, cache_flag)
                     self.pending_futures.append(future)
                 except ValueError as e:
                     # If message same as "...", print and skip
                     if "Number of brain and audio windows do not match" in str(e):
-                        print(f"Recording not found. Skipping {recording.cache_path}")
+                        print(f"Recording not found. Skipping {recording.cache_path}.")
                     else:
                         print(f"Error fetching {recording.cache_path}: {e}")
                 except Exception as e:
@@ -195,30 +194,14 @@ class DataLoader:
         if self.fetch_thread and self.fetch_thread.is_alive():
             self.fetch_thread.join()
 
-
-def get_cache_size(cache_dir):
-    """Calculate the total size of the cache directory in bytes."""
-    total_size = 0
-    for dirpath, _, filenames in os.walk(cache_dir):
-        for f in filenames:
-            fp = os.path.join(dirpath, f)
-            if os.path.exists(fp):
-                total_size += os.path.getsize(fp)
-    total_size_gb = total_size / (1024**3)  # Convert bytes to gigabytes
-    return total_size_gb
-
-
-def delete_random_file(cache_dir):
-    """Delete a random file from the cache directory."""
-    files = []
-    for dirpath, _, filenames in os.walk(cache_dir):
-        for f in filenames:
-            files.append(os.path.join(dirpath, f))
-
-    if files:
-        file_to_delete = random.choice(files)
+    def get_approximate_cache_size(self, cache_dir: str) -> float:
+        """Quick estimate of cache size in GB. Not thread safe, but fast."""
         try:
-            os.remove(file_to_delete)
-            print(f"Deleted cached file: {file_to_delete}")
-        except Exception as e:
-            print(f"Failed to delete file {file_to_delete}: {e}")
+            total_size = sum(
+                os.path.getsize(os.path.join(dirpath, f))
+                for dirpath, _, filenames in os.walk(cache_dir)
+                for f in filenames
+            )
+            return total_size / (1024**3)  # Convert to GB
+        except:
+            return 0  # If error reading size, assume safe to continue
