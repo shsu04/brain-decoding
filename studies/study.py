@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+import attr
 import mne
 import numpy as np
 import pandas as pd
@@ -45,6 +46,23 @@ class Study(ABC):
             raise AttributeError("Study must have recordings attribute.")
         if not hasattr(self, "stimuli"):
             raise AttributeError("Study must have stimuli attribute.")
+        if not hasattr(self, "batch_type"):
+            raise AttributeError("Study must have a batch type attribute.")
+
+    def recording_exists(self, subject: str, session: str, task: str) -> bool:
+        """Check if a recording exists for a given subject, session, and task."""
+        try:
+            exists = any(
+                [
+                    r.subject_id == subject
+                    and r.session_id == session
+                    and r.task_id == task
+                    for r in self.recordings
+                ]
+            )
+        except Exception as e:
+            exists = False
+        return exists
 
 
 class Recording(ABC):

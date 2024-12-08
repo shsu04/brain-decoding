@@ -54,6 +54,19 @@ class Stimuli(ABC):
         """
         self.cache = {}
 
+    def __getstate__(self):
+        """Return the state for pickling, excluding the lock"""
+        state = self.__dict__.copy()
+        # Remove the unpickleable lock
+        state.pop("lock", None)
+        return state
+
+    def __setstate__(self, state):
+        """Restore the state and recreate the lock"""
+        self.__dict__.update(state)
+        # Recreate the lock
+        self.lock = threading.Lock()
+
     def load_audio(self, name: str) -> np.ndarray:
         """
         Fetch the audio from the cache if it exists, otherwise load it from the disk.

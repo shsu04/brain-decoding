@@ -1,4 +1,4 @@
-from .study import Study
-from .study_factory import StudyFactory, STUDIES
+from .study import Study, Recording
+from .study_factory import StudyFactory
 
-__all__ = ["Study", "StudyFactory", "STUDIES"]
+__all__ = ["Study", "StudyFactory", "Recording"]

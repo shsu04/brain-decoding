@@ -23,45 +23,6 @@ class PreProcessor:
         super(PreProcessor, self).__init__()
         self.INVALID = -0.1
 
-    def get_sensor_layout(self, raw: mne.io.Raw) -> torch.Tensor:
-        """Returns the mix-max scaled sensor locations of the neural recording.
-
-        Returns:
-            positions of the sensors in 2D space. Dim = [C, 2]
-        """
-        info = raw.info
-        layout = mne.find_layout(info)
-        indexes: tp.List[int] = []
-        valid_indexes: tp.List[int] = []
-
-        # Separate valid from invalid channels
-        for meg_index, name in enumerate(info.ch_names):
-            name = name.rsplit("-", 1)[0]
-            try:
-                indexes.append(layout.names.index(name))
-            except ValueError:
-                print(
-                    f"Channels {name} not in layout",
-                )
-            else:
-                valid_indexes.append(meg_index)
-
-        # [C, 2]
-        positions = torch.full(size=(len(info.ch_names), 2), fill_value=self.INVALID)
-        # The unit-normalized channel position in 2d (x, y, width, height)
-        x, y = layout.pos[indexes, :2].T  # [2, C]
-
-        # Scale again relative to valid channels
-        x = (x - x.min()) / (x.max() - x.min())
-        y = (y - y.min()) / (y.max() - y.min())
-
-        x = torch.from_numpy(x).float()
-        y = torch.from_numpy(y).float()
-        positions[valid_indexes, 0] = x
-        positions[valid_indexes, 1] = y
-
-        return positions
-
     def pre_process_audio(
         self,
         audio: np.ndarray,

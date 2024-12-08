@@ -17,6 +17,7 @@ filterwarnings("ignore")
 class GWilliams2023(Study):
     def __init__(
         self,
+        batch_type: str,
         path: str = "data/gwilliams2023",
         cache_enabled: bool = True,
         max_cache_size: int = 100,
@@ -40,12 +41,6 @@ class GWilliams2023(Study):
         )
         self.sessions = [str(i) for i in range(2)]
         self.tasks = [str(i) for i in range(4)]  # story_uid
-
-        # Recordings is a 3D array, where the first dimension is the subject,
-        # the second dimension is the session, and the third dimension is the task.
-        self.recordings = [
-            [[] for _ in range(len(self.sessions))] for i in range(len(self.subjects))
-        ]
 
         self.channel_names = [
             "MEG 001",
@@ -259,6 +254,8 @@ class GWilliams2023(Study):
         ]
 
         self.source_link = "https://doi.org/10.1038/s41597-023-02752-5"
+        self.batch_type = batch_type
+        print(f"Loading {self.__class__.__name__} with batch type {self.batch_type}")
 
         # Load the thread-safe stimuli manager
         self.wav_paths = list(pathlib.Path(self.root_dir).rglob("*.wav"))
@@ -269,6 +266,11 @@ class GWilliams2023(Study):
             max_cache_size=max_cache_size,
         )
 
+        # Recordings is a 3D array, where the first dimension is the subject,
+        # the second dimension is the session, and the third dimension is the task.
+        self.recordings = [
+            [[] for _ in range(len(self.sessions))] for i in range(len(self.subjects))
+        ]
         # Create the recordings
         for subject, session, task in product(
             range(len(self.subjects)), range(len(self.sessions)), range(len(self.tasks))
@@ -290,7 +292,7 @@ class GWilliams2023(Study):
                 GWilliams2023Recording(
                     bids_path=bids_path,
                     cache_path=os.path.join(
-                        self.cache_dir, f"{subject}_{session}_{task}.pt"
+                        self.cache_dir, f"sub_{subject}_ses_{session}_task_{task}.pt"
                     ),
                     study_name="GWilliams2023",
                     subject_id=self.subjects[subject],
@@ -299,7 +301,7 @@ class GWilliams2023(Study):
                     channel_names=copy.copy(self.channel_names),
                     stimuli=self.stimuli,
                     power_line_freq=50,
-                    type="audio",
+                    type=self.batch_type,
                 )
             )
 
