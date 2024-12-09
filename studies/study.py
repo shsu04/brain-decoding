@@ -1,11 +1,10 @@
 from abc import ABC, abstractmethod
-
-import attr
 import mne
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import RobustScaler, StandardScaler
 import torch
+from itertools import chain
 
 from .stimuli import Stimuli
 
@@ -49,6 +48,11 @@ class Study(ABC):
         if not hasattr(self, "batch_type"):
             raise AttributeError("Study must have a batch type attribute.")
 
+    @abstractmethod
+    def create_recordings(self):
+        """Creates Recording objects in self.recordings according to the study's directory structure"""
+        pass
+
     def recording_exists(self, subject: str, session: str, task: str) -> bool:
         """Check if a recording exists for a given subject, session, and task."""
         try:
@@ -63,6 +67,10 @@ class Study(ABC):
         except Exception as e:
             exists = False
         return exists
+
+    def get_flat_recordings_list(self):
+        """Collapses 3D recordings list into single list of recordings."""
+        return list(chain.from_iterable(chain.from_iterable(self.recordings)))
 
 
 class Recording(ABC):

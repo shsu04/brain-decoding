@@ -342,13 +342,16 @@ class Schoffelen2022(Study):
             cache_enabled=cache_enabled,
             max_cache_size=max_cache_size,
         )
+        self.create_recordings()
 
+        super(Schoffelen2022, self).__init__()
+
+    def create_recordings(self):
         # Recordings is a 3D array, where the first dimension is the subject,
         # the second dimension is the session, and the third dimension is the task.
         self.recordings = [
             [[] for _ in range(len(self.sessions))] for i in range(len(self.subjects))
         ]
-
         # Create the recordings
         for subject, session, task in product(
             range(len(self.subjects)), range(len(self.sessions)), range(len(self.tasks))
@@ -382,8 +385,6 @@ class Schoffelen2022(Study):
                     type=self.batch_type,
                 )
             )
-
-        super(Schoffelen2022, self).__init__()
 
 
 class Schoffelen2022Recording(Recording):

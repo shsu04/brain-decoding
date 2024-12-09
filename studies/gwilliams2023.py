@@ -265,7 +265,11 @@ class GWilliams2023(Study):
             cache_enabled=cache_enabled,
             max_cache_size=max_cache_size,
         )
+        self.create_recordings()
 
+        super(GWilliams2023, self).__init__()
+
+    def create_recordings(self):
         # Recordings is a 3D array, where the first dimension is the subject,
         # the second dimension is the session, and the third dimension is the task.
         self.recordings = [
@@ -304,8 +308,6 @@ class GWilliams2023(Study):
                     type=self.batch_type,
                 )
             )
-
-        super(GWilliams2023, self).__init__()
 
 
 class GWilliams2023Recording(Recording):
