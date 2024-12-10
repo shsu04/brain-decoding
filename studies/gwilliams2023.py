@@ -296,7 +296,7 @@ class GWilliams2023(Study):
                 GWilliams2023Recording(
                     bids_path=bids_path,
                     cache_path=os.path.join(
-                        self.cache_dir, f"sub_{subject}_ses_{session}_task_{task}.pt"
+                        self.cache_dir, f"sub_{subject}_ses_{session}_task_{task}"
                     ),
                     study_name="GWilliams2023",
                     subject_id=self.subjects[subject],
@@ -371,7 +371,7 @@ class GWilliams2023Recording(Recording):
 
         # Contains all events
         annotations_df = pd.DataFrame(raw.annotations)
-        word_events, sound_events = None, None
+        word_events, sound_events, results = None, None, {}
 
         # Word events
         if options == "word" or options == "both":
@@ -387,6 +387,7 @@ class GWilliams2023Recording(Recording):
                 lambda x: json.loads(x.replace("'", '"'))["word"]
             )
             word_events.drop(["description", "orig_time"], axis=1, inplace=True)
+            results["word"] = word_events
 
         # Sound events
         if options == "sound" or options == "both":
@@ -413,8 +414,10 @@ class GWilliams2023Recording(Recording):
                 sound_events.loc[sound_events["sound"] == sound_file, "end"] = end_time
 
             sound_events.drop_duplicates(subset="sound", keep="first", inplace=True)
+            results["sound"] = sound_events
 
-        return {"word": word_events, "sound": sound_events}
+        del annotations_df
+        return results
 
     # Thread-safe between recording instances
     def load_stimuli(self, name: str, options: str = None) -> np.ndarray:

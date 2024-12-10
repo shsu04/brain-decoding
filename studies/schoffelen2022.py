@@ -373,7 +373,7 @@ class Schoffelen2022(Study):
                 Schoffelen2022Recording(
                     bids_path=bids_path,
                     cache_path=os.path.join(
-                        self.cache_dir, f"sub_{subject}_ses_{session}_task_{task}.pt"
+                        self.cache_dir, f"sub_{subject}_ses_{session}_task_{task}"
                     ),
                     study_name="Schoffelen2022",
                     subject_id=self.subjects[subject],
@@ -457,7 +457,7 @@ class Schoffelen2022Recording(Recording):
             str(events_path.directory) + "/" + events_path.basename, sep="\t"
         )
 
-        word_events, sound_events = None, None
+        word_events, sound_events, results = None, None, {}
 
         # Word events
         if options == "word" or options == "both":
@@ -476,6 +476,7 @@ class Schoffelen2022Recording(Recording):
             word_events = word_events[word_events["word"] != "sp"].reset_index(
                 drop=True
             )
+            results["word"] = word_events
 
         # Sound events
         if options == "sound" or options == "both":
@@ -498,8 +499,10 @@ class Schoffelen2022Recording(Recording):
                 lambda x: f"{self.session_id[1:]}_{x[0]}.wav"
             )
             sound_events = sound_events.drop(columns=["value"])
+            results["sound"] = sound_events
 
-        return {"word": word_events, "sound": sound_events}
+        del annotations_df
+        return results
 
     # Thread-safe between recording instances
     def load_stimuli(self, name: str, options: str = None) -> np.ndarray:

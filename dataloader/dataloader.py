@@ -64,8 +64,9 @@ class DataLoader:
             raise ValueError("batch_types and batch_kwargs keys must match")
         assert buffer_size > 0, "Buffer size must be greater than 0"
         assert max_cache_size_gb > 30, "Max cache size must be greater than 30"
-        # Must've been created by the study
-        assert os.path.exists(cache_dir), "Cache directory does not exist"
+
+        if not os.path.exists(cache_dir):
+            os.makedirs(cache_dir)
 
         # If batch sizes total workers exceed cpu, reduce proportionally
         actual_workers, requested_workers = multiprocessing.cpu_count(), sum(

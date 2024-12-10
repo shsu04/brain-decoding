@@ -6,13 +6,19 @@ into batch of brain and audio segment pairs, sliced by window size and stride.
 
 import copy
 import os
+import shutil
+import time
 from attr import dataclass
-import mne
 import numpy as np
 import pandas as pd
 import ray
 import torch
 from transformers import WhisperFeatureExtractor
+from typing import Dict, Tuple, Any
+import torch
+import shutil
+from ray.exceptions import RayTaskError
+import traceback
 
 from studies import Study, Recording
 from .batch import Batch, BatchFetcher
@@ -71,6 +77,7 @@ class AudioBatchFetcher(BatchFetcher):
         self.brain_clipping = brain_clipping
         self.baseline_window = baseline_window
         self.new_freq = new_freq
+        self.n_jobs = n_jobs
 
         # Specific to this batch type
         self.max_random_shift = max_random_shift
@@ -79,10 +86,10 @@ class AudioBatchFetcher(BatchFetcher):
         self.audio_sample_rate = audio_sample_rate
         self.hop_length = hop_length
         self.audio_processor = WhisperFeatureExtractor.from_pretrained(audio_processor)
-        self.n_jobs = n_jobs
 
     def fetch(self, recording: Recording, cache: bool) -> AudioBatch:
-        """Load, pre-process, and slice audio and brain data into batch segments.
+        """
+        Load, pre-process, and slice audio and brain data into batch segments.
         Loads from cache if available. Audio is returned as mel spectrogram features
         of shape [B, mel_bins, T], brain data is returned as tensor of shape [B, C, T].
 
@@ -91,42 +98,56 @@ class AudioBatchFetcher(BatchFetcher):
         Raises:
             ValueError: Number of brain and audio windows do not match. Skip batch.
         """
-
-        # Load from cache if available
-        if os.path.exists(recording.cache_path):
-
-            loaded = torch.load(recording.cache_path)
-            return AudioBatch(
-                brain_segments=loaded["brain"],
-                audio_segments=loaded["audio"],
-                recording=recording,
-            )
-
-        # Load the raw data
+        s_time = time.time()
+        # Initialize cache directory for the first time
+        if not os.path.exists(recording.cache_path):
+            os.makedirs(recording.cache_path)
         try:
-            raw = recording.load_raw(load_data=True)
-            events = recording.load_events(raw=raw, options="sound")
-            sound_events = events["sound"]
+            try:
+                # Try loading from cache first
+                (
+                    brain_segments,
+                    audio_window_timestamps,
+                    brain_window_timestamps,
+                    brain_start_time,
+                ) = self.load_cached_data(recording)
 
-            # Generate time stamps for the windows
-            audio_window_timestamps, brain_window_timestamps = (
-                self._generate_time_stamps(sound_events)
-            )
+                recording.start_time = brain_start_time
 
-            # BRAIN
-            brain_segments = self._segment_brain(
-                recording=recording,
-                raw=raw,
-                brain_window_timestamps=brain_window_timestamps,
-            )
+                # Segment brain tensors
+                for band in self.frequency_bands.keys():
+                    brain_segments[band] = self.segment_brain_tensor(
+                        brain_tensor=brain_segments[band],
+                        recording=recording,
+                        brain_window_timestamps=brain_window_timestamps,
+                        batch_size=256,
+                    )
+            # Alternatively, process raw data
+            except (ValueError, RayTaskError, FileNotFoundError) as e:
+                brain_segments, audio_window_timestamps, brain_window_timestamps = (
+                    self.process_raw_data(recording, cache=cache)
+                )
+
             # AUDIO
-            audio_segments = self._segment_audio(
+            audio_segments = self.segment_audio(
                 recording=recording,
-                sound_events=sound_events,
                 audio_window_timestamps=audio_window_timestamps,
             )
+            # DIMENSION CHECKS
+            # if not all of the brain segments are the same length
+            if not all(
+                [
+                    brain_segments[list(self.frequency_bands.keys())[0]].shape[-1]
+                    == brain_segments[band].shape[-1]
+                    for band in self.frequency_bands.keys()
+                ]
+            ):
+                raise ValueError(
+                    f"Brain segments are not the same length: {recording.cache_path}"
+                    + f" {brain_segments[list(self.frequency_bands.keys())[0]].shape[-1]}"
+                )
 
-            # Brain audio dimensions check
+            # B, and T mismatch between brain and audio
             if (
                 brain_segments[list(self.frequency_bands.keys())[0]].shape[0]
                 != audio_segments.shape[0]
@@ -136,16 +157,9 @@ class AudioBatchFetcher(BatchFetcher):
             ):
                 raise ValueError("Number of brain and audio windows do not match")
 
-            # Cache the data
-            if cache:
-                torch.save(
-                    {
-                        "brain": brain_segments,
-                        "audio": audio_segments,
-                    },
-                    recording.cache_path,
-                )
-
+            print(
+                f"Batch fetched in {time.time() - s_time:.2f}s: {recording.cache_path}"
+            )
             return AudioBatch(
                 brain_segments=brain_segments,
                 audio_segments=audio_segments,
@@ -153,10 +167,97 @@ class AudioBatchFetcher(BatchFetcher):
             )
 
         except Exception as e:
-            print(f"Error loading recording: {recording.cache_path}: {e}")
-            return None
+            # Clean up cache if anything fails
+            shutil.rmtree(recording.cache_path, ignore_errors=True)
 
-    def _generate_time_stamps(
+            # Capture full traceback for Ray errors
+            if isinstance(e, RayTaskError):
+                error_msg = f"Ray task failed: {str(e)}\n{traceback.format_exc()}"
+            else:
+                error_msg = str(e)
+
+            raise ValueError(
+                f"Error fetching batch for {recording.cache_path}: {error_msg}"
+            )
+
+    def load_cached_data(
+        self, recording: Recording
+    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
+        """Loads unsliced brain tensor and timestamps from cache.
+        Brain start time saved in case of recording does not start at 0,
+        causing indexing issues when slicing brain tensor.
+        """
+        try:
+            # IF cached
+            brain_segments = {
+                band: torch.load(f"{recording.cache_path}/{band}.pt")
+                for band in self.frequency_bands.keys()
+            }
+            timestamps = torch.load(
+                recording.cache_path + "/timestamps.pt"
+            )  # Load timestamps
+
+            return (
+                brain_segments,
+                timestamps["audio_window_timestamps"],
+                timestamps["brain_window_timestamps"],
+                timestamps["brain_start_time"],
+            )
+        except Exception as e:
+            raise ValueError(f"Cache loading failed: {str(e)}")
+
+    def process_raw_data(
+        self, recording: Recording, cache: bool
+    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
+        """Load raw, pre-process, and segment into tensors if not cached.
+        Saves brain tensor and timestamps to cache for future use, including
+        brain start time in case of recording does not start at 0.
+        """
+        raw = None
+        try:
+            # Clear cache
+            shutil.rmtree(recording.cache_path, ignore_errors=True)
+            os.makedirs(recording.cache_path)
+
+            # IF not cached
+            # Load the raw data
+            raw = recording.load_raw(load_data=True)
+            events = recording.load_events(raw=raw, options="sound")
+            sound_events = events["sound"]
+
+            # Generate time stamps for the windows
+            audio_window_timestamps, brain_window_timestamps = (
+                self.generate_time_stamps(sound_events)
+            )
+
+            # BRAIN
+            brain_segments = self.segment_brain_mne(
+                recording=recording,
+                raw=raw,
+                brain_window_timestamps=brain_window_timestamps,
+                batch_size=256,  # Memory efficient batch size
+                cache=cache,
+            )
+
+            if cache:
+                torch.save(
+                    {
+                        "audio_window_timestamps": audio_window_timestamps,
+                        "brain_window_timestamps": brain_window_timestamps,
+                        "brain_start_time": recording.start_time,
+                    },
+                    recording.cache_path + "/timestamps.pt",
+                )
+
+            return brain_segments, audio_window_timestamps, brain_window_timestamps
+
+        except Exception as e:
+            raise ValueError(f"Raw data processing failed: {str(e)}")
+        finally:
+            if raw is not None:
+                del raw
+
+    def generate_time_stamps(
         self, sound_events: pd.DataFrame
     ) -> tuple[dict[str, list[tuple[float, float]]], list[tuple[float, float]]]:
         """Obtain the list of start and end times for the windows. Making sure
@@ -203,10 +304,9 @@ class AudioBatchFetcher(BatchFetcher):
 
         return audio_window_timestamps, brain_window_timestamps
 
-    def _segment_audio(
+    def segment_audio(
         self,
         recording: Recording,
-        sound_events: pd.DataFrame,
         audio_window_timestamps: dict[str, list[tuple[float, float]]],
     ) -> torch.Tensor:
         """Slice the audio data into segments based on the window time stamps.
@@ -215,14 +315,16 @@ class AudioBatchFetcher(BatchFetcher):
         """
         audio_segments = []
 
-        for sound_file in sorted(sound_events["sound"].unique()):
+        for sound_file in sorted(list(audio_window_timestamps.keys())):
 
-            audio_segment = self._pre_process_audio(
+            audio_segment = self.pre_process_audio(
                 audio=recording.load_stimuli(sound_file),
                 time_stamps=audio_window_timestamps[sound_file],
             )  # [B, mel_bins, T]
             audio_segment = audio_segment[
-                :, :, : int(self.window_size * self.audio_sample_rate / self.hop_length)
+                :,
+                :,
+                : int(self.window_size * self.audio_sample_rate / self.hop_length),
             ]  # Truncate temporal dim
             audio_segments.append(audio_segment)
 
@@ -231,7 +333,7 @@ class AudioBatchFetcher(BatchFetcher):
 
         return audio_segments
 
-    def _pre_process_audio(
+    def pre_process_audio(
         self,
         audio: np.ndarray,
         time_stamps: list[tuple[float, float]],
