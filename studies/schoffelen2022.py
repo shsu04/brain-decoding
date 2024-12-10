@@ -471,7 +471,7 @@ class Schoffelen2022Recording(Recording):
                 word_events["type"].str.contains("word_onset")
             ].drop(columns=["sample", "type"])
 
-            # Rename to match GWilliams
+            # Rename to match Gwilliams
             word_events.columns = ["onset", "duration", "word"]
 
             word_events["word"] = word_events["word"].apply(lambda x: x.lower())

@@ -108,7 +108,7 @@ class AudioBatchFetcher(BatchFetcher):
                     audio_window_timestamps,
                     brain_window_timestamps,
                     brain_start_time,
-                ) = self.load_cached_data(recording)
+                ) = self.fetch_cached_data(recording)
 
                 recording.start_time = brain_start_time
 
@@ -123,7 +123,7 @@ class AudioBatchFetcher(BatchFetcher):
             # Alternatively, process raw data
             except (ValueError, RayTaskError, FileNotFoundError) as e:
                 brain_segments, audio_window_timestamps, brain_window_timestamps = (
-                    self.process_raw_data(recording, cache=cache)
+                    self.fetch_raw_data(recording, cache=cache)
                 )
 
             # AUDIO
@@ -175,7 +175,7 @@ class AudioBatchFetcher(BatchFetcher):
                 f"Error fetching batch for {recording.cache_path}: {error_msg}"
             )
 
-    def load_cached_data(
+    def fetch_cached_data(
         self, recording: Recording
     ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
         """Loads unsliced brain tensor and timestamps from cache.
@@ -201,7 +201,7 @@ class AudioBatchFetcher(BatchFetcher):
         except Exception as e:
             raise ValueError(f"Cache loading failed: {str(e)}")
 
-    def process_raw_data(
+    def fetch_raw_data(
         self, recording: Recording, cache: bool
     ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
         """Load raw, pre-process, and segment into tensors if not cached.

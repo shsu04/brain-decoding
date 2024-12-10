@@ -14,7 +14,7 @@ from .stimuli import Stimuli
 filterwarnings("ignore")
 
 
-class GWilliams2023(Study):
+class Gwilliams2023(Study):
     def __init__(
         self,
         batch_type: str,
@@ -270,7 +270,7 @@ class GWilliams2023(Study):
         ]
         self.create_recordings()
 
-        super(GWilliams2023, self).__init__()
+        super(Gwilliams2023, self).__init__()
 
     def create_recordings(self):
         # Recordings is a 3D array, where the first dimension is the subject,
@@ -296,12 +296,12 @@ class GWilliams2023(Study):
                 continue
 
             self.recordings[subject][session].append(
-                GWilliams2023Recording(
+                Gwilliams2023Recording(
                     bids_path=bids_path,
                     cache_path=os.path.join(
                         self.cache_dir, f"sub_{subject}_ses_{session}_task_{task}"
                     ),
-                    study_name="GWilliams2023",
+                    study_name="Gwilliams2023",
                     subject_id=self.subjects[subject],
                     session_id=self.sessions[session],
                     task_id=self.tasks[task],
@@ -313,7 +313,7 @@ class GWilliams2023(Study):
             )
 
 
-class GWilliams2023Recording(Recording):
+class Gwilliams2023Recording(Recording):
     def __init__(
         self,
         bids_path: str,
@@ -327,7 +327,7 @@ class GWilliams2023Recording(Recording):
         power_line_freq=50,
         type: str = "audio",
     ):
-        super(GWilliams2023Recording, self).__init__(
+        super(Gwilliams2023Recording, self).__init__(
             bids_path=bids_path,
             cache_path=cache_path,
             study_name=study_name,
