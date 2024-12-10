@@ -75,7 +75,7 @@ class DataLoader:
         if requested_workers > actual_workers:
             ratio = actual_workers / requested_workers
             print(
-                f"Total batch workers exceed resources. Reducing by ratio {ratio:.2f}"
+                f"Total batch workers exceed resources. Reducing by ratio {ratio:.2f} to {actual_workers}"
             )
             for k in batch_types.keys():
                 batch_types[k] = int(batch_types[k] * ratio)

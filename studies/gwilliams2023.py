@@ -259,12 +259,15 @@ class GWilliams2023(Study):
 
         # Load the thread-safe stimuli manager
         self.wav_paths = list(pathlib.Path(self.root_dir).rglob("*.wav"))
-        self.stimuli = Stimuli(
-            root_path=self.root_dir,
-            names=[f"stimuli/audio/{wav_file.name}" for wav_file in self.wav_paths],
-            cache_enabled=cache_enabled,
-            max_cache_size=max_cache_size,
-        )
+        self.stimuli = [
+            Stimuli(
+                root_path=self.root_dir,
+                names=[f"stimuli/audio/{wav_file.name}" for wav_file in self.wav_paths],
+                cache_enabled=cache_enabled,
+                max_cache_size=max_cache_size,
+            )
+            for _ in range(len(self.tasks))
+        ]
         self.create_recordings()
 
         super(GWilliams2023, self).__init__()
@@ -303,7 +306,7 @@ class GWilliams2023(Study):
                     session_id=self.sessions[session],
                     task_id=self.tasks[task],
                     channel_names=copy.copy(self.channel_names),
-                    stimuli=self.stimuli,
+                    stimuli=self.stimuli[task],
                     power_line_freq=50,
                     type=self.batch_type,
                 )

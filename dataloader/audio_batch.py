@@ -7,7 +7,6 @@ into batch of brain and audio segment pairs, sliced by window size and stride.
 import copy
 import os
 import shutil
-import time
 from attr import dataclass
 import numpy as np
 import pandas as pd
@@ -98,7 +97,6 @@ class AudioBatchFetcher(BatchFetcher):
         Raises:
             ValueError: Number of brain and audio windows do not match. Skip batch.
         """
-        s_time = time.time()
         # Initialize cache directory for the first time
         if not os.path.exists(recording.cache_path):
             os.makedirs(recording.cache_path)
@@ -157,9 +155,6 @@ class AudioBatchFetcher(BatchFetcher):
             ):
                 raise ValueError("Number of brain and audio windows do not match")
 
-            print(
-                f"Batch fetched in {time.time() - s_time:.2f}s: {recording.cache_path}"
-            )
             return AudioBatch(
                 brain_segments=brain_segments,
                 audio_segments=audio_segments,
