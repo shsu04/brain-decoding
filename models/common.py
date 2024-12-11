@@ -18,23 +18,6 @@ def pad_multiple(x: torch.Tensor, base: int):
     return torch.nn.functional.pad(x, (0, target - length))
 
 
-class ScaledEmbedding(nn.Module):
-    """Scale up learning rate for the embedding, otherwise, it can move too slowly."""
-
-    def __init__(self, num_embeddings: int, embedding_dim: int, scale: float = 10.0):
-        super().__init__()
-        self.embedding = nn.Embedding(num_embeddings, embedding_dim)
-        self.embedding.weight.data /= scale
-        self.scale = scale
-
-    @property
-    def weight(self):
-        return self.embedding.weight * self.scale
-
-    def forward(self, x):
-        return self.embedding(x) * self.scale
-
-
 class FourierEmbedding(nn.Module):
 
     def __init__(self, dimension: int = 2048, margin: float = 0.2):
@@ -91,45 +74,6 @@ class FourierEmbedding(nn.Module):
         )  # [B, C, dim]
 
         return emb
-
-
-class DualPathRNN(nn.Module):
-    def __init__(self, channels: int, depth: int, inner_length: int = 10):
-        super().__init__()
-        self.lstms = nn.ModuleList(
-            [nn.LSTM(channels, channels, 1) for _ in range(depth * 4)]
-        )
-        self.inner_length = inner_length
-
-    def forward(self, x: torch.Tensor):
-        B, C, L = x.shape
-        IL = self.inner_length
-
-        x = pad_multiple(x, self.inner_length)
-        x = x.permute(2, 0, 1).contiguous()  # [L, B, C]
-
-        for idx, lstm in enumerate(self.lstms):
-
-            # Reshape for local/global processing
-            y = x.reshape(-1, IL, B, C)
-
-            if idx % 2 == 0:
-                # Local processing on chunks
-                y = y.transpose(0, 1).reshape(IL, -1, C)
-            else:
-                # Global processing on across chunks
-                y = y.reshape(-1, IL * B, C)
-
-            y, _ = lstm(x)
-            if idx % 2 == 0:
-                y = y.reshape(IL, -1, B, C).transpose(0, 1).reshape(-1, B, C)
-            else:
-                y = y.reshape(-1, B, C)
-            x = x + y
-
-            if idx % 2 == 1:
-                x = x.flip(dims=(0,))
-        return x[:L].permute(1, 2, 0).contiguous()
 
 
 class LayerScale(nn.Module):
@@ -190,21 +134,20 @@ class ChannelMerger(nn.Module):
         merger_channels: int,
         embedding_dim: int = 2048,
         dropout: float = 0,
-        usage_penalty: float = 0.0,
-        n_subjects: int = 200,
-        per_subject: bool = False,
+        n_conditions: int = 200,
+        conditional: bool = False,
     ):
         super().__init__()
         assert embedding_dim % 4 == 0
 
         self.position_getter = PositionGetter()
 
-        # Learnable heads per subject or shared
-        self.per_subject = per_subject
-        if self.per_subject:
+        # Learnable heads for each condition
+        self.conditional = conditional
+        if self.conditional:
             self.heads = nn.Parameter(
                 torch.randn(
-                    n_subjects, merger_channels, embedding_dim, requires_grad=True
+                    n_conditions, merger_channels, embedding_dim, requires_grad=True
                 )
             )
         else:
@@ -216,14 +159,9 @@ class ChannelMerger(nn.Module):
         self.dropout = dropout
         self.embedding = FourierEmbedding(dimension=embedding_dim)
 
-        self.usage_penalty = usage_penalty
-        self._penalty = torch.tensor(0.0)
-
-    @property
-    def training_penalty(self):
-        return self._penalty.to(next(self.parameters()).device)
-
-    def forward(self, x: torch.Tensor, layout: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, layout: torch.Tensor, conditions: torch.Tensor = None
+    ) -> torch.Tensor:
         """
         Merges channels by learning a weighted sum of input channels, where the
         weights are determined by the alignment of the channel's positial embeddings
@@ -232,6 +170,7 @@ class ChannelMerger(nn.Module):
         Arguments:
             x -- input tensor with shape [B, C, T]
             layout -- layout of the channels with shape [C, 2]
+            conditions -- tensor of shape [B] with the condition index for each sample
 
         Returns:
             torch.Tensor -- output tensor with shape [B, merger_channels, T]
@@ -256,8 +195,15 @@ class ChannelMerger(nn.Module):
             banned = (positions - center_to_ban).norm(dim=-1) <= radius_to_ban
             score_offset[banned] = float("-inf")
 
-        # [ch_out, dim] -> [B, ch_out, dim]
-        heads = self.heads[None].expand(B, -1, -1)
+        # If conditional, choose heads based on condition
+        if self.conditional:
+            _, chout, pos_dim = self.heads.shape
+            heads = self.heads.gather(
+                0, conditions.view(-1, 1, 1).expand(-1, chout, pos_dim)
+            )
+        else:
+            # [ch_out, dim] -> [B, ch_out, dim]
+            heads = self.heads[None].expand(B, -1, -1)
 
         # How well pos emb aligns with learnable heads
         scores = torch.einsum("bcd,bod->boc", embedding, heads)  # [B, C, ch_out]
@@ -267,61 +213,48 @@ class ChannelMerger(nn.Module):
         weights = torch.softmax(scores, dim=2)
         out = torch.einsum("bct,boc->bot", x, weights)  # [B, ch_out, T]
 
-        # Usage penalty to encourage equal usage of heads
-        if self.training and self.usage_penalty > 0.0:
-            usage = weights.mean(dim=(0, 1)).sum()
-            self._penalty = self.usage_penalty * usage
-
         return out
 
 
-class SubjectLayers(nn.Module):
+class ConditionalLayers(nn.Module):
     def __init__(
         self,
         in_channels: int,
         out_channels: int,
-        n_subjects: int,
-        init_id: bool = False,
+        n_conditions: int,
     ):
         super().__init__()
 
-        self.weights = nn.Parameter(torch.randn(n_subjects, in_channels, out_channels))
-
-        # Initialize as identity scaled
-        if init_id:
-            assert in_channels == out_channels
-            self.weights.data[:] = torch.eye(in_channels)[None]
-
+        self.weights = nn.Parameter(
+            torch.randn(n_conditions, in_channels, out_channels)
+        )
         self.weights.data *= 1 / in_channels**0.5
 
-    def forward(self, x: torch.Tensor, subjects: torch.Tensor) -> torch.Tensor:
-        """Applies a subject-specific linear transformation to the input tensor.
+    def forward(self, x: torch.Tensor, conditions: torch.Tensor) -> torch.Tensor:
+        """Applies a conditional linear transformation to the input tensor.
 
         Arguments:
             x -- input tensor with shape [B, C, T]
-            subjects -- subject indices with shape [B]
+            conditions -- tensor with shape [B]
 
         Returns:
             torch.Tensor -- output tensor with shape [B, C, T]
         """
-
-        # Subjects is a 1 dimensional tensor of subject indices
         _, C, D = self.weights.shape
 
-        # Gather weight matrices for each subject
-        weights = self.weights.gather(0, subjects.view(-1, 1, 1).expand(-1, C, D))
+        # Gather weight matrices for each condition
+        weights = self.weights.gather(0, conditions.view(-1, 1, 1).expand(-1, C, D))
         return torch.einsum("bct,bcd->bdt", x, weights)
 
     def __repr__(self):
         S, C, D = self.weights.shape
-        return f"SubjectLayers({C}, {D}, {S})"
+        return f"Condition layers({C}, {D}, {S})"
 
 
 class ChannelDropout(nn.Module):
-    def __init__(self, dropout: float = 0.1, rescale: bool = True):
+    def __init__(self, dropout: float = 0.1):
         super().__init__()
         self.dropout = dropout
-        self.rescale = rescale
         self.position_getter = PositionGetter()
 
     def forward(self, x: torch.Tensor, layout: torch.Tensor) -> torch.Tensor:
@@ -329,7 +262,6 @@ class ChannelDropout(nn.Module):
 
         Args:
             dropout: dropout radius in normalized [0, 1] coordinates.
-            rescale: at valid, rescale all channels.
         """
 
         if not self.dropout:
@@ -351,17 +283,16 @@ class ChannelDropout(nn.Module):
             x = x * kept.float()[:, :, None]
 
             # Rescale by probability of being kept over n_tests
-            if self.rescale:
-                proba_kept = torch.zeros(B, C, device=x.device)
-                n_tests = 100
+            proba_kept = torch.zeros(B, C, device=x.device)
+            n_tests = 100
 
-                for _ in range(n_tests):
-                    center_to_ban = torch.rand(2, device=x.device)
-                    kept = (positions - center_to_ban).norm(dim=-1) > self.dropout
-                    proba_kept += kept.float() / n_tests
+            for _ in range(n_tests):
+                center_to_ban = torch.rand(2, device=x.device)
+                kept = (positions - center_to_ban).norm(dim=-1) > self.dropout
+                proba_kept += kept.float() / n_tests
 
-                # Rescale by inverse probability of being kept
-                x = x / (1e-8 + proba_kept[:, :, None])
+            # Rescale by inverse probability of being kept
+            x = x / (1e-8 + proba_kept[:, :, None])
         return x
 
 
@@ -375,19 +306,10 @@ class ConvSequence(nn.Module):
         dilation_period: tp.Optional[int] = None,
         stride: int = 2,
         dropout: float = 0.0,
-        leakiness: float = 0.0,
-        groups: int = 1,
         decode: bool = False,
         batch_norm: bool = False,
         dropout_input: float = 0,
-        skip: bool = False,
-        scale: tp.Optional[float] = None,
-        rewrite: bool = False,
-        activation_on_last: bool = True,
-        post_skip: bool = False,
         glu: int = 0,
-        glu_context: int = 0,
-        glu_glu: bool = True,
         activation: tp.Any = None,
     ) -> None:
         """
@@ -397,36 +319,24 @@ class ConvSequence(nn.Module):
             channels -- List of channel dims for each layer.
 
         Keyword Arguments:
-            kernel -- Kernel size for convolutions
-            dilation_growth -- Factor by which dilation increases between layers
-            dilation_period -- Reset dilation after this many layers
-            stride -- Stride for convolutions
-            dropout -- Dropout probability after each layer
-            leakiness -- Negative slope for LeakyReLU
-            groups -- Number of groups for grouped convolutions
-            decode -- If True, use transposed convolutions
-            batch_norm -- Whether to use batch normalization
-            dropout_input -- Dropout probability for input
-            skip -- Enable residual connections
-            scale -- Scale factor for LayerScale
-            rewrite -- Add additional 1x1 conv layer after each conv
-            activation_on_last -- Whether to apply activation on final layer
-            post_skip -- Add depthwise conv after skip connections
-            glu_context -- _description_ (default: {0})
-            glu_glu -- Use GLU vs regular activation for GLU blocks
-            activation -- Custom activation function
+            kernel -- Convolutional kernel size (default: {4})
+            dilation_growth -- Growth factor for dilation (default: {1})
+            dilation_period -- Period for resetting dilation (default: {None})
+            stride -- Convolutional stride (default: {2})
+            dropout -- Dropout rate (default: {0.0})
+            decode -- If True, uses ConvTranspose1d (default: {False})
+            batch_norm -- If True, uses batch normalization (default: {False})
+            dropout_input -- Dropout rate for input (default: {0})
+            glu -- If > 0, uses GLU activation every `glu` layers (default: {0})
+            activation -- Activation function (default: {None})
         """
 
         super().__init__()
 
         dilation = 1
         channels = tuple(channels)
-        self.skip = skip
         self.sequence = nn.ModuleList()
         self.glus = nn.ModuleList()
-
-        if activation is None:
-            activation = partial(nn.LeakyReLU, leakiness)
 
         Conv = nn.Conv1d if not decode else nn.ConvTranspose1d
 
@@ -456,45 +366,29 @@ class ConvSequence(nn.Module):
                     stride,
                     pad,
                     dilation=dilation,
-                    groups=groups if k > 0 else 1,
+                    groups=1,
                 )
             )
 
             dilation *= dilation_growth
 
             # Batch norm, activation, and dropout
-            if activation_on_last or not is_last:
+            if not is_last:
                 if batch_norm:
                     layers.append(nn.BatchNorm1d(num_features=chout))
                 layers.append(activation())
 
                 if dropout:
                     layers.append(nn.Dropout(dropout))
-                # Optional 1x1 convolution rewrite layer
-                if rewrite:
-                    layers += [nn.Conv1d(chout, chout, 1), nn.LeakyReLU(leakiness)]
-                    # layers += [nn.Conv1d(chout, 2 * chout, 1), nn.GLU(dim=1)]
-
-            # Skip connection
-            if chin == chout and skip:
-
-                if scale is not None:
-                    layers.append(LayerScale(chout, scale))
-
-                if post_skip:
-                    layers.append(Conv(chout, chout, 1, groups=chout, bias=False))
 
             self.sequence.append(nn.Sequential(*layers))
 
             # Add GLU layer if specified
             if glu and (k + 1) % glu == 0:
-
-                ch = 2 * chout if glu_glu else chout
-                act = nn.GLU(dim=1) if glu_glu else activation()
                 self.glus.append(
                     nn.Sequential(
-                        nn.Conv1d(chout, ch, 1 + 2 * glu_context, padding=glu_context),
-                        act,
+                        nn.Conv1d(chout, chout * 2, 1 + 2, padding=1),
+                        nn.GLU(dim=1),
                     )
                 )
             else:
@@ -506,10 +400,13 @@ class ConvSequence(nn.Module):
             old_x = x
             x = module(x)
 
-            if self.skip and x.shape == old_x.shape:
+            # Residual
+            if x.shape == old_x.shape:
                 x = x + old_x
 
             glu = self.glus[module_idx]
+
             if glu is not None:
                 x = glu(x)
+
         return x
