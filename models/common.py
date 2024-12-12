@@ -13,65 +13,6 @@ from studies.study import Recording
 from dataloader.batch import Batch
 
 
-class FourierEmbedding(nn.Module):
-    """
-    Fourier positional embedding. Maps each channel to a high dimensional space
-    through a learnt channel-specific function over sensor locations.
-    Unlike trad. embedding this is not using exponential periods for cos and sin,
-    but typical `2 pi k` which can represent any function over [0, 1]. As this
-    function would be necessarily periodic, we take a bit of margin and do over
-    [-0.2, 1.2].
-    """
-
-    def __init__(self, dimension: int = 2048, margin: float = 0.2):
-        super().__init__()
-
-        # Grid size. e.g. dim=2048, n_freqs=32
-        n_freqs = (dimension // 2) ** 0.5
-        assert int(n_freqs**2 * 2) == dimension
-        self.dimension = dimension
-        self.margin = margin
-
-    def forward(self, positions: torch.Tensor) -> torch.Tensor:
-        """
-        Arguments:
-            positions -- 2D positions of channels in the batch [B, C, 2]
-
-        Returns:
-            emb -- Fourier positional embedding [B, C, dim]
-        """
-
-        *O, D = positions.shape  # [B, C, 2]
-        assert D == 2
-
-        n_freqs = (self.dimension // 2) ** 0.5
-        freqs_y = torch.arange(n_freqs).to(positions)  # [n_freqs]
-        freqs_x = freqs_y[:, None]  # [n_freqs, 1] for broadcasting
-        width = 1 + 2 * self.margin
-        positions = positions + self.margin  # Shift pos by margin
-
-        # Scale freq by 2 pi / width to get phase multipliers
-        p_x = 2 * math.pi * freqs_x / width  # [n_freqs, 1]
-        p_y = 2 * math.pi * freqs_y / width  # [n_freqs]
-
-        # Add dim for broadcasting, [*O, 2] -> [*O, 1, 1, 2]
-        positions = positions[..., None, None, :]
-
-        # Compute phase values, (*O, n_freqs, n_freqs) -> (*O, n_freqs*n_freqs)
-        loc = (positions[..., 0] * p_x + positions[..., 1] * p_y).view(*O, -1)
-
-        # Apply sin and cos to phases and concatenate
-        emb = torch.cat(
-            [
-                torch.cos(loc),
-                torch.sin(loc),
-            ],
-            dim=-1,
-        )  # [B, C, dim]
-
-        return emb
-
-
 class PositionGetter:
     INVALID = -0.1
 
@@ -111,11 +52,11 @@ class PositionGetter:
             if dim == 3:
                 scaled positions of the sensors in 3D space. Dim = [C, 3], (x, y, z)
         """
-        assert (
-            recording.info is not None
-        ), f"Recording info is not available. {recording.cache_path}"
-
         try:
+            assert (
+                recording.info is not None
+            ), f"Recording info is not available. {recording.cache_path}"
+
             # Find layout projects 3D to 2D
             if self.proj:
                 layout = mne.find_layout(
@@ -188,6 +129,119 @@ class PositionGetter:
         """
 
         return (positions == self.INVALID).all(dim=-1)
+
+
+class ChannelDropout(nn.Module):
+    """Spatial dropout by random center and radius in normalized [0, 1] coordinates."""
+
+    def __init__(
+        self,
+        dropout: float = 0.1,
+        layout_dim: int = 2,
+        layout_proj: bool = False,
+        layout_scaling: str = "midpoint",
+    ):
+        super().__init__()
+        self.dropout = dropout
+        self.position_getter = PositionGetter(
+            dim=layout_dim, proj=layout_proj, scaling=layout_scaling
+        )
+
+    def forward(self, x: torch.Tensor, recording: Recording) -> torch.Tensor:
+        """
+        Args:
+            dropout: dropout radius in normalized [0, 1] coordinates.
+        """
+
+        if not self.dropout:
+            return x
+
+        B, C, T = x.shape
+
+        # Mask out invalid channels
+        positions = self.position_getter.get_positions(x, recording)
+        valid = (~self.position_getter.is_invalid(positions)).float()
+
+        x = x * valid[:, :, None]
+
+        if self.training:
+
+            # Spatial dropout by random center and radius
+            center_to_ban = torch.rand(self.position_getter.dim, device=x.device)
+            kept = (positions - center_to_ban).norm(dim=-1) > self.dropout
+            x = x * kept.float()[:, :, None]
+
+            # Rescale by probability of being kept over n_tests
+            proba_kept = torch.zeros(B, C, device=x.device)
+            n_tests = 100
+
+            for _ in range(n_tests):
+                center_to_ban = torch.rand(self.position_getter.dim, device=x.device)
+                kept = (positions - center_to_ban).norm(dim=-1) > self.dropout
+                proba_kept += kept.float() / n_tests
+
+            # Rescale by inverse probability of being kept
+            x = x / (1e-8 + proba_kept[:, :, None])
+        return x
+
+
+class FourierEmbedding(nn.Module):
+    """
+    Fourier positional embedding. Maps each channel to a high dimensional space
+    through a learnt channel-specific function over sensor locations.
+    Unlike trad. embedding this is not using exponential periods for cos and sin,
+    but typical `2 pi k` which can represent any function over [0, 1]. As this
+    function would be necessarily periodic, we take a bit of margin and do over
+    [-0.2, 1.2].
+    """
+
+    def __init__(self, dimension: int = 2048, margin: float = 0.2):
+        super().__init__()
+
+        # Grid size. e.g. dim=2048, n_freqs=32
+        n_freqs = (dimension // 2) ** 0.5
+        assert int(n_freqs**2 * 2) == dimension
+        self.dimension = dimension
+        self.margin = margin
+
+    def forward(self, positions: torch.Tensor) -> torch.Tensor:
+        """
+        Arguments:
+            positions -- 2D positions of channels in the batch [B, C, 2]
+
+        Returns:
+            emb -- Fourier positional embedding [B, C, dim]
+        """
+
+        *O, D = positions.shape  # [B, C, 2]
+        assert D == 2
+
+        n_freqs = (self.dimension // 2) ** 0.5
+        freqs_y = torch.arange(n_freqs).to(positions)  # [n_freqs]
+        freqs_x = freqs_y[:, None]  # [n_freqs, 1] for broadcasting
+        width = 1 + 2 * self.margin
+        positions = positions + self.margin  # Shift pos by margin
+
+        # Scale freq by 2 pi / width to get phase multipliers
+        p_x = 2 * math.pi * freqs_x / width  # [n_freqs, 1]
+        p_y = 2 * math.pi * freqs_y / width  # [n_freqs]
+
+        # Add dim for broadcasting, [*O, 2] -> [*O, 1, 1, 2]
+        positions = positions[..., None, None, :]
+
+        # Compute phase values, (*O, n_freqs, n_freqs) -> (*O, n_freqs*n_freqs)
+        loc = (positions[..., 0] * p_x + positions[..., 1] * p_y).view(*O, -1)
+
+        # Apply sin and cos to phases and concatenate
+        emb = torch.cat(
+            [
+                torch.cos(loc),
+                torch.sin(loc),
+            ],
+            dim=-1,
+        )  # [B, C, dim]
+
+        return emb
 
 
 class ChannelMerger(nn.Module):
@@ -318,60 +372,6 @@ class ConditionalLayers(nn.Module):
     def __repr__(self):
         S, C, D = self.weights.shape
         return f"Condition layers({C}, {D}, {S})"
-
-
-class ChannelDropout(nn.Module):
-    """Spatial dropout by random center and radius in normalized [0, 1] coordinates."""
-
-    def __init__(
-        self,
-        dropout: float = 0.1,
-        layout_dim: int = 2,
-        layout_proj: bool = False,
-        layout_scaling: str = "midpoint",
-    ):
-        super().__init__()
-        self.dropout = dropout
-        self.position_getter = PositionGetter(
-            dim=layout_dim, proj=layout_proj, scaling=layout_scaling
-        )
-
-    def forward(self, x: torch.Tensor, recording: Recording) -> torch.Tensor:
-        """
-        Args:
-            dropout: dropout radius in normalized [0, 1] coordinates.
-        """
-
-        if not self.dropout:
-            return x
-
-        B, C, T = x.shape
-
-        # Mask out invalid channels
-        positions = self.position_getter.get_positions(x, recording)
-        valid = (~self.position_getter.is_invalid(positions)).float()
-
-        x = x * valid[:, :, None]
-
-        if self.training:
-
-            # Spatial dropout by random center and radius
-            center_to_ban = torch.rand(self.position_getter.dim, device=x.device)
-            kept = (positions - center_to_ban).norm(dim=-1) > self.dropout
-            x = x * kept.float()[:, :, None]
-
-            # Rescale by probability of being kept over n_tests
-            proba_kept = torch.zeros(B, C, device=x.device)
-            n_tests = 100
-
-            for _ in range(n_tests):
-                center_to_ban = torch.rand(self.position_getter.dim, device=x.device)
-                kept = (positions - center_to_ban).norm(dim=-1) > self.dropout
-                proba_kept += kept.float() / n_tests
-
-            # Rescale by inverse probability of being kept
-            x = x / (1e-8 + proba_kept[:, :, None])
-        return x
 
 
 class ConvSequence(nn.Module):

@@ -6,8 +6,10 @@ into batch of brain and audio segment pairs, sliced by window size and stride.
 
 import copy
 import os
+import pickle
 import shutil
 from attr import dataclass
+import mne
 import numpy as np
 import pandas as pd
 import ray
@@ -108,9 +110,11 @@ class AudioBatchFetcher(BatchFetcher):
                     audio_window_timestamps,
                     brain_window_timestamps,
                     brain_start_time,
+                    info,
                 ) = self.fetch_cached_data(recording)
 
                 recording.start_time = brain_start_time
+                recording.info = info
 
                 # Segment brain tensors
                 for band in self.frequency_bands.keys():
@@ -177,7 +181,7 @@ class AudioBatchFetcher(BatchFetcher):
 
     def fetch_cached_data(
         self, recording: Recording
-    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
+    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor, mne.Info]:
         """Loads unsliced brain tensor and timestamps from cache.
         Brain start time saved in case of recording does not start at 0,
         causing indexing issues when slicing brain tensor.
@@ -192,11 +196,14 @@ class AudioBatchFetcher(BatchFetcher):
                 recording.cache_path + "/timestamps.pt"
             )  # Load timestamps
 
+            info = pickle.load(open(recording.cache_path + "/info.pkl", "rb"))
+
             return (
                 brain_segments,
                 timestamps["audio_window_timestamps"],
                 timestamps["brain_window_timestamps"],
                 timestamps["brain_start_time"],
+                info,
             )
         except Exception as e:
             raise ValueError(f"Cache loading failed: {str(e)}")
@@ -242,6 +249,9 @@ class AudioBatchFetcher(BatchFetcher):
                         "brain_start_time": recording.start_time,
                     },
                     recording.cache_path + "/timestamps.pt",
+                )
+                pickle.dump(
+                    recording.info, open(recording.cache_path + "/info.pkl", "wb")
                 )
 
             return brain_segments, audio_window_timestamps, brain_window_timestamps

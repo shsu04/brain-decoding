@@ -10,10 +10,11 @@ class SimpleConvConfig(Config):
         out_channels: int = 128,
         hidden_dim: int = 512,
         dropout: float = 0.3,
-        # Merger with spatial attn
+        # Sensor layout settings
         layout_dim: int = 2,
         layout_proj: bool = False,
         layout_scaling: str = "midpoint",
+        # Merger with spatial attn
         merger: bool = True,
         merger_emb_dim: int = 2048,
         merger_channels: int = 256,
