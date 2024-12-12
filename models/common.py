@@ -278,6 +278,7 @@ class ChannelMerger(nn.Module):
         # Learnable heads for each condition
         self.conditions = conditions
         if self.conditions:
+            assert "unknown" in conditions, "Conditions must include an 'unknown' key"
             self.trained_indices = set()
             self.heads = nn.Parameter(
                 torch.randn(
@@ -295,6 +296,10 @@ class ChannelMerger(nn.Module):
         self.heads.data /= embedding_dim**0.5
         self.dropout = dropout
         self.embedding = FourierEmbedding(dimension=embedding_dim)
+
+    @property
+    def trained_indices_list(self):
+        return list(self.trained_indices)
 
     def forward(
         self, x: torch.Tensor, recording: Recording, condition: str = None
@@ -337,7 +342,7 @@ class ChannelMerger(nn.Module):
             if condition == "mean":
                 # [B, ch_out, emb_dim]
                 heads = (
-                    torch.stack([self.heads[list(self.trained_indices)]])
+                    torch.stack([self.heads[self.trained_indices_list]])
                     .mean(dim=0)
                     .expand(B, -1, -1)
                 )
@@ -379,6 +384,7 @@ class ConditionalLayers(nn.Module):
         conditions: dict[str, int],
     ):
         super().__init__()
+        assert "unknown" in conditions, "Conditions must include an 'unknown' key"
 
         self.conditions = conditions
         self.trained_indices = set()
@@ -386,6 +392,10 @@ class ConditionalLayers(nn.Module):
             torch.randn(len(conditions), in_channels, out_channels)
         )
         self.weights.data *= 1 / in_channels**0.5
+
+    @property
+    def trained_indices_list(self):
+        return list(self.trained_indices)
 
     def forward(self, x: torch.Tensor, condition: str) -> torch.Tensor:
         """Applies a conditional linear transformation to the input tensor.
@@ -402,7 +412,7 @@ class ConditionalLayers(nn.Module):
 
         if condition == "mean":
             weights = (
-                torch.stack([self.weights[list(self.trained_indices)]])
+                torch.stack([self.weights[self.trained_indices_list]])
                 .mean(dim=0)
                 .expand(B, -1, -1)
             )
