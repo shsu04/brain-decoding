@@ -9,10 +9,6 @@ import random
 import typing as tp
 import torch
 from config import SimpleConvConfig
-
-# import torch_audio as ta
-
-# import torchaudio as ta
 from torch import nn
 from torch.nn import functional as F
 
@@ -41,7 +37,12 @@ class SimpleConv(nn.Module):
         # Spatial dropout and rescale
         self.dropout = None
         if self.config.dropout > 0.0:
-            self.dropout = ChannelDropout(self.config.dropout)
+            self.dropout = ChannelDropout(
+                self.config.dropout,
+                layout_dim=self.config.layout_dim,
+                layout_proj=self.config.layout_proj,
+                layout_scaling=self.config.layout_scaling,
+            )
 
         # Channel merger by spatial attention
         self.merger = None
@@ -52,6 +53,9 @@ class SimpleConv(nn.Module):
                 dropout=self.config.merger_dropout,
                 n_conditions=self.config.merger_conditions,
                 conditional=self.config.merger_conditional,
+                layout_dim=self.config.layout_dim,
+                layout_proj=self.config.layout_proj,
+                layout_scaling=self.config.layout_scaling,
             )
             channels = self.config.merger_channels
 
@@ -129,10 +133,10 @@ class SimpleConv(nn.Module):
         )
 
         total_params = sum(p.numel() for p in self.parameters())
+        print(f"\nSimpleConv: \n\tParams: {total_params}")
         print(
-            f"\nSimpleConv: \n\tParams: {total_params}\n\tConv blocks: {self.config.depth}\n\tTrans layers: {self.config.transformer_layers}"
+            f"\tConv blocks: {self.config.depth}\n\tTrans layers: {self.config.transformer_layers}"
         )
-        print(f"Convolutional channel sizes: {conv_channel_sizes}")
 
     def forward(
         self,
@@ -192,13 +196,10 @@ class SimpleConv(nn.Module):
                 src_key_padding_mask=attention_mask,
                 is_causal=True if (self.config.is_causal) else False,
             )
-
             x = x.permute(0, 2, 1)  # [B, C, T]
 
         # Final projection
-        x = self.final(x)
-
+        x = self.final(x)  # [B, C, T]
         assert x.shape[-1] >= length
-        x = x[:, :, :length]  # [B, C, T]
 
         return x

@@ -11,6 +11,9 @@ class SimpleConvConfig(Config):
         hidden_dim: int = 512,
         dropout: float = 0.3,
         # Merger with spatial attn
+        layout_dim: int = 2,
+        layout_proj: bool = False,
+        layout_scaling: str = "midpoint",
         merger: bool = True,
         merger_emb_dim: int = 2048,
         merger_channels: int = 256,
@@ -47,6 +50,10 @@ class SimpleConvConfig(Config):
         self.out_channels = out_channels
         self.hidden_dim = hidden_dim
         self.dropout = dropout
+        # Sensor layout settings
+        self.layout_dim = layout_dim
+        self.layout_proj = layout_proj
+        self.layout_scaling = layout_scaling
         # Merger with spatial attn
         self.merger = merger
         self.merger_emb_dim = merger_emb_dim
@@ -68,8 +75,8 @@ class SimpleConvConfig(Config):
         self.dilation_growth = dilation_growth
         self.dilation_period = dilation_period
         self.glu = glu
-        self.conv_dropout = conv_dropout
         self.dropout_input = dropout_input
+        self.conv_dropout = conv_dropout
         self.batch_norm = batch_norm
         # Transformers
         self.use_attention_mask = use_attention_mask

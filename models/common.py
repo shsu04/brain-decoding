@@ -4,21 +4,24 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from functools import partial
 import math
 import typing as tp
 import torch
 from torch import nn
-import pandas as pd
-
-
-def pad_multiple(x: torch.Tensor, base: int):
-    length = x.shape[-1]
-    target = math.ceil(length / base) * base
-    return torch.nn.functional.pad(x, (0, target - length))
+import mne
+from studies.study import Recording
+from dataloader.batch import Batch
 
 
 class FourierEmbedding(nn.Module):
+    """
+    Fourier positional embedding. Maps each channel to a high dimensional space
+    through a learnt channel-specific function over sensor locations.
+    Unlike trad. embedding this is not using exponential periods for cos and sin,
+    but typical `2 pi k` which can represent any function over [0, 1]. As this
+    function would be necessarily periodic, we take a bit of margin and do over
+    [-0.2, 1.2].
+    """
 
     def __init__(self, dimension: int = 2048, margin: float = 0.2):
         super().__init__()
@@ -31,13 +34,6 @@ class FourierEmbedding(nn.Module):
 
     def forward(self, positions: torch.Tensor) -> torch.Tensor:
         """
-        Fourier positional embedding. Maps each channel to a high dimensional space
-        through a learnt channel-specific function over sensor locations.
-        Unlike trad. embedding this is not using exponential periods for cos and sin,
-        but typical `2 pi k` which can represent any function over [0, 1]. As this
-        function would be necessarily periodic, we take a bit of margin and do over
-        [-0.2, 1.2].
-
         Arguments:
             positions -- 2D positions of channels in the batch [B, C, 2]
 
@@ -76,39 +72,105 @@ class FourierEmbedding(nn.Module):
         return emb
 
 
-class LayerScale(nn.Module):
-    """Layer scale from [Touvron et al 2021] (https://arxiv.org/pdf/2103.17239.pdf).
-    This rescales diagonaly residual outputs close to 0 initially, then learnt.
-    """
-
-    def __init__(self, channels: int, init: float = 0.1, boost: float = 5.0):
-        super().__init__()
-        self.scale = nn.Parameter(torch.zeros(channels, requires_grad=True))
-        self.scale.data[:] = init / boost
-        self.boost = boost
-
-    def forward(self, x):
-        return (self.boost * self.scale[:, None]) * x
-
-
 class PositionGetter:
     INVALID = -0.1
 
-    def __init__(self) -> None:
-        pass
+    def __init__(
+        self, dim: int = None, proj: bool = False, scaling: str = "midpoint"
+    ) -> None:
+        self.dim = dim
+        self.proj = proj
+        self.scaling = scaling
 
-    def get_positions(self, x: torch.Tensor, layout: torch.Tensor) -> torch.Tensor:
-        """Returns scaled 2D positions of channels in x.
+        assert dim in [2, 3, None], f"Layout can only be 2D or 3D. Invalid dim {dim}."
+        assert scaling in [
+            "midpoint",
+            "minmax",
+            "standard",
+            "maxabs",
+        ], f"Invalid scaling type {scaling}"
+        assert not (proj and dim == 3), "Cannot project to 3D"
+
+    def load_sensor_layout(self, recording: Recording) -> torch.Tensor:
+        """
+        Returns the scaled sensor locations of the neural recording.
+        Channels already valid from since picked in load raw in Recording
+
+        If proj, 3D layout is projected to 2D space.
+
+        Arguments:
+            scaling -- type of scaling to apply, can be:
+                "midpoint" - scale to [-1, 1] around geometric midpoint
+                "minmax" - scale to [0, 1] based on min and max
+                "standard" - scale to mean 0 and std 1
+                "maxabs" - scale to [-1, 1] based on max absolute value
+
+        Returns:
+            if dim == 2:
+                scaled positions of the sensors in 2D space. Dim = [C, 2], (x, y)
+            if dim == 3:
+                scaled positions of the sensors in 3D space. Dim = [C, 3], (x, y, z)
+        """
+        assert (
+            recording.info is not None
+        ), f"Recording info is not available. {recording.cache_path}"
+
+        try:
+            # Find layout projects 3D to 2D
+            if self.proj:
+                layout = mne.find_layout(
+                    recording.info,
+                )
+                layout = torch.tensor(
+                    layout.pos[: len(recording.channel_names), :2], dtype=torch.float32
+                )  # [C, 2]
+            # Get x, y, z coordinates without projection
+            else:
+                layout = torch.tensor(
+                    [
+                        recording.info["chs"][i]["loc"][: self.dim]
+                        for i in range(len(self.info["chs"]))
+                        if recording.info["ch_names"][i] in recording.channel_names
+                    ],
+                    dtype=torch.float32,
+                )  # [C, dim]
+        except Exception as e:
+            raise ValueError(f"Error loading layout for {recording.cache_path}. {e}")
+
+        # Scaling each dim independently
+        if self.scaling == "midpoint":
+            midpoints = layout.mean(dim=0)
+            max_deviation = (layout - midpoints).abs().max(dim=0).values
+            layout = (layout - midpoints) / max_deviation
+
+        elif self.scaling == "minmax":
+            mins = layout.min(dim=0).values
+            maxs = layout.max(dim=0).values
+            layout = (layout - mins) / (maxs - mins)
+
+        elif self.scaling == "standard":
+            means = layout.mean(dim=0)
+            stds = layout.std(dim=0)
+            layout = (layout - means) / stds
+
+        elif self.scaling == "maxabs":
+            max_abs = layout.abs().max(dim=0).values
+            layout = layout / max_abs
+
+        return layout
+
+    def get_positions(self, x: torch.Tensor, recording: Recording) -> torch.Tensor:
+        """Returns scaled positions of channels in x.
 
         Arguments:
             x -- recordings with shape [B, C, T]
-            layout -- layout of the channels with shape [C, 2]
 
         Returns:
-            torch.Tensor -- 2D positions of channels in x [B, C, 2]
+            torch.Tensor -- 2D positions of channels in x [B, C, dim]
         """
         B, C, T = x.shape
-        positions = torch.full((B, C, 2), self.INVALID, device=x.device)
+        positions = torch.full((B, C, self.dim), self.INVALID, device=x.device)
+        layout = self.load_sensor_layout(recording)
 
         for idx in range(len(x)):
             positions[idx, : len(layout)] = layout.to(x.device)
@@ -119,7 +181,7 @@ class PositionGetter:
         """Returns a boolean mask of invalid channels.
 
         Arguments:
-            positions -- 2D positions of channels in x [B, C, 2]
+            positions -- 2D positions of channels in x [B, C, dim]
 
         Returns:
             torch.Tensor -- boolean mask of invalid channels [B, C]
@@ -129,18 +191,29 @@ class PositionGetter:
 
 
 class ChannelMerger(nn.Module):
+    """
+    Merges channels by learning a weighted sum of input channels, where the
+    weights are determined by the alignment of the channel's positial embeddings
+    with learnable heads.
+    """
+
     def __init__(
         self,
         merger_channels: int,
         embedding_dim: int = 2048,
         dropout: float = 0,
-        n_conditions: int = 200,
+        n_conditions: int = 2,
         conditional: bool = False,
+        layout_dim: int = 2,
+        layout_proj: bool = False,
+        layout_scaling: str = "midpoint",
     ):
         super().__init__()
         assert embedding_dim % 4 == 0
 
-        self.position_getter = PositionGetter()
+        self.position_getter = PositionGetter(
+            dim=layout_dim, proj=layout_proj, scaling=layout_scaling
+        )
 
         # Learnable heads for each condition
         self.conditional = conditional
@@ -160,16 +233,12 @@ class ChannelMerger(nn.Module):
         self.embedding = FourierEmbedding(dimension=embedding_dim)
 
     def forward(
-        self, x: torch.Tensor, layout: torch.Tensor, conditions: torch.Tensor = None
+        self, x: torch.Tensor, recording: Recording, conditions: torch.Tensor = None
     ) -> torch.Tensor:
         """
-        Merges channels by learning a weighted sum of input channels, where the
-        weights are determined by the alignment of the channel's positial embeddings
-        with learnable heads.
-
         Arguments:
             x -- input tensor with shape [B, C, T]
-            layout -- layout of the channels with shape [C, 2]
+            recording -- recording object with channel layout
             conditions -- tensor of shape [B] with the condition index for each sample
 
         Returns:
@@ -179,8 +248,8 @@ class ChannelMerger(nn.Module):
         B, C, T = x.shape
 
         # Spatial embedding, [B, C, 2] -> [B, C, dim]
-        positions = self.position_getter.get_positions(x, layout)
-        embedding = self.embedding(positions)  # [B, C, dim]
+        positions = self.position_getter.get_positions(x, recording)
+        embedding = self.embedding(positions)  # [B, C, emb_dim]
 
         # Mask out invalid channels, [B, C]
         score_offset = torch.zeros(B, C, device=x.device)
@@ -189,7 +258,7 @@ class ChannelMerger(nn.Module):
         # Dropout by random center and radius
         if self.training and self.dropout:
 
-            center_to_ban = torch.rand(2, device=x.device)
+            center_to_ban = torch.rand(self.position_getter.dim, device=x.device)
             radius_to_ban = self.dropout
 
             banned = (positions - center_to_ban).norm(dim=-1) <= radius_to_ban
@@ -252,14 +321,23 @@ class ConditionalLayers(nn.Module):
 
 
 class ChannelDropout(nn.Module):
-    def __init__(self, dropout: float = 0.1):
+    """Spatial dropout by random center and radius in normalized [0, 1] coordinates."""
+
+    def __init__(
+        self,
+        dropout: float = 0.1,
+        layout_dim: int = 2,
+        layout_proj: bool = False,
+        layout_scaling: str = "midpoint",
+    ):
         super().__init__()
         self.dropout = dropout
-        self.position_getter = PositionGetter()
+        self.position_getter = PositionGetter(
+            dim=layout_dim, proj=layout_proj, scaling=layout_scaling
+        )
 
-    def forward(self, x: torch.Tensor, layout: torch.Tensor) -> torch.Tensor:
-        """Spatial dropout by random center and radius in normalized [0, 1] coordinates.
-
+    def forward(self, x: torch.Tensor, recording: Recording) -> torch.Tensor:
+        """
         Args:
             dropout: dropout radius in normalized [0, 1] coordinates.
         """
@@ -270,7 +348,7 @@ class ChannelDropout(nn.Module):
         B, C, T = x.shape
 
         # Mask out invalid channels
-        positions = self.position_getter.get_positions(x, layout)
+        positions = self.position_getter.get_positions(x, recording)
         valid = (~self.position_getter.is_invalid(positions)).float()
 
         x = x * valid[:, :, None]
@@ -278,7 +356,7 @@ class ChannelDropout(nn.Module):
         if self.training:
 
             # Spatial dropout by random center and radius
-            center_to_ban = torch.rand(2, device=x.device)
+            center_to_ban = torch.rand(self.position_getter.dim, device=x.device)
             kept = (positions - center_to_ban).norm(dim=-1) > self.dropout
             x = x * kept.float()[:, :, None]
 
@@ -287,7 +365,7 @@ class ChannelDropout(nn.Module):
             n_tests = 100
 
             for _ in range(n_tests):
-                center_to_ban = torch.rand(2, device=x.device)
+                center_to_ban = torch.rand(self.position_getter.dim, device=x.device)
                 kept = (positions - center_to_ban).norm(dim=-1) > self.dropout
                 proba_kept += kept.float() / n_tests
 
@@ -297,6 +375,7 @@ class ChannelDropout(nn.Module):
 
 
 class ConvSequence(nn.Module):
+    """Convolutional sequence with optional skip connections and GLU activations."""
 
     def __init__(
         self,
@@ -313,8 +392,6 @@ class ConvSequence(nn.Module):
         activation: tp.Any = None,
     ) -> None:
         """
-        Convolutional sequence with optional skip connections and GLU activations.
-
         Arguments:
             channels -- List of channel dims for each layer.
 
