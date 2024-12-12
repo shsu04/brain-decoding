@@ -42,7 +42,7 @@ class SimpleConv(nn.Module):
                 len(self.config.conditions) > 0
             ), "There must be at least one condition"
 
-            # doubel dictionary to map condition type and name to index
+            # double dictionary to map condition type and name to index
             self.condition_to_idx = {}
             for cond_type, cond_names in sorted(self.config.conditions.items()):
                 # add an additional condition in case not found during training
@@ -104,7 +104,7 @@ class SimpleConv(nn.Module):
         if self.config.conditional_layers:
             for cond_type, cond_names in sorted(self.config.conditions.items()):
                 dim = {
-                    "self.config.hidden_dim": self.config.hidden_dim,
+                    "hidden_dim": self.config.hidden_dim,
                     "input": channels,
                 }[self.config.conditional_layers_dim]
 
@@ -203,7 +203,7 @@ class SimpleConv(nn.Module):
             x = self.merger(
                 x=x,
                 recording=recording,
-                conditions=conditions[self.config.merger_conditional],
+                condition=conditions[self.config.merger_conditional],
             )
 
         if self.initial_linear is not None:
@@ -213,7 +213,7 @@ class SimpleConv(nn.Module):
             assert (
                 cond_type in conditions.keys()
             ), f"The conditional type {cond_type} must be in the conditions"
-            x = cond_layer(x, conditions[cond_type])
+            x = cond_layer(x, condition=conditions[cond_type])
 
         # CNN
         x = self.encoders(x)

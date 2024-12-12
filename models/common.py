@@ -22,6 +22,7 @@ class PositionGetter:
         self.dim = dim
         self.proj = proj
         self.scaling = scaling
+        self._cache: tp.Dict[int, torch.Tensor] = {}
 
         assert dim in [2, 3, None], f"Layout can only be 2D or 3D. Invalid dim {dim}."
         assert scaling in [
@@ -52,6 +53,10 @@ class PositionGetter:
             if dim == 3:
                 scaled positions of the sensors in 3D space. Dim = [C, 3], (x, y, z)
         """
+        if recording.cache_path in self._cache:
+            return self._cache[recording.cache_path]
+
+        # Get layout
         try:
             assert (
                 recording.info is not None
@@ -98,6 +103,8 @@ class PositionGetter:
             max_abs = layout.abs().max(dim=0).values
             layout = layout / max_abs
 
+        self._cache[recording.cache_path] = layout
+
         return layout
 
     def get_positions(self, x: torch.Tensor, recording: Recording) -> torch.Tensor:
@@ -107,7 +114,7 @@ class PositionGetter:
             x -- recordings with shape [B, C, T]
 
         Returns:
-            torch.Tensor -- 2D positions of channels in x [B, C, dim]
+            torch.Tensor -- positions of channels in x [B, C, dim]
         """
         B, C, T = x.shape
         positions = torch.full((B, C, self.dim), self.INVALID, device=x.device)
@@ -256,8 +263,7 @@ class ChannelMerger(nn.Module):
         merger_channels: int,
         embedding_dim: int = 2048,
         dropout: float = 0,
-        n_conditions: int = 2,
-        conditional: bool = False,
+        conditions: dict[str, int] = None,
         layout_dim: int = 2,
         layout_proj: bool = False,
         layout_scaling: str = "midpoint",
@@ -270,11 +276,15 @@ class ChannelMerger(nn.Module):
         )
 
         # Learnable heads for each condition
-        self.conditional = conditional
-        if self.conditional:
+        self.conditions = conditions
+        if self.conditions:
+            self.trained_indices = set()
             self.heads = nn.Parameter(
                 torch.randn(
-                    n_conditions, merger_channels, embedding_dim, requires_grad=True
+                    len(self.conditions),
+                    merger_channels,
+                    embedding_dim,
+                    requires_grad=True,
                 )
             )
         else:
@@ -287,13 +297,13 @@ class ChannelMerger(nn.Module):
         self.embedding = FourierEmbedding(dimension=embedding_dim)
 
     def forward(
-        self, x: torch.Tensor, recording: Recording, conditions: torch.Tensor = None
+        self, x: torch.Tensor, recording: Recording, condition: str = None
     ) -> torch.Tensor:
         """
         Arguments:
             x -- input tensor with shape [B, C, T]
             recording -- recording object with channel layout
-            conditions -- tensor of shape [B] with the condition index for each sample
+            condition -- condition to select heads from. Can also be "mean"
 
         Returns:
             torch.Tensor -- output tensor with shape [B, merger_channels, T]
@@ -301,9 +311,9 @@ class ChannelMerger(nn.Module):
 
         B, C, T = x.shape
 
-        # Spatial embedding, [B, C, 2] -> [B, C, dim]
+        # Spatial embedding, [B, C, dim] -> [B, C, emb_dim]
         positions = self.position_getter.get_positions(x, recording)
-        embedding = self.embedding(positions)  # [B, C, emb_dim]
+        embedding = self.embedding(positions)
 
         # Mask out invalid channels, [B, C]
         score_offset = torch.zeros(B, C, device=x.device)
@@ -319,11 +329,33 @@ class ChannelMerger(nn.Module):
             score_offset[banned] = float("-inf")
 
         # If conditional, choose heads based on condition
-        if self.conditional:
+        if self.conditions:
+
             _, chout, pos_dim = self.heads.shape
-            heads = self.heads.gather(
-                0, conditions.view(-1, 1, 1).expand(-1, chout, pos_dim)
-            )
+
+            # Take mean of trained indices
+            if condition == "mean":
+                # [B, ch_out, emb_dim]
+                heads = (
+                    torch.stack([self.heads[list(self.trained_indices)]])
+                    .mean(dim=0)
+                    .expand(B, -1, -1)
+                )
+            else:
+                # Expand unknown head to shape B
+                if condition not in self.conditions:
+                    index = self.conditions["unknown"]
+                # Expand known head to shape B
+                else:
+                    index = self.conditions[condition]
+                    if self.training:
+                        self.trained_indices.add(index)
+
+                # [1, ch_out, emb_dim] -> [B, ch_out, emb_dim]
+                conditions = torch.full((B,), index, dtype=torch.long)
+                heads = self.heads.gather(
+                    0, conditions.view(-1, 1, 1).expand(-1, chout, pos_dim)
+                )
         else:
             # [ch_out, dim] -> [B, ch_out, dim]
             heads = self.heads[None].expand(B, -1, -1)
@@ -344,29 +376,50 @@ class ConditionalLayers(nn.Module):
         self,
         in_channels: int,
         out_channels: int,
-        n_conditions: int,
+        conditions: dict[str, int],
     ):
         super().__init__()
 
+        self.conditions = conditions
+        self.trained_indices = set()
         self.weights = nn.Parameter(
-            torch.randn(n_conditions, in_channels, out_channels)
+            torch.randn(len(conditions), in_channels, out_channels)
         )
         self.weights.data *= 1 / in_channels**0.5
 
-    def forward(self, x: torch.Tensor, conditions: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, condition: str) -> torch.Tensor:
         """Applies a conditional linear transformation to the input tensor.
 
         Arguments:
             x -- input tensor with shape [B, C, T]
-            conditions -- tensor with shape [B]
+            condition -- string specifying condition, can be "mean"
 
         Returns:
             torch.Tensor -- output tensor with shape [B, C, T]
         """
-        _, C, D = self.weights.shape
+        S, C, D = self.weights.shape
+        B, C, T = x.shape
 
-        # Gather weight matrices for each condition
-        weights = self.weights.gather(0, conditions.view(-1, 1, 1).expand(-1, C, D))
+        if condition == "mean":
+            weights = (
+                torch.stack([self.weights[list(self.trained_indices)]])
+                .mean(dim=0)
+                .expand(B, -1, -1)
+            )
+        else:
+            # Expand unknown cond to shape B
+            if condition not in self.conditions:
+                index = self.conditions["unknown"]
+            # Expand known head to shape B
+            else:
+                index = self.conditions[condition]
+                if self.training:
+                    self.trained_indices.add(index)
+
+            # Gather weight matrices for each condition
+            conditions = torch.full((B,), index, dtype=torch.long)
+            weights = self.weights.gather(0, conditions.view(-1, 1, 1).expand(-1, C, D))
+
         return torch.einsum("bct,bcd->bdt", x, weights)
 
     def __repr__(self):
