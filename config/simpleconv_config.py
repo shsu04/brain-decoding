@@ -5,6 +5,8 @@ from .config import Config
 class SimpleConvConfig(Config):
     def __init__(
         self,
+        # Str to list of possible conditions
+        conditions: dict[str, list] = None,
         # Channels
         in_channels: int = 208,
         out_channels: int = 128,
@@ -19,13 +21,11 @@ class SimpleConvConfig(Config):
         merger_emb_dim: int = 2048,
         merger_channels: int = 256,
         merger_dropout: float = 0.3,
-        merger_conditional: bool = False,
-        merger_conditions: int = 0,
+        merger_conditional: str = None,
         # Inital
         initial_linear: int = 256,
         initial_depth: int = 1,
-        # Subject specific settings
-        n_conditions: int = 27,
+        # Conditional layers
         conditional_layers: bool = True,
         conditional_layers_dim: str = "input",  # or hidden_dim
         # Conv layer overall structure
@@ -46,6 +46,7 @@ class SimpleConvConfig(Config):
     ):
         super(SimpleConvConfig, self).__init__()
 
+        self.conditions = conditions
         # Channels
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -61,12 +62,10 @@ class SimpleConvConfig(Config):
         self.merger_channels = merger_channels
         self.merger_dropout = merger_dropout
         self.merger_conditional = merger_conditional
-        self.merger_conditions = merger_conditions
         # Inital
         self.initial_linear = initial_linear
         self.initial_depth = initial_depth
         # Subject specific settings
-        self.n_conditions = n_conditions
         self.conditional_layers = conditional_layers
         self.conditional_layers_dim = conditional_layers_dim
         # Conv layer overall structure

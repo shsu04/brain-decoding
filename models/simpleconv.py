@@ -12,6 +12,8 @@ from config import SimpleConvConfig
 from torch import nn
 from torch.nn import functional as F
 
+from ..studies.study import Recording
+
 from .common import (
     ConvSequence,
     ConditionalLayers,
@@ -34,6 +36,21 @@ class SimpleConv(nn.Module):
             self.config.kernel_size % 2 == 1
         ), "For padding to work, this must be verified"
 
+        if config.conditions is not None:
+
+            assert (
+                len(self.config.conditions) > 0
+            ), "There must be at least one condition"
+
+            # doubel dictionary to map condition type and name to index
+            self.condition_to_idx = {}
+            for cond_type, cond_names in sorted(self.config.conditions.items()):
+                # add an additional condition in case not found during training
+                self.condition_to_idx[cond_type] = {
+                    cond: idx
+                    for idx, cond in enumerate(sorted(cond_names + ["unknown"]))
+                }
+
         # Spatial dropout and rescale
         self.dropout = None
         if self.config.dropout > 0.0:
@@ -47,12 +64,20 @@ class SimpleConv(nn.Module):
         # Channel merger by spatial attention
         self.merger = None
         if self.config.merger:
+
+            if self.config.merger_conditional is not None:
+                assert (
+                    config.merger_conditional in self.condition_to_idx.keys()
+                ), f"The merger conditional type {config.merger_conditional} must be in the conditions"
+                conditions = self.condition_to_idx[config.merger_conditional]
+            else:
+                conditions = None
+
             self.merger = ChannelMerger(
                 merger_channels=self.config.merger_channels,
                 embedding_dim=self.config.merger_emb_dim,
                 dropout=self.config.merger_dropout,
-                n_conditions=self.config.merger_conditions,
-                conditional=self.config.merger_conditional,
+                conditions=conditions,
                 layout_dim=self.config.layout_dim,
                 layout_proj=self.config.layout_proj,
                 layout_scaling=self.config.layout_scaling,
@@ -73,19 +98,22 @@ class SimpleConv(nn.Module):
             self.initial_linear = nn.Sequential(*init)
             channels = self.config.initial_linear
 
-        # Subject-specific layers
-        self.conditional_layers = None
+        # Conditional layers
+        self.conditional_layers = nn.ModuleDict()
+
         if self.config.conditional_layers:
-            dim = {
-                "self.config.hidden_dim": self.config.hidden_dim,
-                "input": channels,
-            }[self.config.conditional_layers_dim]
-            self.conditional_layers = ConditionalLayers(
-                in_channels=channels,
-                out_channels=dim,
-                n_conditions=self.config.n_conditions,
-            )
-            channels = dim
+            for cond_type, cond_names in sorted(self.config.conditions.items()):
+                dim = {
+                    "self.config.hidden_dim": self.config.hidden_dim,
+                    "input": channels,
+                }[self.config.conditional_layers_dim]
+
+                self.conditional_layers[cond_type] = ConditionalLayers(
+                    in_channels=channels,
+                    out_channels=dim,
+                    conditions=self.condition_to_idx[cond_type],
+                )
+                channels = dim
 
         # Convolutional blocks parameter
         # Compute the sequences of channel sizes
@@ -141,16 +169,14 @@ class SimpleConv(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        layout: torch.Tensor = None,
-        subjects: torch.Tensor = None,
+        recording: Recording,
+        conditions: tp.Dict[str, str],
     ):
         """
         Arguments:
             x -- meg scans of shape [B, C, T]
-
-        Keyword Arguments:
-            layout -- layout tensor of shape [C, 2] with the channel positions
-            subjects -- tensor of shape [B] with the subject index for each sample
+            recording -- Recording object with the layout and subject index
+            conditions -- dictionary of conditions_type : condition_name
         """
         length = x.shape[-1]
 
@@ -167,13 +193,27 @@ class SimpleConv(nn.Module):
             attention_mask = None
 
         if self.dropout is not None:
-            x = self.dropout(x=x, layout=layout)
+            x = self.dropout(x=x, recording=recording)
+
         if self.merger is not None:
-            x = self.merger(x=x, layout=layout)
+            assert (
+                self.config.merger_conditional in conditions.keys()
+            ), f"The merger conditional type {self.config.merger_conditional} must be in the conditions"
+
+            x = self.merger(
+                x=x,
+                recording=recording,
+                conditions=conditions[self.config.merger_conditional],
+            )
+
         if self.initial_linear is not None:
             x = self.initial_linear(x)
-        if self.conditional_layers is not None:
-            x = self.conditional_layers(x, subjects)
+
+        for cond_type, cond_layer in self.conditional_layers.items():
+            assert (
+                cond_type in conditions.keys()
+            ), f"The conditional type {cond_type} must be in the conditions"
+            x = cond_layer(x, conditions[cond_type])
 
         # CNN
         x = self.encoders(x)
