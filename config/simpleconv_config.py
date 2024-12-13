@@ -43,6 +43,8 @@ class SimpleConvConfig(Config):
         is_causal: bool = False,
         transformer_layers: int = 0,
         transformer_heads: int = 0,
+        transformer_concat_spectrals: bool = False,
+        transformer_bins: int = None,
     ):
         super(SimpleConvConfig, self).__init__()
 
@@ -83,3 +85,5 @@ class SimpleConvConfig(Config):
         self.is_causal = is_causal
         self.transformer_layers = transformer_layers
         self.transformer_heads = transformer_heads
+        self.transformer_concat_spectrals = transformer_concat_spectrals
+        self.transformer_bins = transformer_bins

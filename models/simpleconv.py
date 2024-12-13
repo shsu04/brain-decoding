@@ -11,6 +11,7 @@ import torch
 from config import SimpleConvConfig
 from torch import nn
 from torch.nn import functional as F
+from transformer import Transformer
 
 from ..studies.study import Recording
 
@@ -139,14 +140,16 @@ class SimpleConv(nn.Module):
         # Final transformer encoder
         self.transformer_encoders = False
         if self.config.transformer_layers > 0:
-            self.transformer_encoders = nn.TransformerEncoder(
-                nn.TransformerEncoderLayer(
-                    d_model=final_channels,
-                    nhead=self.config.transformer_heads,
-                    batch_first=True,
-                    dropout=self.config.conv_dropout,
-                ),
-                num_layers=self.config.transformer_layers,
+            self.transformer_encoders = Transformer(
+                d_model=final_channels,
+                nhead=self.config.transformer_heads,
+                dropout=self.config.conv_dropout,
+                layers=self.config.transformer_layers,
+                embedding=None,
+                causal=self.config.is_causal,
+                use_attention_mask=self.config.use_attention_mask,
+                concat_spectrals=self.config.transformer_concat_spectrals,
+                bins=self.config.transformer_bins,
             )
 
         # Final linear projection
@@ -164,6 +167,12 @@ class SimpleConv(nn.Module):
         print(f"\nSimpleConv: \n\tParams: {total_params}")
         print(
             f"\tConv blocks: {self.config.depth}\n\tTrans layers: {self.config.transformer_layers}"
+        )
+        print(
+            f"Spectral: {self.config.transformer_concat_spectrals}, Decoder: {self.config.transformer_decoder}"
+        )
+        print(
+            f"Causal: {self.config.is_causal}, Attention mask: {self.config.use_attention_mask}"
         )
 
     def forward(
@@ -216,27 +225,11 @@ class SimpleConv(nn.Module):
             x = cond_layer(x, condition=conditions[cond_type])
 
         # CNN
-        x = self.encoders(x)
+        x = self.encoders(x)  # [B, C, T]
 
         # Transformers
         if self.transformer_encoders:
-
-            x = x.permute(0, 2, 1)  # [B, T, C]
-            if self.config.is_causal:
-                _, t, _ = x.shape
-                causal_mask = nn.Transformer.generate_square_subsequent_mask(
-                    sz=t
-                )  # of shape [t, t]
-            else:
-                causal_mask = None
-
-            x = self.transformer_encoders(
-                x,
-                mask=causal_mask,
-                src_key_padding_mask=attention_mask,
-                is_causal=True if (self.config.is_causal) else False,
-            )
-            x = x.permute(0, 2, 1)  # [B, C, T]
+            self.transformer_encoders(x, attn_mask=attention_mask)  # [B, C, T]
 
         # Final projection
         x = self.final(x)  # [B, C, T]

@@ -1,0 +1,219 @@
+from torch import nn
+import torch
+import math
+import torchaudio.transforms as T
+
+
+class SinusoidalPositionalEncoding(nn.Module):
+    def __init__(self, d_model: int, max_len: int = 5000):
+        super().__init__()
+
+        pe = torch.zeros(max_len, d_model)  # [L, D]
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)  # [L, 1]
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
+        )  # [D/2]
+
+        pe[:, 0::2] = torch.sin(position * div_term)  # [L, D/2]
+        pe[:, 1::2] = torch.cos(position * div_term)  # [L, D/2]
+
+        self.register_buffer("pe", pe.unsqueeze(0))  # [1, L, D]
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: [B, T, D]
+        seq_len = x.size(1)
+        return x + self.pe[:, :seq_len, :]
+
+
+class GroupedConvolution(nn.Module):
+    """
+    Inspired by wav2vec 2.0, convolution over the input features (z) to
+    generate positional embeddings.
+
+    - A convolution with `groups = d_model` is used to produce positional embeddings.
+    - After conv, it's added to the input features.
+    """
+
+    def __init__(self, d_model: int, kernel_size: int = 4):
+        super().__init__()
+        # group the conv by d_model channels (depthwise convolution)
+        self.conv = nn.Conv1d(
+            in_channels=d_model,
+            out_channels=d_model,
+            kernel_size=kernel_size,
+            padding=kernel_size // 2,
+            groups=d_model,
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: [B, T, C] -> [B, C, T]
+        x_t = x.permute(0, 2, 1)
+        pos_emb = self.conv(x_t)  # [B, C, T]
+        pos_emb = pos_emb.permute(0, 2, 1)  # [B, T, C]
+        return x + pos_emb
+
+
+class TransformerEmbedding(nn.Module):
+    supported_embeddings = ["sinusoidal", "wav2vec_conv", "None"]
+
+    def __init__(
+        self,
+        embedding: str = None,
+        d_model: int = 256,
+        dropout: float = 0.1,
+        max_len: int = 5000,
+        kernel_size: int = 4,
+    ):
+        super().__init__()
+        assert (
+            embedding in self.supported_embeddings or embedding is None
+        ), f"Embedding {embedding} not supported."
+
+        self.embedding_type = embedding
+
+        if embedding == "sinusoidal":
+            self.embedding = SinusoidalPositionalEncoding(d_model, max_len=max_len)
+        elif embedding == "wav2vec_conv":
+            self.embedding = GroupedConvolution(d_model, kernel_size=kernel_size)
+        else:
+            self.embedding = None
+
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: [B, T, d_model]
+        x = self.embedding(x) if self.embedding is not None else x
+        return self.dropout(x)
+
+
+class SpectralEmbedding(nn.Module):
+    """
+    Merges a time series [B, C, T] channel-wise into [B, c, T] using attention,
+    then compute spectrals for each channel [B, c, T] -> [B, c * bins, T]
+    """
+
+    def __init__(
+        self,
+        bins: int = 16,
+        channels: int = 256,
+    ):
+        super().__init__()
+        assert channels % bins == 0, "Channels must be divisible by bins."
+        assert bins > 1, "Bins must be greater than 1."
+
+        self.bins = bins
+        self.channels = channels
+
+        self.key = nn.Linear(channels, int(channels / bins), bias=False)
+        self.query = nn.Linear(channels, channels, bias=False)
+        self.value = nn.Linear(channels, channels, bias=False)
+
+        n_fft = 2 * (bins - 1)
+        self.spectrogram_transform = T.Spectrogram(
+            n_fft=n_fft,
+            hop_length=1,
+            normalized=True,
+            power=2,
+        )
+
+    def forward(self, x: torch.Tensor):
+        B, C, T = x.shape
+        x = x.permute(0, 2, 1)  # [B, C, T] -> [B, T, C]
+
+        key = self.key(x).transpose(1, 2)  # [B, T, c] -> [B, c, T]
+        query = self.query(x).transpose(1, 2)  # [B, T, C] -> [B, C, T]
+        value = self.value(x).transpose(1, 2)  # [B, T, C] -> [B, C, T]
+
+        # [B, c, T] x [B, C, T] → [B, c, C]
+        scores = torch.einsum("bct,bCt->bcC", key, query)
+        scores = torch.softmax(scores / (C**0.5), dim=-1)
+
+        # [B, c, C] x [B, C, T] → [B, c, T]
+        out = torch.einsum("bCt,bcC->bct", value, scores)
+        # [B, c, T] -> [B, c, bins, T + 1]
+        spectral_out = self.spectrogram_transform(out)
+        # remove the last time step to match the input shape
+        spectral_out = spectral_out[:, :, :, :-1]
+
+        B, c, bins, T = spectral_out.shape
+        spectral_out = spectral_out.reshape(B, c * bins, T)
+        # [B, c * bins, T]
+        return spectral_out
+
+
+class Transformer(nn.Module):
+    """
+    Transformer model for time series data with custom embedding options
+    Note, no final projection is done here. Optionally, concat a channel-reduced
+    spectral embedding to the input features.
+    """
+
+    def __init__(
+        self,
+        d_model: int,
+        nhead: int,
+        dropout: float,
+        layers: int,
+        embedding: str,
+        is_causal: bool = False,
+        use_attention_mask: bool = True,
+        concat_spectrals: bool = False,
+        bins: int = 16,
+        # use_decoder: bool = False,
+    ):
+        super().__init__()
+
+        self.is_causal = is_causal
+        self.use_attention_mask = use_attention_mask
+
+        self.spectral = None
+        if concat_spectrals:
+            self.spectral = SpectralEmbedding(bins=bins, channels=d_model)
+            d_model *= 2
+
+        self.embedding_name = embedding
+        self.embedding = TransformerEmbedding(
+            embedding=embedding, d_model=d_model, dropout=dropout
+        )
+        self.encoders = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=d_model,
+                nhead=nhead,
+                batch_first=True,
+                dropout=dropout,
+                dim_feedforward=4 * d_model,
+            ),
+            num_layers=layers,
+        )
+        self.d_model = d_model
+
+    def forward(self, x: torch.Tensor, attn_mask=None):
+        """x: [B, C, T], attn_mask: [B, T]"""
+        if self.spectral is not None:
+            spectral = self.spectral(x)  # [B, c * bins, T]
+            assert (
+                spectral.shape == x.shape
+            ), f"Spectral shape mismatch. {spectral.shape} != {x.shape}"
+            x = torch.cat([x, spectral], dim=1)  # [B, 2 * d_model, T]
+
+        x = x.permute(0, 2, 1)  # [B, C, T] -> [B, T, C]
+
+        x = self.embedding(x)  # [B, T, C]
+
+        if self.is_causal:
+            _, t, _ = x.shape
+            causal_mask = nn.Transformer.generate_square_subsequent_mask(
+                sz=t
+            )  # of shape [T, T]
+        else:
+            causal_mask = None
+
+        x = self.encoders(
+            x,
+            mask=causal_mask,
+            src_key_padding_mask=attn_mask,
+            is_causal=True if (self.is_causal) else False,
+        )  # [B, T, C]
+        x = x.permute(0, 2, 1)  # [B, C, T]
+
+        return x
