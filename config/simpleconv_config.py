@@ -38,13 +38,17 @@ class SimpleConvConfig(Config):
         conv_dropout: float = 0.2,
         dropout_input: float = 0.2,
         batch_norm: bool = True,
-        # Transformers
-        use_attention_mask: bool = False,
-        is_causal: bool = False,
-        transformer_layers: int = 0,
-        transformer_heads: int = 0,
-        transformer_concat_spectrals: bool = False,
-        transformer_bins: int = None,
+        # Transformers Encoders
+        transformer_encoder_emb: str = "grouped",
+        transformer_encoder_layers: int = 0,
+        transformer_encoder_heads: int = 0,
+        transformer_encoder_concat_spectrals: bool = False,
+        transformer_encoder_bins: int = None,
+        # Transformer Decoders
+        transformer_decoder_emb: str = "grouped",
+        transformer_decoder_layers: int = 0,
+        transformer_decoder_heads: int = 0,
+        transformer_decoder_dim: int = 0,
     ):
         super(SimpleConvConfig, self).__init__()
 
@@ -80,10 +84,14 @@ class SimpleConvConfig(Config):
         self.dropout_input = dropout_input
         self.conv_dropout = conv_dropout
         self.batch_norm = batch_norm
-        # Transformers
-        self.use_attention_mask = use_attention_mask
-        self.is_causal = is_causal
-        self.transformer_layers = transformer_layers
-        self.transformer_heads = transformer_heads
-        self.transformer_concat_spectrals = transformer_concat_spectrals
-        self.transformer_bins = transformer_bins
+        # Transformer Encoders
+        self.transformer_encoder_emb = transformer_encoder_emb
+        self.transformer_encoder_layers = transformer_encoder_layers
+        self.transformer_encoder_heads = transformer_encoder_heads
+        self.transformer_encoder_concat_spectrals = transformer_encoder_concat_spectrals
+        self.transformer_encoder_bins = transformer_encoder_bins
+        # Transformer Decoders
+        self.transformer_decoder_emb = transformer_decoder_emb
+        self.transformer_decoder_layers = transformer_decoder_layers
+        self.transformer_decoder_heads = transformer_decoder_heads
+        self.transformer_decoder_dim = transformer_decoder_dim

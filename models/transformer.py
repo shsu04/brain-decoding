@@ -141,9 +141,9 @@ class SpectralEmbedding(nn.Module):
         return spectral_out
 
 
-class Transformer(nn.Module):
+class TransformerEncoder(nn.Module):
     """
-    Transformer model for time series data with custom embedding options
+    Transformer encoder model for time series data with custom embedding options
     Note, no final projection is done here. Optionally, concat a channel-reduced
     spectral embedding to the input features.
     """
@@ -155,17 +155,10 @@ class Transformer(nn.Module):
         dropout: float,
         layers: int,
         embedding: str,
-        is_causal: bool = False,
-        use_attention_mask: bool = True,
         concat_spectrals: bool = False,
         bins: int = 16,
-        # use_decoder: bool = False,
     ):
         super().__init__()
-
-        self.is_causal = is_causal
-        self.use_attention_mask = use_attention_mask
-
         self.spectral = None
         if concat_spectrals:
             self.spectral = SpectralEmbedding(bins=bins, channels=d_model)
@@ -196,24 +189,107 @@ class Transformer(nn.Module):
             ), f"Spectral shape mismatch. {spectral.shape} != {x.shape}"
             x = torch.cat([x, spectral], dim=1)  # [B, 2 * d_model, T]
 
-        x = x.permute(0, 2, 1)  # [B, C, T] -> [B, T, C]
-
-        x = self.embedding(x)  # [B, T, C]
-
-        if self.is_causal:
-            _, t, _ = x.shape
-            causal_mask = nn.Transformer.generate_square_subsequent_mask(
-                sz=t
-            )  # of shape [T, T]
-        else:
-            causal_mask = None
+        x = self.embedding(x.permute(0, 2, 1))  # [B, C, T] -> [B, T, C]
 
         x = self.encoders(
             x,
-            mask=causal_mask,
+            mask=None,
             src_key_padding_mask=attn_mask,
-            is_causal=True if (self.is_causal) else False,
+            is_causal=False,
         )  # [B, T, C]
         x = x.permute(0, 2, 1)  # [B, C, T]
 
         return x
+
+
+class TransformerDecoder(nn.Module):
+    """
+    Transformer decoder model for Mel prediction
+    """
+
+    mel_bins = 128
+
+    def __init__(
+        self,
+        encoder_output_dim: int,
+        d_model: int = 256,
+        nhead: int = 8,
+        dropout: float = 0.2,
+        layers: int = 4,
+        embedding: str = None,
+    ):
+        super().__init__()
+        self.encoder_output_dim = encoder_output_dim
+        self.encoder_proj = None
+
+        # ENCODER PROJECTION
+        if encoder_output_dim != d_model:
+            pad, kernel, stride = 0, 1, 1
+            self.encoder_proj = nn.Sequential(
+                nn.Conv1d(encoder_output_dim, 2 * encoder_output_dim, 1),
+                nn.GELU(),
+                nn.ConvTranspose1d(
+                    2 * encoder_output_dim,
+                    d_model,
+                    kernel,
+                    stride,
+                    pad,
+                ),
+            )
+
+        # DECODER EMBEDDING
+        self.embedding_name = embedding
+        self.embedding = TransformerEmbedding(
+            embedding=embedding, d_model=self.mel_bins, dropout=dropout
+        )
+        # DECODER PROJECTION, mel_bins to d_model
+        self.decoder_proj = None
+        if self.mel_bins != d_model:
+            self.decoder_proj = nn.Linear(self.mel_bins, d_model)
+
+        self.decoders = nn.TransformerDecoder(
+            nn.TransformerDecoderLayer(
+                d_model=d_model,
+                nhead=nhead,
+                batch_first=True,
+                dropout=dropout,
+                dim_feedforward=4 * d_model,
+            ),
+            num_layers=layers,
+        )
+
+    def forward(self, mel: torch.Tensor, encoder_output: torch.Tensor, src_mask=None):
+        """Uses the encoder output to predict the mel spectrogram
+
+        Arguments:
+            mel -- mel spectrogram of the perceived audio [B, mel, T]
+            encoder_output -- output from the encoder [B, C, T]
+            src_mask -- mask for the encoder output [B, T]
+        """
+        # [B, mel, T] -> [B, T, mel]
+        mel = self.embedding(mel.permute(0, 2, 1))
+        if self.decoder_proj is not None:
+            mel = self.decoder_proj(mel)  # [B, T, d_model]
+
+        if self.encoder_proj is not None:
+            encoder_output = self.encoder_proj(encoder_output)  # [B, d_model, T]
+        encoder_output = encoder_output.permute(0, 2, 1)  # [B, T, d_model]
+
+        _, t, _ = mel.shape
+        causal_mask = nn.Transformer.generate_square_subsequent_mask(
+            sz=t
+        )  # of shape [T, T]
+
+        output = self.decoders(
+            mel,
+            encoder_output,
+            tgt_mask=causal_mask,  # Causal mask for decoder self-attention
+            memory_mask=None,  # No mask for cross-attention with encoder
+            tgt_key_padding_mask=None,
+            memory_key_padding_mask=src_mask,  # If meg padded
+            is_causal=True,
+        )  # [B, T, d_model]
+
+        output = output.permute(0, 2, 1)  # [B, d_model, T]
+
+        return output

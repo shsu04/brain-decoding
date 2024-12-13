@@ -10,7 +10,6 @@ import torch
 from torch import nn
 import mne
 from studies.study import Recording
-from dataloader.batch import Batch
 
 
 class PositionGetter:

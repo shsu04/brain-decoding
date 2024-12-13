@@ -7,11 +7,12 @@
 from functools import partial
 import random
 import typing as tp
+from unittest import skip
 import torch
 from config import SimpleConvConfig
 from torch import nn
 from torch.nn import functional as F
-from transformer import Transformer
+from transformer import TransformerEncoder, TransformerDecoder
 
 from ..studies.study import Recording
 
@@ -139,20 +140,34 @@ class SimpleConv(nn.Module):
 
         # Final transformer encoder
         self.transformer_encoders = False
-        if self.config.transformer_layers > 0:
-            self.transformer_encoders = Transformer(
+        if self.config.transformer_encoder_layers > 0:
+            self.transformer_encoders = TransformerEncoder(
                 d_model=final_channels,
-                nhead=self.config.transformer_heads,
+                nhead=self.config.transformer_encoder_heads,
                 dropout=self.config.conv_dropout,
-                layers=self.config.transformer_layers,
-                embedding=None,
-                causal=self.config.is_causal,
-                use_attention_mask=self.config.use_attention_mask,
-                concat_spectrals=self.config.transformer_concat_spectrals,
-                bins=self.config.transformer_bins,
+                layers=self.config.transformer_encoder_layers,
+                embedding=self.config.transformer_encoder_emb,
+                concat_spectrals=self.config.transformer_encoder_concat_spectrals,
+                bins=self.config.transformer_encoder_bins,
             )
 
-        # Final linear projection
+        # Final transformer decoder
+        self.transformer_decoders = False
+        if self.config.transformer_decoder_layers > 0:
+            assert (
+                self.config.transformer_encoder_layers > 0
+            ), "Must have transformer encoders to use decoders"
+            self.transformer_decoders = TransformerDecoder(
+                encoder_output_dim=final_channels,
+                d_model=self.config.transformer_decoder_dim,
+                nhead=self.config.transformer_decoder_heads,
+                dropout=self.config.conv_dropout,
+                layers=self.config.transformer_decoder_layers,
+                embedding=self.config.transformer_decoder_emb,
+            )
+            final_channels = self.config.transformer_decoder_dim
+
+        # Final encoder linear projection
         self.final = None
         pad, kernel, stride = 0, 1, 1
         self.final = nn.Sequential(
@@ -166,10 +181,10 @@ class SimpleConv(nn.Module):
         total_params = sum(p.numel() for p in self.parameters())
         print(f"\nSimpleConv: \n\tParams: {total_params}")
         print(
-            f"\tConv blocks: {self.config.depth}\n\tTrans layers: {self.config.transformer_layers}"
+            f"\tConv blocks: {self.config.depth}\n\tTrans layers: {self.config.transformer_encoder_layers}"
         )
         print(
-            f"Spectral: {self.config.transformer_concat_spectrals}, Decoder: {self.config.transformer_decoder}"
+            f"Spectral: {self.config.transformer_encoder_concat_spectrals}, Decoder: {self.config.transformer_decoder_layers}"
         )
         print(
             f"Causal: {self.config.is_causal}, Attention mask: {self.config.use_attention_mask}"
@@ -180,23 +195,25 @@ class SimpleConv(nn.Module):
         x: torch.Tensor,
         recording: Recording,
         conditions: tp.Dict[str, str],
+        mel: torch.Tensor = None,
+        train: bool = False,
     ):
         """
         Arguments:
             x -- meg scans of shape [B, C, T]
             recording -- Recording object with the layout and subject index
             conditions -- dictionary of conditions_type : condition_name
+            torch.Tensor -- mel spectrogram of shape [B, mel_bins, T], UNSHIFTED.
         """
         length = x.shape[-1]
 
         # For transformer later, to not attend to padding time steps, of shape [B, T]
         if self.transformer_encoders and self.config.use_attention_mask:
-            mask_shape_tensor = x.clone().permute(0, 2, 1)
+            mask_shape_tensor = x.clone().permute(0, 2, 1)  # [B, T, C]
             sequence_condition = mask_shape_tensor.sum(dim=2) == 0  # [B, T]
-
-            attention_mask = torch.zeros_like(sequence_condition).float()
-            attention_mask[sequence_condition] = float("-inf")  # mask padding
-
+            attention_mask = (
+                sequence_condition  # True for padding positions (to be masked)
+            )
             attention_mask = attention_mask.to(x.device)
         else:
             attention_mask = None
@@ -228,11 +245,52 @@ class SimpleConv(nn.Module):
         x = self.encoders(x)  # [B, C, T]
 
         # Transformers
+        decoder_inference = False
         if self.transformer_encoders:
             self.transformer_encoders(x, attn_mask=attention_mask)  # [B, C, T]
 
-        # Final projection
-        x = self.final(x)  # [B, C, T]
-        assert x.shape[-1] >= length
+            if self.transformer_decoders:
+                if train:
+                    assert (
+                        mel is not None
+                    ), "Mel spectrogram must be provided for training"
 
+                    b_1, _, t_1, b_2, _, t_2 = x.shape, mel.shape
+
+                    assert (
+                        b_1 == b_2 and t_1 == t_2
+                    ), f"Batch size and time steps must match. {b_1} != {b_2} or {t_1} != {t_2}"
+
+                    # Shift mel spectrogram to the right
+                    mel = F.pad(mel, (1, 0), "constant", 0)[
+                        ..., :t_2
+                    ]  # [B, mel_bins, T]
+                    x = self.transformer_decoders(
+                        mel=mel, encoder_output=x, src_mask=attention_mask
+                    )  # [B, C, T]
+
+                # Inference with auto-regressive decoding
+                else:
+                    self.transformer_decoders.eval()
+                    with torch.no_grad():
+
+                        decoder_inference = True
+                        mel_bins = self.transformer_decoders.mel_bins
+                        B, C, T = x.shape
+                        mel = torch.zeros(B, mel_bins, 1).to(x.device)  # [B, mel, 1]
+
+                        for t in range(T):
+                            output = self.transformer_decoders(
+                                mel=mel, encoder_output=x, src_mask=attention_mask
+                            )  # [B, d_model, t + 1]
+
+                            # [B, d_model, 1] -> [B, mel, 1]
+                            next_mel = self.final(output[..., -1:])
+                            torch.cat([mel, next_mel], dim=-1)  # [B, mel, t + 1]
+
+        # Final projection, except when it is alreay done in the decoder
+        if not decoder_inference:
+            x = self.final(x)  # [B, C, T]
+
+        assert x.shape[-1] == length
         return x
