@@ -41,15 +41,16 @@ class GroupedConvolution(nn.Module):
             in_channels=d_model,
             out_channels=d_model,
             kernel_size=kernel_size,
-            padding=kernel_size // 2,
+            padding="same",
             groups=d_model,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: [B, T, C] -> [B, C, T]
-        x_t = x.permute(0, 2, 1)
+        x_t = x.transpose(1, 2)
         pos_emb = self.conv(x_t)  # [B, C, T]
-        pos_emb = pos_emb.permute(0, 2, 1)  # [B, T, C]
+        pos_emb = pos_emb.transpose(1, 2)  # [B, T, C]
+
         return x + pos_emb
 
 
@@ -118,7 +119,7 @@ class SpectralEmbedding(nn.Module):
 
     def forward(self, x: torch.Tensor):
         B, C, T = x.shape
-        x = x.permute(0, 2, 1)  # [B, C, T] -> [B, T, C]
+        x = x.transpose(1, 2)  # [B, C, T] -> [B, T, C]
 
         key = self.key(x).transpose(1, 2)  # [B, T, c] -> [B, c, T]
         query = self.query(x).transpose(1, 2)  # [B, T, C] -> [B, C, T]
@@ -197,16 +198,14 @@ class TransformerEncoder(nn.Module):
             ), f"Spectral shape mismatch. {spectral.shape} != {x.shape}"
             x = torch.cat([x, spectral], dim=1)  # [B, 2 * d_model, T]
 
-        x = self.embedding(x.permute(0, 2, 1))  # [B, C, T] -> [B, T, C]
-
+        x = self.embedding(x.transpose(1, 2))  # [B, C, T] -> [B, T, C]
         x = self.encoders(
             x,
             mask=None,
             src_key_padding_mask=attn_mask,
             is_causal=False,
         )  # [B, T, C]
-        x = x.permute(0, 2, 1)  # [B, C, T]
-
+        x = x.transpose(1, 2)  # [B, C, T]
         return x
 
 
@@ -281,13 +280,13 @@ class TransformerDecoder(nn.Module):
             src_mask -- mask for the encoder output [B, T]
         """
         # [B, mel, T] -> [B, T, mel]
-        mel = self.embedding(mel.permute(0, 2, 1))
+        mel = self.embedding(mel.transpose(1, 2))
         if self.decoder_proj is not None:
             mel = self.decoder_proj(mel)  # [B, T, d_model]
 
         if self.encoder_proj is not None:
             encoder_output = self.encoder_proj(encoder_output)  # [B, d_model, T]
-        encoder_output = encoder_output.permute(0, 2, 1)  # [B, T, d_model]
+        encoder_output = encoder_output.transpose(1, 2)  # [B, T, d_model]
 
         _, t, _ = mel.shape
         causal_mask = nn.Transformer.generate_square_subsequent_mask(
@@ -295,15 +294,16 @@ class TransformerDecoder(nn.Module):
         )  # of shape [T, T]
 
         output = self.decoders(
-            mel,
-            encoder_output,
+            tgt=mel,
+            memory=encoder_output,
             tgt_mask=causal_mask,  # Causal mask for decoder self-attention
             memory_mask=None,  # No mask for cross-attention with encoder
             tgt_key_padding_mask=None,
             memory_key_padding_mask=src_mask,  # If meg padded
-            is_causal=True,
+            tgt_is_causal=True,
+            memory_is_causal=False,
         )  # [B, T, d_model]
 
-        output = output.permute(0, 2, 1)  # [B, d_model, T]
+        output = output.transpose(1, 2)  # [B, d_model, T]
 
         return output

@@ -205,7 +205,7 @@ class SimpleConv(nn.Module):
 
         # For transformer later, to not attend to padding time steps, of shape [B, T]
         if self.transformer_encoders:
-            mask_shape_tensor = x.clone().permute(0, 2, 1)  # [B, T, C]
+            mask_shape_tensor = x.clone().transpose(1, 2)  # [B, T, C]
             sequence_condition = mask_shape_tensor.sum(dim=2) == 0  # [B, T]
             attention_mask = (
                 sequence_condition  # True for padding positions (to be masked)
@@ -218,14 +218,19 @@ class SimpleConv(nn.Module):
             x = self.dropout(x=x, recording=recording)
 
         if self.merger is not None:
-            assert (
-                self.config.merger_conditional in conditions.keys()
-            ), f"The merger conditional type {self.config.merger_conditional} must be in the conditions"
+
+            if self.config.merger_conditional is not None:
+                assert (
+                    self.config.merger_conditional in conditions.keys()
+                ), f"The merger conditional type {self.config.merger_conditional} must be in the conditions"
+                condition = conditions[self.config.merger_conditional]
+            else:
+                condition = None
 
             x = self.merger(
                 x=x,
                 recording=recording,
-                condition=conditions[self.config.merger_conditional],
+                condition=condition,
             )
 
         if self.initial_linear is not None:
@@ -251,7 +256,7 @@ class SimpleConv(nn.Module):
                         mel is not None
                     ), "Mel spectrogram must be provided for training"
 
-                    b_1, _, t_1, b_2, _, t_2 = x.shape, mel.shape
+                    (b_1, _, t_1), (b_2, _, t_2) = x.shape, mel.shape
 
                     assert (
                         b_1 == b_2 and t_1 == t_2

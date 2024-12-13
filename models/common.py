@@ -347,6 +347,7 @@ class ChannelMerger(nn.Module):
                     torch.stack([self.heads[self.trained_indices_list]])
                     .mean(dim=0)
                     .expand(B, -1, -1)
+                    .to(x.device)
                 )
             else:
                 # Expand head to shape B
@@ -358,7 +359,7 @@ class ChannelMerger(nn.Module):
                         self.trained_indices.add(index)
 
                 # [1, ch_out, emb_dim] -> [B, ch_out, emb_dim]
-                conditions = torch.full((B,), index, dtype=torch.long)
+                conditions = torch.full((B,), index, dtype=torch.long).to(x.device)
                 heads = self.heads.gather(
                     0, conditions.view(-1, 1, 1).expand(-1, chout, pos_dim)
                 )
@@ -416,6 +417,7 @@ class ConditionalLayers(nn.Module):
                 torch.stack([self.weights[self.trained_indices_list]])
                 .mean(dim=0)
                 .expand(B, -1, -1)
+                .to(x.device)
             )
         else:
             # Expand cond to shape B
@@ -427,7 +429,7 @@ class ConditionalLayers(nn.Module):
                     self.trained_indices.add(index)
 
             # Gather weight matrices for each condition
-            conditions = torch.full((B,), index, dtype=torch.long)
+            conditions = torch.full((B,), index, dtype=torch.long).to(x.device)
             weights = self.weights.gather(0, conditions.view(-1, 1, 1).expand(-1, C, D))
 
         return torch.einsum("bct,bcd->bdt", x, weights)
