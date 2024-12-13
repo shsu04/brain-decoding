@@ -3,18 +3,13 @@
 #
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
-
-from functools import partial
-import random
 import typing as tp
-from unittest import skip
 import torch
 from config import SimpleConvConfig
 from torch import nn
 from torch.nn import functional as F
-from transformer import TransformerEncoder, TransformerDecoder
-
-from ..studies.study import Recording
+from .transformer import TransformerEncoder, TransformerDecoder
+from studies.study import Recording
 
 from .common import (
     ConvSequence,
@@ -149,6 +144,7 @@ class SimpleConv(nn.Module):
                 embedding=self.config.transformer_encoder_emb,
                 concat_spectrals=self.config.transformer_encoder_concat_spectrals,
                 bins=self.config.transformer_encoder_bins,
+                spectral_dim=self.config.transformer_encoder_spectral_dim,
             )
 
         # Final transformer decoder
@@ -179,15 +175,15 @@ class SimpleConv(nn.Module):
         )
 
         total_params = sum(p.numel() for p in self.parameters())
-        print(f"\nSimpleConv: \n\tParams: {total_params}")
         print(
-            f"\tConv blocks: {self.config.depth}\n\tTrans layers: {self.config.transformer_encoder_layers}"
+            f"\nSimpleConv: \tParams: {total_params}, \tcond: {list(self.config.conditions.keys())}"
         )
         print(
-            f"Spectral: {self.config.transformer_encoder_concat_spectrals}, Decoder: {self.config.transformer_decoder_layers}"
+            f"\t\tMerger: {self.merger is not None}, \t\tMerger chan: {self.config.merger_channels}"
         )
+        cnn_params = sum(p.numel() for p in self.encoders.parameters())
         print(
-            f"Causal: {self.config.is_causal}, Attention mask: {self.config.use_attention_mask}"
+            f"\t\tConv blocks: {self.config.depth}, \tChannels: {channels}, \t\tParams: {cnn_params}"
         )
 
     def forward(
@@ -208,7 +204,7 @@ class SimpleConv(nn.Module):
         length = x.shape[-1]
 
         # For transformer later, to not attend to padding time steps, of shape [B, T]
-        if self.transformer_encoders and self.config.use_attention_mask:
+        if self.transformer_encoders:
             mask_shape_tensor = x.clone().permute(0, 2, 1)  # [B, T, C]
             sequence_condition = mask_shape_tensor.sum(dim=2) == 0  # [B, T]
             attention_mask = (
@@ -274,7 +270,6 @@ class SimpleConv(nn.Module):
                     self.transformer_decoders.eval()
                     with torch.no_grad():
 
-                        decoder_inference = True
                         mel_bins = self.transformer_decoders.mel_bins
                         B, C, T = x.shape
                         mel = torch.zeros(B, mel_bins, 1).to(x.device)  # [B, mel, 1]
@@ -290,6 +285,7 @@ class SimpleConv(nn.Module):
 
                         # [B, mel_bins, T + 1] -> [B, mel_bins, T]
                         x = mel[..., 1:]
+                        decoder_inference = True
 
         # Final projection, except when it is alreay done in the decoder
         if not decoder_inference:

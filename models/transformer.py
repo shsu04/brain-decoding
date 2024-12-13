@@ -54,7 +54,7 @@ class GroupedConvolution(nn.Module):
 
 
 class TransformerEmbedding(nn.Module):
-    supported_embeddings = ["sinusoidal", "wav2vec_conv", "None"]
+    supported_embeddings = ["sinusoidal", "groupconv"]
 
     def __init__(
         self,
@@ -73,7 +73,7 @@ class TransformerEmbedding(nn.Module):
 
         if embedding == "sinusoidal":
             self.embedding = SinusoidalPositionalEncoding(d_model, max_len=max_len)
-        elif embedding == "wav2vec_conv":
+        elif embedding == "groupconv":
             self.embedding = GroupedConvolution(d_model, kernel_size=kernel_size)
         else:
             self.embedding = None
@@ -157,12 +157,13 @@ class TransformerEncoder(nn.Module):
         embedding: str,
         concat_spectrals: bool = False,
         bins: int = 16,
+        spectral_dim=128,
     ):
         super().__init__()
         self.spectral = None
         if concat_spectrals:
-            self.spectral = SpectralEmbedding(bins=bins, channels=d_model)
-            d_model *= 2
+            self.spectral = SpectralEmbedding(bins=bins, channels=spectral_dim)
+            d_model += spectral_dim
 
         self.embedding_name = embedding
         self.embedding = TransformerEmbedding(
@@ -179,6 +180,13 @@ class TransformerEncoder(nn.Module):
             num_layers=layers,
         )
         self.d_model = d_model
+
+        total_params = sum(p.numel() for p in self.parameters())
+        print(f"\nTransEncoder \tParams: {total_params}")
+        print(
+            f"\t\tSpec: {spectral_dim}, \t\tEmb: {self.embedding_name}, \tBins: {bins}"
+        )
+        print(f"\t\tLayers: {layers}, \t\tD_model: {d_model}, \t\tNhead: {nhead}")
 
     def forward(self, x: torch.Tensor, attn_mask=None):
         """x: [B, C, T], attn_mask: [B, T]"""
@@ -257,6 +265,12 @@ class TransformerDecoder(nn.Module):
             ),
             num_layers=layers,
         )
+        total_params = sum(p.numel() for p in self.parameters())
+        print(f"\nTransDecoder \tParams: {total_params}")
+        print(
+            f"\t\tEmb: {self.embedding_name}, \tLayers: {layers}, \t\tD_model: {d_model}"
+        )
+        print(f"\t\tNhead: {nhead}, \t\tMel_bins: {self.mel_bins}")
 
     def forward(self, mel: torch.Tensor, encoder_output: torch.Tensor, src_mask=None):
         """Uses the encoder output to predict the mel spectrogram
