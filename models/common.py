@@ -74,7 +74,7 @@ class PositionGetter:
                 layout = torch.tensor(
                     [
                         recording.info["chs"][i]["loc"][: self.dim]
-                        for i in range(len(self.info["chs"]))
+                        for i in range(len(recording.info["chs"]))
                         if recording.info["ch_names"][i] in recording.channel_names
                     ],
                     dtype=torch.float32,
@@ -138,7 +138,10 @@ class PositionGetter:
 
 
 class ChannelDropout(nn.Module):
-    """Spatial dropout by random center and radius in normalized [0, 1] coordinates."""
+    """
+    Spatial dropout by random center and radius (self.dropout) in normalized [0, 1]
+    coordinates, where all within the radius in 2 or 3D space is zeroed out.
+    """
 
     def __init__(
         self,
@@ -338,7 +341,7 @@ class ChannelMerger(nn.Module):
             _, chout, pos_dim = self.heads.shape
 
             # Take mean of trained indices
-            if condition == "mean":
+            if condition == "mean" and len(self.trained_indices) > 0:
                 # [B, ch_out, emb_dim]
                 heads = (
                     torch.stack([self.heads[self.trained_indices_list]])
@@ -346,10 +349,9 @@ class ChannelMerger(nn.Module):
                     .expand(B, -1, -1)
                 )
             else:
-                # Expand unknown head to shape B
+                # Expand head to shape B
                 if condition not in self.conditions:
                     index = self.conditions["unknown"]
-                # Expand known head to shape B
                 else:
                     index = self.conditions[condition]
                     if self.training:
@@ -409,17 +411,16 @@ class ConditionalLayers(nn.Module):
         S, C, D = self.weights.shape
         B, C, T = x.shape
 
-        if condition == "mean":
+        if condition == "mean" and len(self.trained_indices) > 0:
             weights = (
                 torch.stack([self.weights[self.trained_indices_list]])
                 .mean(dim=0)
                 .expand(B, -1, -1)
             )
         else:
-            # Expand unknown cond to shape B
+            # Expand cond to shape B
             if condition not in self.conditions:
                 index = self.conditions["unknown"]
-            # Expand known head to shape B
             else:
                 index = self.conditions[condition]
                 if self.training:

@@ -286,7 +286,10 @@ class SimpleConv(nn.Module):
 
                             # [B, d_model, 1] -> [B, mel, 1]
                             next_mel = self.final(output[..., -1:])
-                            torch.cat([mel, next_mel], dim=-1)  # [B, mel, t + 1]
+                            mel = torch.cat([mel, next_mel], dim=-1)  # [B, mel, t + 1]
+
+                        # [B, mel_bins, T + 1] -> [B, mel_bins, T]
+                        x = mel[..., 1:]
 
         # Final projection, except when it is alreay done in the decoder
         if not decoder_inference:
