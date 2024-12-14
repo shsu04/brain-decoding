@@ -87,61 +87,6 @@ class TransformerEmbedding(nn.Module):
         return self.dropout(x)
 
 
-class SpectralEmbedding(nn.Module):
-    """
-    Merges a time series [B, C, T] channel-wise into [B, c, T] using attention,
-    then compute spectrals for each channel [B, c, T] -> [B, c * bins, T]
-    """
-
-    def __init__(
-        self,
-        bins: int = 16,
-        channels: int = 256,
-    ):
-        super().__init__()
-        assert channels % bins == 0, "Channels must be divisible by bins."
-        assert bins > 1, "Bins must be greater than 1."
-
-        self.bins = bins
-        self.channels = channels
-
-        self.key = nn.Linear(channels, int(channels / bins), bias=False)
-        self.query = nn.Linear(channels, channels, bias=False)
-        self.value = nn.Linear(channels, channels, bias=False)
-
-        n_fft = 2 * (bins - 1)
-        self.spectrogram_transform = T.Spectrogram(
-            n_fft=n_fft,
-            hop_length=1,
-            normalized=True,
-            power=2,
-        )
-
-    def forward(self, x: torch.Tensor):
-        B, C, T = x.shape
-        x = x.transpose(1, 2)  # [B, C, T] -> [B, T, C]
-
-        key = self.key(x).transpose(1, 2)  # [B, T, c] -> [B, c, T]
-        query = self.query(x).transpose(1, 2)  # [B, T, C] -> [B, C, T]
-        value = self.value(x).transpose(1, 2)  # [B, T, C] -> [B, C, T]
-
-        # [B, c, T] x [B, C, T] → [B, c, C]
-        scores = torch.einsum("bct,bCt->bcC", key, query)
-        scores = torch.softmax(scores / (C**0.5), dim=-1)
-
-        # [B, c, C] x [B, C, T] → [B, c, T]
-        out = torch.einsum("bCt,bcC->bct", value, scores)
-        # [B, c, T] -> [B, c, bins, T + 1]
-        spectral_out = self.spectrogram_transform(out)
-        # remove the last time step to match the input shape
-        spectral_out = spectral_out[:, :, :, :-1]
-
-        B, c, bins, T = spectral_out.shape
-        spectral_out = spectral_out.reshape(B, c * bins, T)
-        # [B, c * bins, T]
-        return spectral_out
-
-
 class TransformerEncoder(nn.Module):
     """
     Transformer encoder model for time series data with custom embedding options
@@ -156,16 +101,8 @@ class TransformerEncoder(nn.Module):
         dropout: float,
         layers: int,
         embedding: str,
-        concat_spectrals: bool = False,
-        bins: int = 16,
-        spectral_dim=128,
     ):
         super().__init__()
-        self.spectral = None
-        if concat_spectrals:
-            self.spectral = SpectralEmbedding(bins=bins, channels=spectral_dim)
-            d_model += spectral_dim
-
         self.embedding_name = embedding
         self.embedding = TransformerEmbedding(
             embedding=embedding, d_model=d_model, dropout=dropout
@@ -183,21 +120,11 @@ class TransformerEncoder(nn.Module):
         self.d_model = d_model
 
         total_params = sum(p.numel() for p in self.parameters())
-        print(f"\nTransEncoder \tParams: {total_params}")
-        print(
-            f"\t\tSpec: {spectral_dim}, \t\tEmb: {self.embedding_name}, \tBins: {bins}"
-        )
+        print(f"\nTransEncoder \tParams: {total_params} \t\tEmb: {self.embedding_name}")
         print(f"\t\tLayers: {layers}, \t\tD_model: {d_model}, \t\tNhead: {nhead}")
 
     def forward(self, x: torch.Tensor, attn_mask=None):
         """x: [B, C, T], attn_mask: [B, T]"""
-        if self.spectral is not None:
-            spectral = self.spectral(x)  # [B, c * bins, T]
-            assert (
-                spectral.shape == x.shape
-            ), f"Spectral shape mismatch. {spectral.shape} != {x.shape}"
-            x = torch.cat([x, spectral], dim=1)  # [B, 2 * d_model, T]
-
         x = self.embedding(x.transpose(1, 2))  # [B, C, T] -> [B, T, C]
         x = self.encoders(
             x,

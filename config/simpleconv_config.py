@@ -42,9 +42,6 @@ class SimpleConvConfig(Config):
         transformer_encoder_emb: str = "groupconv",
         transformer_encoder_layers: int = 0,
         transformer_encoder_heads: int = 0,
-        transformer_encoder_concat_spectrals: bool = False,
-        transformer_encoder_bins: int = None,
-        transformer_encoder_spectral_dim: int = None,
         # Transformer Decoders
         transformer_decoder_emb: str = "groupconv",
         transformer_decoder_layers: int = 0,
@@ -89,9 +86,6 @@ class SimpleConvConfig(Config):
         self.transformer_encoder_emb = transformer_encoder_emb
         self.transformer_encoder_layers = transformer_encoder_layers
         self.transformer_encoder_heads = transformer_encoder_heads
-        self.transformer_encoder_concat_spectrals = transformer_encoder_concat_spectrals
-        self.transformer_encoder_bins = transformer_encoder_bins
-        self.transformer_encoder_spectral_dim = transformer_encoder_spectral_dim
         # Transformer Decoders
         self.transformer_decoder_emb = transformer_decoder_emb
         self.transformer_decoder_layers = transformer_decoder_layers

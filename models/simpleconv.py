@@ -142,9 +142,6 @@ class SimpleConv(nn.Module):
                 dropout=self.config.conv_dropout,
                 layers=self.config.transformer_encoder_layers,
                 embedding=self.config.transformer_encoder_emb,
-                concat_spectrals=self.config.transformer_encoder_concat_spectrals,
-                bins=self.config.transformer_encoder_bins,
-                spectral_dim=self.config.transformer_encoder_spectral_dim,
             )
 
         # Final transformer decoder
