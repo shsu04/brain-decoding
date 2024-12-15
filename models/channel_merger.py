@@ -2,54 +2,222 @@ from typing import Tuple, List
 import torch
 import torch.nn as nn
 import numpy as np
-import itertools
-import functools
 from torch import Tensor
 from scipy.special import sph_harm
+import math
+
+from .common import PositionGetter
+from studies import Recording
 
 
-class TemplateEmbedding(nn.Module):
-    """
-    Learns optimal common spatial representations across different input layout
-    to produce high dim embeddings.
-    """
-
+class ChannelMerger(nn.Module):
     def __init__(
-        self, dimension: int = 2048, n_template_points: int = 64, rbf_sigma: float = 0.1
+        self,
+        merger_channels: int,
+        embedding_type="fourier",
+        embedding_dim: int = 256,
+        dropout: float = 0.2,
+        conditions: dict[str, int] = None,
+        layout_dim: int = 2,
+        layout_proj: bool = False,
+        layout_scaling: str = "midpoint",
     ):
         super().__init__()
-        # Leaned template positions
-        self.template_positions = nn.Parameter(torch.randn(n_template_points, 2))
-        # Projects RBF weights to high-dimensional space
-        self.embedding = nn.Linear(n_template_points, dimension)
-        self.rbf_sigma = rbf_sigma
 
-    def forward(self, positions: Tensor) -> Tensor:
+        self.merger_channels = merger_channels
+        self.embedding_dim = embedding_dim
+        self.dropout = dropout
+
+        self.position_getter = PositionGetter(
+            dim=layout_dim, proj=layout_proj, scaling=layout_scaling
+        )
+
+        assert embedding_dim % 4 == 0
+
+        # EMBEDDING
+        self.embedding_type = embedding_type
+        self.embedding_type = embedding_type
+        if embedding_type == "fourier":
+            assert layout_dim == 2 and layout_scaling == "minmax"
+            self.embedding = FourierEmbedding(dimension=embedding_dim)
+        elif embedding_type == "spherical":
+            assert layout_dim == 3 and layout_scaling == "midpoint"
+            self.embedding = SphericalEmbedding(dimension=embedding_dim)
+        elif embedding_type == "linear":
+            self.embedding = nn.Sequential(
+                nn.Linear(layout_dim, embedding_dim), nn.Tanh()
+            )
+        else:
+            raise ValueError(f"Unknown embedding type: {embedding_type}")
+
+        # Learnable heads for each condition
+        self.conditions = conditions
+        if self.conditions:
+            assert "unknown" in conditions, "Conditions must include an 'unknown' key"
+            self.trained_indices = set()
+            self.heads = nn.Parameter(
+                torch.randn(
+                    len(self.conditions),
+                    merger_channels,
+                    embedding_dim,
+                    requires_grad=True,
+                )
+            )
+        else:
+            self.heads = nn.Parameter(
+                torch.randn(merger_channels, embedding_dim, requires_grad=True)
+            )
+        self.heads.data /= embedding_dim**0.5
+
+    @property
+    def trained_indices_list(self):
+        return list(self.trained_indices)
+
+    def get_heads(self, B: int, condition: str = None, device: str = "cpu"):
+
+        _, chout, pos_dim = self.heads.shape
+
+        if not self.conditions:
+            # [ch_out, dim] -> [B, ch_out, dim]
+            heads = self.heads[None].expand(B, -1, -1)
+
+        # If conditional, choose heads based on condition
+        else:
+            # Take mean of trained indices
+            if condition == "mean" and len(self.trained_indices) > 0:
+                # [B, ch_out, emb_dim]
+                heads = (
+                    torch.stack([self.heads[self.trained_indices_list]])
+                    .mean(dim=0)
+                    .expand(B, -1, -1)
+                    .to(device)
+                )
+            else:
+                # Expand head to shape B
+                if condition not in self.conditions:
+                    index = self.conditions["unknown"]
+                else:
+                    index = self.conditions[condition]
+                    if self.training:
+                        self.trained_indices.add(index)
+
+                # [1, ch_out, emb_dim] -> [B, ch_out, emb_dim]
+                conditions = torch.full((B,), index, dtype=torch.long).to(device)
+                heads = self.heads.gather(
+                    0, conditions.view(-1, 1, 1).expand(-1, chout, pos_dim)
+                )
+        return heads
+
+    def forward(self, x: torch.Tensor, recording: Recording, condition: str = None):
         """
-        Args:
-            positions: Channel positions [B, C, dims]
+        Arguments:
+            x -- input tensor with shape [B, C, T]
+            recording -- recording object with channel layout
+            condition -- condition to select heads from. Can also be "mean"
+
         Returns:
-            embeddings: Position embeddings [B, C, D]
+            torch.Tensor -- output tensor with shape [B, merger_channels, T]
         """
-        # Compute distances to template positions
-        dists = torch.cdist(positions, self.template_positions[None])
+        B, C, T = x.shape
 
-        # RBF interpolation weights
-        weights = torch.exp(-(dists**2) / (2 * self.rbf_sigma**2))
-        weights = weights / (weights.sum(dim=-1, keepdim=True) + 1e-8)
+        positions = self.position_getter.get_positions(x, recording)  # [B, C, 2]
 
-        # Project to embedding space
-        return self.embedding(weights)
+        # Mask invalid channels, [B, C]
+        score_offset = torch.zeros(B, C, device=x.device)
+        score_offset[self.position_getter.is_invalid(positions)] = float("-inf")
+
+        # Spatial embedding, [B, C, dim] -> [B, C, emb_dim]
+        embedding = self.embedding(positions)
+
+        # Dropout around random center's radius
+        if self.training and self.dropout:
+
+            center_to_ban = torch.rand(self.position_getter.dim, device=x.device)
+            radius_to_ban = self.dropout
+
+            banned = (positions - center_to_ban).norm(dim=-1) <= radius_to_ban
+            score_offset[banned] = float("-inf")  # [B, C]
+
+        heads = self.get_heads(B=B, condition=condition, device=x.device)
+
+        # How well pos emb aligns with learnable heads
+        scores = torch.einsum("bcd,bod->boc", embedding, heads)  # [B, C, ch_out]
+        scores += score_offset[:, None]  # mask
+
+        # Create each output channel as a weighted sum of input channels
+        weights = torch.softmax(scores, dim=2)
+        out = torch.einsum("bct,boc->bot", x, weights)  # [B, ch_out, T]
+
+        return out
+
+
+class FourierEmbedding(nn.Module):
+    """
+    Fourier positional embedding. Maps each channel to a high dimensional space
+    through a learnt channel-specific function over sensor locations.
+    Unlike trad. embedding this is not using exponential periods for cos and sin,
+    but typical `2 pi k` which can represent any function over [0, 1]. As this
+    function would be necessarily periodic, we take a bit of margin and do over
+    [-0.2, 1.2].
+    """
+
+    def __init__(self, dimension: int = 2048, margin: float = 0.2):
+        super().__init__()
+
+        # Grid size. e.g. dim=2048, n_freqs=32
+        n_freqs = (dimension // 2) ** 0.5
+        assert int(n_freqs**2 * 2) == dimension
+        self.dimension = dimension
+        self.margin = margin
+
+    def forward(self, positions: torch.Tensor) -> torch.Tensor:
+        """
+        Arguments:
+            positions -- 2D positions of channels in the batch [B, C, 2]
+
+        Returns:
+            emb -- Fourier positional embedding [B, C, dim]
+        """
+
+        *O, D = positions.shape  # [B, C, 2]
+        assert D == 2
+
+        n_freqs = (self.dimension // 2) ** 0.5
+        freqs_y = torch.arange(n_freqs).to(positions)  # [n_freqs]
+        freqs_x = freqs_y[:, None]  # [n_freqs, 1] for broadcasting
+        width = 1 + 2 * self.margin
+        positions = positions + self.margin  # Shift pos by margin
+
+        # Scale freq by 2 pi / width to get phase multipliers
+        p_x = 2 * math.pi * freqs_x / width  # [n_freqs, 1]
+        p_y = 2 * math.pi * freqs_y / width  # [n_freqs]
+
+        # Add dim for broadcasting, [*O, 2] -> [*O, 1, 1, 2]
+        positions = positions[..., None, None, :]
+
+        # Compute phase values, (*O, n_freqs, n_freqs) -> (*O, n_freqs*n_freqs)
+        loc = (positions[..., 0] * p_x + positions[..., 1] * p_y).view(*O, -1)
+
+        # Apply sin and cos to phases and concatenate
+        emb = torch.cat(
+            [
+                torch.cos(loc),
+                torch.sin(loc),
+            ],
+            dim=-1,
+        )  # [B, C, dim]
+
+        return emb
 
 
 class SphericalEmbedding(nn.Module):
     """
     Projects positions onto a unit sphere and computes spherical harmonic
-    coefficients. Learns optimal weighting of harmonic components for
-    embedding positionsonto a high-dimensional space.
+    coefficients for each sensor location. Then learns optimal weighting
+    of harmonic components to describe each sensor location in high dim.
     """
 
-    def __init__(self, dimension: int = 2048, max_degree: int = 8):
+    def __init__(self, dimension: int = 256, max_degree: int = 8):
         """
         Args:
             dimension (int): Output dimension of the embedding.
@@ -63,20 +231,22 @@ class SphericalEmbedding(nn.Module):
         n_harmonics = (max_degree + 1) ** 2
 
         # Learnable weights for each harmonic component
-        self.harmonics_weights = nn.Parameter(torch.randn(n_harmonics, dimension))
+        self.harmonics_weights = nn.Parameter(
+            torch.randn(n_harmonics, dimension), requires_grad=True
+        )
 
     def _spherical_harmonic(self, l: int, m: int, theta: Tensor, phi: Tensor) -> Tensor:
         """
         Computes spherical harmonic Y_l^m(theta, phi) for given angles.
 
         Args:
-            l (int): Degree of the spherical harmonic.
-            m (int): Order of the spherical harmonic.
-            theta (Tensor): Polar angle (in radians) [batch, channels].
-            phi (Tensor): Azimuthal angle (in radians) [batch, channels].
+            l (int): Degree of the spherical harmonic, level of detail.
+            m (int): Order of the spherical harmonic, orientation.
+            theta (Tensor): Polar angle (in radians) [B, C].
+            phi (Tensor): Azimuthal angle (in radians) [B, C].
 
         Returns:
-            Tensor: Real part of the spherical harmonic Y_l^m [batch, channels].
+            Tensor: Real part of the spherical harmonic Y_l^m [B, C].
         """
         # Compute spherical harmonics using scipy's sph_harm
         Y_lm = np.vectorize(lambda t, p: sph_harm(m, l, p, t), otypes=[np.complex128])
@@ -87,236 +257,32 @@ class SphericalEmbedding(nn.Module):
     def forward(self, positions: Tensor) -> Tensor:
         """
         Args:
-            positions: Positions in 3D space [batch, channels, 3].
+            positions: Positions in 3D space [B, C, 3].
 
         Returns:
-            embeddings: Spherical harmonic embeddings [batch, channels, dimension].
+            embeddings: Spherical harmonic embeddings [B, C, D].
         """
         # Normalize positions to project onto the unit sphere
-        r = torch.norm(positions, dim=-1, keepdim=True)
-        positions = positions / (r + 1e-8)
+        radius = torch.norm(positions, dim=-1, keepdim=True)  # [B, C, 1]
+        positions = positions / (radius + 1e-8)
 
-        # Convert to spherical coordinates
+        # Convert to spherical coordinates, clamp to avoid NaNs
         theta = torch.acos(
             torch.clamp(positions[..., 2], -1.0, 1.0)
-        )  # Clamping for numerical stability
-        phi = torch.atan2(positions[..., 1], positions[..., 0])
+        )  # angle from z-axis
+        phi = torch.atan2(positions[..., 1], positions[..., 0])  # angle around z
 
         # Compute spherical harmonics for each (l, m) pair
         harmonics = []
         for l in range(self.max_degree + 1):
             for m in range(-l, l + 1):
-                Y = self._spherical_harmonic(l, m, theta, phi)
+                Y = self._spherical_harmonic(l, m, theta, phi)  # [B, C]
                 harmonics.append(Y)
 
-        harmonics = torch.stack(harmonics, dim=-1)  # [batch, channels, n_harmonics]
+        harmonics = torch.stack(harmonics, dim=-1).float()  # [B, C, n_harmonics]
 
         # Compute weighted sum of harmonics
-        embeddings = torch.matmul(
-            harmonics, self.harmonics_weights
-        )  # [batch, channels, dimension]
+        embeddings = torch.matmul(harmonics, self.harmonics_weights)  # [B, C, D]
+        embeddings *= radius  # scale back to retain magnitude
 
         return embeddings
-
-
-class AdaptiveGridMerger(nn.Module):
-    """
-    Learns a common grid representation across different channel layouts using
-    soft assignments to grid points.
-
-    Key advantages:
-    - Explicit spatial structure preservation
-    - Interpretable intermediate representation
-    - Handles arbitrary input layouts through interpolation
-    - Good for visualization and understanding learned patterns
-
-    The approach:
-    1. Defines a regular grid in space
-    2. Softly assigns input channels to grid points
-    3. Learns optimal mapping from grid to output channels
-    """
-
-    def __init__(
-        self,
-        merger_channels: int,
-        grid_size: Tuple[int, ...] = (8, 8),
-        smoothing: float = 0.1,
-    ):
-        super().__init__()
-        self.grid_size = grid_size
-        self.smoothing = smoothing
-        # Learnable mapping from grid points to output channels
-        self.grid_weights = nn.Parameter(
-            torch.randn(merger_channels, np.prod(grid_size))
-        )
-
-    def forward(self, x: Tensor, positions: Tensor) -> Tensor:
-        """
-        Args:
-            x: Input features [batch, channels, time]
-            positions: Channel positions [batch, channels, dims]
-        Returns:
-            merged: Merged channel outputs [batch, merger_channels, time]
-        """
-        # Scale positions to grid coordinates
-        grid_pos = (positions + 1) * torch.tensor(self.grid_size) / 2
-
-        # Compute interpolation weights for each dimension
-        indices = []
-        weights = []
-        for dim in range(len(self.grid_size)):
-            pos = grid_pos[..., dim]
-            idx_low = pos.floor().long()
-            idx_high = pos.ceil().long()
-            w_high = pos - idx_low
-            w_low = 1 - w_high
-
-            indices.append((idx_low, idx_high))
-            weights.append((w_low, w_high))
-
-        # Distribute channel values to grid points using trilinear interpolation
-        grid_values = torch.zeros(
-            *x.shape[:-2], np.prod(self.grid_size), device=x.device
-        )
-
-        for idx_combo in itertools.product(*[(0, 1)] * len(self.grid_size)):
-            idx = [indices[d][i] for d, i in enumerate(idx_combo)]
-            w = [weights[d][i] for d, i in enumerate(idx_combo)]
-            weight = functools.reduce(lambda a, b: a * b, w)
-
-            # Convert multidimensional index to flat index
-            grid_idx = sum(
-                idx[d] * np.prod(self.grid_size[d + 1 :])
-                for d in range(len(self.grid_size))
-            )
-
-            grid_values.scatter_add_(-1, grid_idx, x * weight.unsqueeze(-1))
-
-        # Map grid to output channels
-        return torch.matmul(self.grid_weights, grid_values)
-
-
-class MultiResolutionMerger(nn.Module):
-    """
-    Merges channels using multiple spatial scales, adapting to both local and
-    global patterns in the data.
-
-    Key advantages:
-    - Captures patterns at multiple spatial scales
-    - Adaptively determines optimal scale per region
-    - Robust to layout differences and sensor density variations
-    - Good for hierarchical spatial patterns
-
-    The approach:
-    1. Computes channel relationships at multiple spatial scales
-    2. Learns optimal scale combination for each output channel
-    3. Allows different regions to use different dominant scales
-    """
-
-    def __init__(
-        self, merger_channels: int, n_scales: int = 3, base_sigma: float = 0.1
-    ):
-        super().__init__()
-        # Generate geometric sequence of spatial scales
-        self.scales = [(base_sigma * (2**i)) for i in range(n_scales)]
-        self.merger_channels = merger_channels
-
-        # Network to learn optimal scale combination
-        self.weight_net = nn.Sequential(
-            nn.Linear(n_scales, 32), nn.ReLU(), nn.Linear(32, 1)
-        )
-
-        # Learnable target positions for output channels
-        self.target_positions = nn.Parameter(torch.randn(merger_channels, 2))
-
-    def forward(self, x: Tensor, positions: Tensor) -> Tensor:
-        """
-        Args:
-            x: Input features [batch, channels, time]
-            positions: Channel positions [batch, channels, dims]
-        Returns:
-            merged: Merged channel outputs [batch, merger_channels, time]
-        """
-        # Compute distances to target positions
-        dists = torch.cdist(positions, self.target_positions[None])
-
-        # Calculate weights at each spatial scale
-        scale_weights = []
-        for sigma in self.scales:
-            weights = torch.exp(-(dists**2) / (2 * sigma**2))
-            scale_weights.append(weights)
-
-        # Learn optimal scale combination
-        scale_weights = torch.stack(scale_weights, dim=-1)
-        weights = self.weight_net(scale_weights).squeeze(-1)
-        weights = weights / (weights.sum(dim=1, keepdim=True) + 1e-8)
-
-        # Apply weights to input features
-        return torch.einsum("bct,bcm->bmt", x, weights)
-
-
-class EquivariantMerger(nn.Module):
-    """
-    Merges channels using operations that are equivariant to rotations and
-    translations of the input layout.
-
-    Key advantages:
-    - Preserves geometric relationships under transformations
-    - Generalizes well across different recording setups
-    - Theoretically well-founded geometric deep learning approach
-    - Robust to layout variations and rotations
-
-    The approach:
-    1. Uses local coordinate frames to achieve equivariance
-    2. Applies series of equivariant transformations
-    3. Projects to output channels while maintaining equivariance
-    """
-
-    def __init__(self, merger_channels: int, n_layers: int = 3, hidden_dim: int = 64):
-        super().__init__()
-        self.layers = nn.ModuleList(
-            [
-                EquivariantLayer(
-                    in_dim=2 if i == 0 else hidden_dim,  # or 3 for 3D
-                    out_dim=hidden_dim,
-                )
-                for i in range(n_layers)
-            ]
-        )
-        self.output_heads = nn.Parameter(torch.randn(merger_channels, hidden_dim))
-
-    def forward(self, x: Tensor, positions: Tensor) -> Tensor:
-        """
-        Args:
-            x: Input features [batch, channels, time]
-            positions: Channel positions [batch, channels, dims]
-        Returns:
-            merged: Merged channel outputs [batch, merger_channels, time]
-        """
-        # Apply sequence of equivariant transformations
-        features = x
-        for layer in self.layers:
-            features = layer(features, positions)
-
-        # Project to output channels while maintaining equivariance
-        return torch.matmul(self.output_heads, features.transpose(-1, -2))
-
-
-class EquivariantLayer(nn.Module):
-    """Helper class for equivariant operations"""
-
-    def __init__(self, in_dim: int, out_dim: int):
-        super().__init__()
-        self.linear = nn.Linear(in_dim, out_dim)
-
-    def forward(self, x: Tensor, positions: Tensor) -> Tensor:
-        """
-        Applies equivariant transformation to input features
-        """
-        # Build local coordinate frames
-        dists = torch.cdist(positions, positions)
-        weights = torch.exp(-(dists**2))
-        weights = weights / (weights.sum(dim=-1, keepdim=True) + 1e-8)
-
-        # Transform features in local coordinates
-        return self.linear(torch.matmul(weights, x))

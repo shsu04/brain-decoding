@@ -14,9 +14,9 @@ from studies.study import Recording
 from .common import (
     ConvSequence,
     ConditionalLayers,
-    ChannelMerger,
     ChannelDropout,
 )
+from .channel_merger import ChannelMerger
 
 
 class SimpleConv(nn.Module):
@@ -72,6 +72,7 @@ class SimpleConv(nn.Module):
 
             self.merger = ChannelMerger(
                 merger_channels=self.config.merger_channels,
+                embedding_type=self.config.merger_emb_type,
                 embedding_dim=self.config.merger_emb_dim,
                 dropout=self.config.merger_dropout,
                 conditions=conditions,

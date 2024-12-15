@@ -18,6 +18,7 @@ class SimpleConvConfig(Config):
         layout_scaling: str = "midpoint",
         # Merger with spatial attn
         merger: bool = True,
+        merger_emb_type: str = "fourier",
         merger_emb_dim: int = 2048,
         merger_channels: int = 256,
         merger_dropout: float = 0.3,
@@ -62,6 +63,7 @@ class SimpleConvConfig(Config):
         self.layout_scaling = layout_scaling
         # Merger with spatial attn
         self.merger = merger
+        self.merger_emb_type = self.merger_emb_type
         self.merger_emb_dim = merger_emb_dim
         self.merger_channels = merger_channels
         self.merger_dropout = merger_dropout

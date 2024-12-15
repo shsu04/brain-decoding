@@ -27,7 +27,6 @@ class PositionGetter:
         assert scaling in [
             "midpoint",
             "minmax",
-            "standard",
             "maxabs",
         ], f"Invalid scaling type {scaling}"
         assert not (proj and dim == 3), "Cannot project to 3D"
@@ -43,7 +42,6 @@ class PositionGetter:
             scaling -- type of scaling to apply, can be:
                 "midpoint" - scale to [-1, 1] around geometric midpoint
                 "minmax" - scale to [0, 1] based on min and max
-                "standard" - scale to mean 0 and std 1
                 "maxabs" - scale to [-1, 1] based on max absolute value
 
         Returns:
@@ -92,11 +90,6 @@ class PositionGetter:
             mins = layout.min(dim=0).values
             maxs = layout.max(dim=0).values
             layout = (layout - mins) / (maxs - mins)
-
-        elif self.scaling == "standard":
-            means = layout.mean(dim=0)
-            stds = layout.std(dim=0)
-            layout = (layout - means) / stds
 
         elif self.scaling == "maxabs":
             max_abs = layout.abs().max(dim=0).values
@@ -192,190 +185,6 @@ class ChannelDropout(nn.Module):
             # Rescale by inverse probability of being kept
             x = x / (1e-8 + proba_kept[:, :, None])
         return x
-
-
-class FourierEmbedding(nn.Module):
-    """
-    Fourier positional embedding. Maps each channel to a high dimensional space
-    through a learnt channel-specific function over sensor locations.
-    Unlike trad. embedding this is not using exponential periods for cos and sin,
-    but typical `2 pi k` which can represent any function over [0, 1]. As this
-    function would be necessarily periodic, we take a bit of margin and do over
-    [-0.2, 1.2].
-    """
-
-    def __init__(self, dimension: int = 2048, margin: float = 0.2):
-        super().__init__()
-
-        # Grid size. e.g. dim=2048, n_freqs=32
-        n_freqs = (dimension // 2) ** 0.5
-        assert int(n_freqs**2 * 2) == dimension
-        self.dimension = dimension
-        self.margin = margin
-
-    def forward(self, positions: torch.Tensor) -> torch.Tensor:
-        """
-        Arguments:
-            positions -- 2D positions of channels in the batch [B, C, 2]
-
-        Returns:
-            emb -- Fourier positional embedding [B, C, dim]
-        """
-
-        *O, D = positions.shape  # [B, C, 2]
-        assert D == 2
-
-        n_freqs = (self.dimension // 2) ** 0.5
-        freqs_y = torch.arange(n_freqs).to(positions)  # [n_freqs]
-        freqs_x = freqs_y[:, None]  # [n_freqs, 1] for broadcasting
-        width = 1 + 2 * self.margin
-        positions = positions + self.margin  # Shift pos by margin
-
-        # Scale freq by 2 pi / width to get phase multipliers
-        p_x = 2 * math.pi * freqs_x / width  # [n_freqs, 1]
-        p_y = 2 * math.pi * freqs_y / width  # [n_freqs]
-
-        # Add dim for broadcasting, [*O, 2] -> [*O, 1, 1, 2]
-        positions = positions[..., None, None, :]
-
-        # Compute phase values, (*O, n_freqs, n_freqs) -> (*O, n_freqs*n_freqs)
-        loc = (positions[..., 0] * p_x + positions[..., 1] * p_y).view(*O, -1)
-
-        # Apply sin and cos to phases and concatenate
-        emb = torch.cat(
-            [
-                torch.cos(loc),
-                torch.sin(loc),
-            ],
-            dim=-1,
-        )  # [B, C, dim]
-
-        return emb
-
-
-class ChannelMerger(nn.Module):
-    """
-    Merges channels by learning a weighted sum of input channels, where the
-    weights are determined by the alignment of the channel's positial embeddings
-    with learnable heads.
-    """
-
-    def __init__(
-        self,
-        merger_channels: int,
-        embedding_dim: int = 2048,
-        dropout: float = 0,
-        conditions: dict[str, int] = None,
-        layout_dim: int = 2,
-        layout_proj: bool = False,
-        layout_scaling: str = "midpoint",
-    ):
-        super().__init__()
-        assert embedding_dim % 4 == 0
-
-        self.position_getter = PositionGetter(
-            dim=layout_dim, proj=layout_proj, scaling=layout_scaling
-        )
-
-        # Learnable heads for each condition
-        self.conditions = conditions
-        if self.conditions:
-            assert "unknown" in conditions, "Conditions must include an 'unknown' key"
-            self.trained_indices = set()
-            self.heads = nn.Parameter(
-                torch.randn(
-                    len(self.conditions),
-                    merger_channels,
-                    embedding_dim,
-                    requires_grad=True,
-                )
-            )
-        else:
-            self.heads = nn.Parameter(
-                torch.randn(merger_channels, embedding_dim, requires_grad=True)
-            )
-
-        self.heads.data /= embedding_dim**0.5
-        self.dropout = dropout
-        self.embedding = FourierEmbedding(dimension=embedding_dim)
-
-    @property
-    def trained_indices_list(self):
-        return list(self.trained_indices)
-
-    def forward(
-        self, x: torch.Tensor, recording: Recording, condition: str = None
-    ) -> torch.Tensor:
-        """
-        Arguments:
-            x -- input tensor with shape [B, C, T]
-            recording -- recording object with channel layout
-            condition -- condition to select heads from. Can also be "mean"
-
-        Returns:
-            torch.Tensor -- output tensor with shape [B, merger_channels, T]
-        """
-
-        B, C, T = x.shape
-
-        # Spatial embedding, [B, C, dim] -> [B, C, emb_dim]
-        positions = self.position_getter.get_positions(x, recording)
-        embedding = self.embedding(positions)
-
-        # Mask out invalid channels, [B, C]
-        score_offset = torch.zeros(B, C, device=x.device)
-        score_offset[self.position_getter.is_invalid(positions)] = float("-inf")
-
-        # Dropout by random center and radius
-        if self.training and self.dropout:
-
-            center_to_ban = torch.rand(self.position_getter.dim, device=x.device)
-            radius_to_ban = self.dropout
-
-            banned = (positions - center_to_ban).norm(dim=-1) <= radius_to_ban
-            score_offset[banned] = float("-inf")
-
-        # If conditional, choose heads based on condition
-        if self.conditions:
-
-            _, chout, pos_dim = self.heads.shape
-
-            # Take mean of trained indices
-            if condition == "mean" and len(self.trained_indices) > 0:
-                # [B, ch_out, emb_dim]
-                heads = (
-                    torch.stack([self.heads[self.trained_indices_list]])
-                    .mean(dim=0)
-                    .expand(B, -1, -1)
-                    .to(x.device)
-                )
-            else:
-                # Expand head to shape B
-                if condition not in self.conditions:
-                    index = self.conditions["unknown"]
-                else:
-                    index = self.conditions[condition]
-                    if self.training:
-                        self.trained_indices.add(index)
-
-                # [1, ch_out, emb_dim] -> [B, ch_out, emb_dim]
-                conditions = torch.full((B,), index, dtype=torch.long).to(x.device)
-                heads = self.heads.gather(
-                    0, conditions.view(-1, 1, 1).expand(-1, chout, pos_dim)
-                )
-        else:
-            # [ch_out, dim] -> [B, ch_out, dim]
-            heads = self.heads[None].expand(B, -1, -1)
-
-        # How well pos emb aligns with learnable heads
-        scores = torch.einsum("bcd,bod->boc", embedding, heads)  # [B, C, ch_out]
-        scores += score_offset[:, None]  # mask
-
-        # Create each output channel as a weighted sum of input channels
-        weights = torch.softmax(scores, dim=2)
-        out = torch.einsum("bct,boc->bot", x, weights)  # [B, ch_out, T]
-
-        return out
 
 
 class ConditionalLayers(nn.Module):
