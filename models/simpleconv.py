@@ -342,6 +342,8 @@ class SimpleConv(nn.Module):
         # Final projection, except when it is alreay done in the decoder
         if not decoder_inference:
             x = self.final(x)  # [B, C, T]
+            
+        x = torch.log1p(x)
 
         assert x.shape[-1] == length
         return x, quantizer_metrics

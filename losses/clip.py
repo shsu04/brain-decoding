@@ -17,8 +17,8 @@ class CLIPLoss(nn.Module):
         """
         assert x_1.size() == x_2.size()
 
-        # Normalize across time per mel band
-        x_1, x_2 = F.normalize(x_1, dim=2), F.normalize(x_2, dim=2)
+        # # Normalize across time per mel band
+        # x_1, x_2 = F.normalize(x_1, dim=2), F.normalize(x_2, dim=2)
 
         # Compute similarity, [B, C, T] x [B, C, T] -> [B, B]
         logits = torch.einsum("bct,dct->bd", x_1, x_2)
@@ -27,8 +27,8 @@ class CLIPLoss(nn.Module):
         targets = torch.arange(x_1.size(0), device=x_1.device)
 
         # Symmetric loss
-        x_1_loss = self.cross_entropy(logits, targets, reduction="mean")  # [B]
-        x_2_loss = self.cross_entropy(logits.T, targets.T, reduction="mean")  # [B]
+        x_1_loss = self.cross_entropy(logits, targets, reduction="none")  # [B]
+        x_2_loss = self.cross_entropy(logits.T, targets.T, reduction="none")  # [B]
         clip_loss = (x_1_loss + x_2_loss) / 2  # [B]
 
         return {
@@ -49,9 +49,18 @@ class CLIPLoss(nn.Module):
         Returns:
             loss -- [B] tensor of losses
         """
+        # One-hot encode the targets
+        one_hot_targets = torch.zeros_like(preds)
+        one_hot_targets[torch.arange(preds.size(0)), targets] = 1
+        
+        # Compute cross entropy
         log_softmax = nn.LogSoftmax(dim=-1)
-        loss = -log_softmax(preds)[torch.arange(preds.shape[0]), targets]
-        return loss.mean() if reduction == "mean" else loss
+        loss = (-one_hot_targets * log_softmax(preds)).sum(1)
+        
+        if reduction == "none":
+            return loss  # [B] 
+        elif reduction == "mean":
+            return loss.mean()  # scalar
 
     def eval_metrics(
         self,
