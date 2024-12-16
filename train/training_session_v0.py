@@ -407,7 +407,7 @@ class TrainingSessionV0(TrainingSession):
                 
             test_sizes[test] = len(test_datasets[test])
             self.test_dataoader[test] = self.get_dataloader(
-                buffer_size=test_datasets[test],
+                buffer_size=test_sizes[test],
                 num_workers=num_workers,
                 max_cache_size=max_cache_size,
             )
