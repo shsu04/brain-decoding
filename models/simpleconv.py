@@ -211,11 +211,9 @@ class SimpleConv(nn.Module):
 
         total_params = sum(p.numel() for p in self.parameters())
         cnn_params = sum(p.numel() for p in self.encoders.parameters())
+        conditions = list(self.config.conditions.keys()) if self.config.conditions else []
         print(
-            f"\t\tConv blocks: {self.config.depth}, \tChannels: {channels}, \t\tParams: {cnn_params}"
-        )
-        print(
-            f"SimpleConv initialized with {total_params} parameters, cond: {list(self.config.conditions.keys())}"
+            f"SimpleConv initialized with {total_params} parameters, cond: {conditions}"
         )
         print(
             f"Merger {self.merger is not None}, merger channels {self.config.merger_channels}"

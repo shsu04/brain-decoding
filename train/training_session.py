@@ -67,7 +67,7 @@ class TrainingSession(ABC):
 
         # Create studies accessor
         self.studies = {}
-        for study, batch_type in studies:
+        for study, batch_type in studies.items():
             path = os.path.join(data_path, study)
             try:
                 self.studies[study] = StudyFactory.create_study(
@@ -105,7 +105,7 @@ class TrainingSession(ABC):
         }
 
         self.error = None
-        self.set_seed(self.config.seed)
+        self.set_seed(int(self.config.seed))
         self.dataloader, self.test_dataloader = None, {}
 
     @abstractmethod
@@ -124,14 +124,11 @@ class TrainingSession(ABC):
     def save(self):
         pass
 
-    @abstractmethod
-    def load(self):
-        pass
 
     def pre_process_all_recordings(self):
         pass
 
-    def set_seed(seed):
+    def set_seed(self, seed: int):
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -145,7 +142,7 @@ class TrainingSession(ABC):
         self.recordings = []
 
         for study_name, study in self.studies.items():
-            if study_name not in self.config.data_partition:
+            if study_name not in self.config.data_partition.keys():
                 raise ValueError(f"Study {study_name} not found in data partition")
 
             data_partition = self.config.data_partition[study_name]

@@ -92,7 +92,7 @@ class ChannelMerger(nn.Module):
                 )
             else:
                 # Expand head to shape B
-                if condition not in self.conditions:
+                if condition not in self.conditions.keys():
                     index = self.conditions["unknown"]
                 else:
                     index = self.conditions[condition]

@@ -1,11 +1,12 @@
 import gc
 import random
 import time
+from numpy import int0
 from tqdm import tqdm
 import typing as tp
 import json
 from torch.optim import AdamW
-from torch.cuda.amp import GradScaler, autocast
+from torch.cuda.amp import GradScaler
 import os
 import torch
 
@@ -246,7 +247,7 @@ class TrainingSessionV0(TrainingSession):
             for i in range(0, total, self.config.batch_size)
         ]
 
-        with autocast(dtype=torch.float16):
+        with torch.amp.autocast(dtype=torch.bfloat16):
 
             for start, end in batch_indices:
 
@@ -374,7 +375,7 @@ class TrainingSessionV0(TrainingSession):
     def test(self, buffer_size: int, num_workers: int, max_cache_size: int):
 
         self.model.eval().to(self.device)
-        self.set_seed(self.config.seed)
+        self.set_seed(int(self.config.seed))
         test_start_time = time.time()
 
         test_datasets = {}

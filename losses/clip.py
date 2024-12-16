@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class CLIPLoss(nn.Module):
     def __init__(self):
-        pass
+        super().__init__()
 
     def forward(self, x_1: torch.Tensor, x_2: torch.Tensor):
         """
