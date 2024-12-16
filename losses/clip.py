@@ -18,42 +18,25 @@ class CLIPLoss(nn.Module):
         """
         assert x_1.size() == x_2.size()
 
-        # # Normalize across time per mel band
-        # x_1, x_2 = F.normalize(x_1, dim=2), F.normalize(x_2, dim=2)
+        inv_norms = 1 / (1e-8 + x_1.norm(dim=(1, 2), p=2))
 
         # Compute similarity, [B, C, T] x [B, C, T] -> [B, B]
-        logits = torch.einsum("bct,dct->bd", x_1, x_2) * self.temperature
+        logits = torch.einsum("bct,dct,d->bd", x_1, x_2, inv_norms) * self.temperature
 
         # Diagonal targets
         targets = torch.arange(x_1.size(0), device=x_1.device)
-
-        # Symmetric loss
-        x_1_loss = self.cross_entropy(logits, targets, reduction="none")  # [B]
-        x_2_loss = self.cross_entropy(logits.T, targets.T, reduction="none")  # [B]
-        clip_loss = (x_1_loss + x_2_loss) / 2  # [B]
+        probs = F.log_softmax(logits, dim=-1)  # [B]
+        clip_loss = F.cross_entropy(probs, targets, reduction='mean') 
 
         return {
-            "loss": clip_loss.mean(),  # Still on device
-            "metrics": self.eval_metrics(logits),  # on CPU
+            "loss": clip_loss,  # Still on device
+            "metrics": self.eval_metrics(probs, targets),  # on CPU
         }
-
-    def cross_entropy(self, preds, targets, reduction="none"):
-        """
-        Arguments:
-            preds -- [B, B] tensor of predictions 
-            targets -- [B] tensor of indices
-        Returns:
-            loss -- [B] tensor of losses
-        """
-        # Direct computation without materializing one-hot matrix
-        log_softmax = F.log_softmax(preds, dim=-1)
-        loss = -log_softmax[torch.arange(preds.size(0), device=preds.device), targets]
-        
-        return loss.mean() if reduction == "mean" else loss
 
     def eval_metrics(
         self,
-        logits: torch.Tensor,
+        probs: torch.Tensor,
+        targets: torch.Tensor,
     ) -> dict[str, float]:
         """
         Gives evaluation metrics using CLIP loss logits. Top % correct.
@@ -64,44 +47,43 @@ class CLIPLoss(nn.Module):
         to track progress during training.
 
         Args:
-            logits: torch.Tensor, shape [B, B]
+            probs: torch.Tensor, shape [B, B]
+            targets: torch.Tensor, shape [B]
 
         Returns:
             metrics: dict[str, float]
         """
 
         # Metrics
-        total = logits.shape[0]
-        score = F.softmax(logits, dim=-1)
-        labels = torch.arange(total).to(logits.device)
+        batch_size = probs.shape[0]
 
         # Top 10% correct
-        top_10 = max(1, total // 10)
-        topk_values, topk_indices = torch.topk(score, top_10, dim=-1)
+        top_10 = max(1, batch_size // 10)
+        topk_values, topk_indices = torch.topk(probs, top_10, dim=-1)
         correct_tensor = topk_indices.eq(
-            labels.unsqueeze(1).expand_as(topk_indices)
+            targets.unsqueeze(1).expand_as(topk_indices)
         )  # tensor of boolean values
         top10_correct = correct_tensor.cpu().sum().item()
 
         # Top 5% correct
-        top_5 = max(1, total // 20)
-        topk_values, topk_indices = torch.topk(score, top_5, dim=-1)
+        top_5 = max(1, batch_size // 20)
+        topk_values, topk_indices = torch.topk(probs, top_5, dim=-1)
         correct_tensor = topk_indices.eq(
-            labels.unsqueeze(1).expand_as(topk_indices)
+            targets.unsqueeze(1).expand_as(topk_indices)
         )  # tensor of boolean values
         top5_correct = correct_tensor.cpu().sum().item()
 
         # Top 1% correct
-        top_1 = max(1, total // 100)
-        topk_values, topk_indices = torch.topk(score, top_1, dim=-1)
+        top_1 = max(1, batch_size // 100)
+        topk_values, topk_indices = torch.topk(probs, top_1, dim=-1)
         correct_tensor = topk_indices.eq(
-            labels.unsqueeze(1).expand_as(topk_indices)
+            targets.unsqueeze(1).expand_as(topk_indices)
         )  # tensor of boolean values
         top1_correct = correct_tensor.cpu().sum().item()
 
         # correct
-        predicted_labels = torch.argmax(score, dim=-1)
-        correct_predictions = (predicted_labels == labels).cpu().sum().item()
+        predicted_labels = torch.argmax(probs, dim=-1)
+        correct_predictions = (predicted_labels == targets).cpu().sum().item()
         correct = correct_predictions
 
         metrics =  {
@@ -110,7 +92,6 @@ class CLIPLoss(nn.Module):
             "top_5_correct": top5_correct,
             "top_1_correct": top1_correct,
         }
-        batch_size = logits.shape[0]
         for k, v in metrics.items():
             metrics[k] = v / batch_size if batch_size > 0 else 0
             
