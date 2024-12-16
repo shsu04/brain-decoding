@@ -114,7 +114,7 @@ class DataLoader:
         self.fetch_thread = None
         self.pending_futures = []
 
-    def start_fetching(self, recordings: list[Recording], cache: bool):
+    def start_fetching(self, recordings: list[Recording], cache: bool = True):
         """Start the background fetching thread.
 
         Args:
