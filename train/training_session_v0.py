@@ -77,7 +77,7 @@ class TrainingSessionV0(TrainingSession):
             lr=self.config.learning_rate,
             weight_decay=self.config.weight_decay,
         )
-        self.clip_loss, self.mse_loss = CLIPLoss(), torch.nn.MSELoss()
+        self.clip_loss, self.mse_loss = CLIPLoss(), torch.nn.MSELoss(reduction='mean')
 
     def train(
         self,
@@ -87,13 +87,14 @@ class TrainingSessionV0(TrainingSession):
         max_cache_size: int,
         current_epoch: int = 0,
     ):
+        """Max cache size for the cache dir in GB"""
 
         # Set all training parameters
         self.device = device
         gpu_ok = False
         torch.set_float32_matmul_precision("high")
         training_size = len(self.dataset["train"])
-        self.scaler = torch.amp.GradScaler(deivce=device)
+        self.scaler = torch.amp.GradScaler(device=device)
         self.model.to(device)
         self.clip_loss.to(device)
 
@@ -275,7 +276,7 @@ class TrainingSessionV0(TrainingSession):
 
                     # Compute loss
                     mse_loss = self.mse_loss(
-                        input=output, target=audio_batch, reduction="mean"
+                        input=output, target=audio_batch,
                     )
                     clip_results = self.clip_loss(x_1=output, x_2=audio_batch)
                     clip_loss, clip_metrics = (
@@ -350,6 +351,7 @@ class TrainingSessionV0(TrainingSession):
                     )
                     missed_recordings += end - start
                     missed_batches += 1
+                    raise e
                     continue
 
         gc.collect()
@@ -360,19 +362,24 @@ class TrainingSessionV0(TrainingSession):
         batches = len(batch_indices) - missed_batches
 
         # Loss divided by batches, metrics by total
-        return {
-            "loss": recording_loss / batches if batches > 0 else 0,
-            "clip_loss": recording_clip_loss / batches if batches > 0 else 0,
-            "mse_loss": recording_mse_loss / batches if batches > 0 else 0,
+        metrics = {
+            "loss": recording_loss,
+            "clip_loss": recording_clip_loss,
+            "mse_loss": recording_mse_loss,
             "commitment_loss": (
-                recording_commitment_loss / batches if batches > 0 else 0
+                recording_commitment_loss
             ),
-            "perplexity": recording_perplexity / batches if batches > 0 else 0,
-            "accuracy": recording_correct / total if total > 0 else 0,
-            "top_1_accuracy": recording_top_1 / total if total > 0 else 0,
-            "top_5_accuracy": recording_top_5 / total if total > 0 else 0,
-            "top_10_accuracy": recording_top_10 / total if total > 0 else 0,
+            "perplexity": recording_perplexity,
+            "accuracy": recording_correct,
+            "top_1_accuracy": recording_top_1,
+            "top_5_accuracy": recording_top_5,
+            "top_10_accuracy": recording_top_10,
         }
+        
+        for metrics, value in metrics.items():
+            metrics[metrics] = value / batches if batches > 0 else 0
+            
+        return metrics
 
     def test(self, buffer_size: int, num_workers: int, max_cache_size: int):
         """Max cache size in GB"""

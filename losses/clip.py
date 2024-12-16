@@ -18,7 +18,7 @@ class CLIPLoss(nn.Module):
         assert x_1.size() == x_2.size()
 
         # Normalize across time per mel band
-        x_1, x_2 = F.normalize(x_1, dim=2), F.normalize(x_1, dim=2)
+        x_1, x_2 = F.normalize(x_1, dim=2), F.normalize(x_2, dim=2)
 
         # Compute similarity, [B, C, T] x [B, C, T] -> [B, B]
         logits = torch.einsum("bct,dct->bd", x_1, x_2)
@@ -50,11 +50,8 @@ class CLIPLoss(nn.Module):
             loss -- [B] tensor of losses
         """
         log_softmax = nn.LogSoftmax(dim=-1)
-        loss = (-targets * log_softmax(preds)).sum(1)
-        if reduction == "none":
-            return loss
-        elif reduction == "mean":
-            return loss.mean()
+        loss = -log_softmax(preds)[torch.arange(preds.shape[0]), targets]
+        return loss.mean() if reduction == "mean" else loss
 
     def eval_metrics(
         self,
@@ -109,9 +106,14 @@ class CLIPLoss(nn.Module):
         correct_predictions = (predicted_labels == labels).cpu().sum().item()
         correct = correct_predictions
 
-        return {
+        metrics =  {
             "correct": correct,
-            "top10_correct": top10_correct,
-            "top5_correct": top5_correct,
-            "top1_correct": top1_correct,
+            "top_10_correct": top10_correct,
+            "top_5_correct": top5_correct,
+            "top_1_correct": top1_correct,
         }
+        batch_size = logits.shape[0]
+        for k, v in metrics.items():
+            metrics[k] = v / batch_size if batch_size > 0 else 0
+            
+        return metrics
