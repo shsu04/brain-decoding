@@ -6,6 +6,7 @@ import torch.nn.functional as F
 class CLIPLoss(nn.Module):
     def __init__(self):
         super().__init__()
+        self.temperature = nn.Parameter(torch.tensor(0.7))
 
     def forward(self, x_1: torch.Tensor, x_2: torch.Tensor):
         """
@@ -21,7 +22,7 @@ class CLIPLoss(nn.Module):
         # x_1, x_2 = F.normalize(x_1, dim=2), F.normalize(x_2, dim=2)
 
         # Compute similarity, [B, C, T] x [B, C, T] -> [B, B]
-        logits = torch.einsum("bct,dct->bd", x_1, x_2)
+        logits = torch.einsum("bct,dct->bd", x_1, x_2) * self.temperature
 
         # Diagonal targets
         targets = torch.arange(x_1.size(0), device=x_1.device)
@@ -37,30 +38,18 @@ class CLIPLoss(nn.Module):
         }
 
     def cross_entropy(self, preds, targets, reduction="none"):
-        """Computes cross entropy loss between preds and targets.
-
+        """
         Arguments:
-            preds -- [B, B] tensor of predictions
-            targets -- [B] tensor of targets.
-
-        Keyword Arguments:
-            reduction -- "none" or "mean" (default: {"none"})
-
+            preds -- [B, B] tensor of predictions 
+            targets -- [B] tensor of indices
         Returns:
             loss -- [B] tensor of losses
         """
-        # One-hot encode the targets
-        one_hot_targets = torch.zeros_like(preds)
-        one_hot_targets[torch.arange(preds.size(0)), targets] = 1
+        # Direct computation without materializing one-hot matrix
+        log_softmax = F.log_softmax(preds, dim=-1)
+        loss = -log_softmax[torch.arange(preds.size(0), device=preds.device), targets]
         
-        # Compute cross entropy
-        log_softmax = nn.LogSoftmax(dim=-1)
-        loss = (-one_hot_targets * log_softmax(preds)).sum(1)
-        
-        if reduction == "none":
-            return loss  # [B] 
-        elif reduction == "mean":
-            return loss.mean()  # scalar
+        return loss.mean() if reduction == "mean" else loss
 
     def eval_metrics(
         self,

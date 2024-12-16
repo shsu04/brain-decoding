@@ -19,6 +19,7 @@ from .common import (
 from .channel_merger import ChannelMerger
 from .quantizer import Quantizer, VQQuantizer, GumbelQuantizer
 from .transformer import TransformerEncoder, TransformerDecoder
+from losses import CLIPLoss
 
 
 class SimpleConv(nn.Module):
@@ -221,6 +222,9 @@ class SimpleConv(nn.Module):
         print(
             f"ConvBlocks: {self.config.depth}, hidden_dim: {self.config.hidden_dim}, params {cnn_params}"
         )
+        
+        # Leave the temp param learnable
+        self.clip_loss = CLIPLoss()
 
     def forward(
         self,
@@ -343,7 +347,5 @@ class SimpleConv(nn.Module):
         if not decoder_inference:
             x = self.final(x)  # [B, C, T]
             
-        x = torch.log1p(torch.clamp(x, min=0))
-
         assert x.shape[-1] == length
         return x, quantizer_metrics

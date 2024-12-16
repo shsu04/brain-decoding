@@ -73,14 +73,13 @@ class ChannelMerger(nn.Module):
 
     def get_heads(self, B: int, condition: str = None, device: str = "cpu"):
 
-        _, chout, pos_dim = self.heads.shape
-
         if not self.conditions:
             # [ch_out, dim] -> [B, ch_out, dim]
             heads = self.heads[None].expand(B, -1, -1)
 
         # If conditional, choose heads based on condition
         else:
+            _, chout, pos_dim = self.heads.shape
             # Take mean of trained indices
             if condition == "mean" and len(self.trained_indices) > 0:
                 # [B, ch_out, emb_dim]

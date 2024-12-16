@@ -79,7 +79,7 @@ class TrainingSessionV0(TrainingSession):
             weight_decay=self.config.weight_decay,
         )
         self.scaler = torch.amp.GradScaler(device=device)
-        self.clip_loss, self.mse_loss = CLIPLoss(), mse_loss_per_batch
+        self.clip_loss, self.mse_loss = self.model.clip_loss, mse_loss_per_batch
 
     def train(
         self,
@@ -165,7 +165,6 @@ class TrainingSessionV0(TrainingSession):
                     self.log_print(
                         f"Error in epoch {epoch}, {batch.recording.study_name} {batch.recording.subject_id} {batch.recording.session_id} {batch.recording.task_id}. Skipping. {e}"
                     )
-                    self.dataloader.stop()
                     raise e
                 
                 pbar.update(1)
