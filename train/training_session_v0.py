@@ -65,11 +65,11 @@ class TrainingSessionV0(TrainingSession):
                     studies.keys()
                 )
 
-            if "subjects" in self.config.brain_encoder_config.conditions:
+            if "subject" in self.config.brain_encoder_config.conditions:
                 subjects = set()
                 for recording in self.recordings:
                     subjects.add(f"{recording.study_name}_{recording.subject_id}")
-                self.config.brain_encoder_config.conditions["subjects"] = list(subjects)
+                self.config.brain_encoder_config.conditions["subject"] = list(subjects)
 
         self.model = SimpleConv(self.config.brain_encoder_config)
 
@@ -109,13 +109,6 @@ class TrainingSessionV0(TrainingSession):
                 "GPU is not NVIDIA V100, A100, or H100. Speedup numbers may be lower than expected."
             )
 
-        # Fetch recordings
-        dataloader = self.get_dataloader(
-                buffer_size=buffer_size,
-                num_workers=num_workers,
-                max_cache_size=max_cache_size,
-            )
-
         for epoch in range(current_epoch + 1, self.config.epochs + 1):
             try:
                 self.model.to(device).train()
@@ -126,6 +119,12 @@ class TrainingSessionV0(TrainingSession):
                     self.dataset["train"].copy(),
                     training_size,
                 )
+                # Fetch recordings
+                dataloader = self.get_dataloader(
+                    buffer_size=buffer_size,
+                    num_workers=num_workers,
+                    max_cache_size=max_cache_size,
+                )
                 # For reproducibility
                 self.set_seed(int(self.config.seed + epoch))
                 random.shuffle(epoch_training_dataset)
@@ -135,7 +134,7 @@ class TrainingSessionV0(TrainingSession):
                 self.log_print(f"Error in epoch {epoch} during initialization, {e}")
                 self.save(f"error_epoch_{epoch}")
 
-            pbar = tqdm(total=training_size, desc="Training Epoch " + str(epoch))
+            pbar = tqdm(total=len(epoch_training_dataset), desc="Training Epoch " + str(epoch))
             
             # Run each batch
             while True:
@@ -170,7 +169,6 @@ class TrainingSessionV0(TrainingSession):
                 pbar.update(1)
 
             pbar.close()
-            dataloader.stop()
             elapsed_minutes = (time.time() - epoch_start_time) / 60
             self.log_print(
                 f"Epoch {epoch} completed in {elapsed_minutes:.2f}m. {elapsed_minutes / training_size:.2f}m per recording."
@@ -238,10 +236,10 @@ class TrainingSessionV0(TrainingSession):
 
         # Models config decides if it is used
         conditions = {
-            "study": str(recording.study_name),
-            "subject": str(recording.study_name) + "_" + str(recording.subject_id),
+            "study": f'{recording.study_name}',
+            "subject": f'{recording.study_name}_{recording.subject_id}',
         }
-
+        
         # Shuffle segments
         shuffle_indices = torch.randperm(brain_segments.shape[0])
         brain_segments, audio_segments = (
@@ -307,6 +305,10 @@ class TrainingSessionV0(TrainingSession):
 
                         if train:
                             self.scaler.scale(loss).backward()
+                            self.scaler.unscale_(self.optimizer)
+                            
+                            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                            
                             self.scaler.step(self.optimizer)
                             self.scaler.update()
 
@@ -407,7 +409,7 @@ class TrainingSessionV0(TrainingSession):
             test_sizes[test] = len(test_datasets[test])
             test_dataloader[test] = self.get_dataloader(
                 buffer_size=test_sizes[test],
-                num_workers=num_workers,
+                num_workers=test_sizes[test],
                 max_cache_size=max_cache_size,
             )
             test_dataloader[test].start_fetching(test_datasets[test], cache=True)

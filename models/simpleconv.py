@@ -115,6 +115,10 @@ class SimpleConv(nn.Module):
                     conditions=self.condition_to_idx[cond_type],
                 )
                 channels = dim
+                
+                print(
+                    f'Conditional layer {cond_type} initialized with {len(self.conditional_layers[cond_type].conditions)} conditions'
+                )
 
         # Convolutional blocks parameter
         # Compute the sequences of channel sizes
@@ -138,8 +142,10 @@ class SimpleConv(nn.Module):
         final_channels = conv_channel_sizes[-1]
 
         # Final transformer encoder
-        self.transformer_encoders, self.quantizer = False, False
+        self.transformer_encoders, self.quantizer, self.layer_norm = False, False, False
         if self.config.transformer_encoder_layers > 0:
+            
+            # self.layer_norm = nn.LayerNorm(normalized_shape=final_channels)
 
             assert self.config.transformer_input in [
                 "continuous",
@@ -293,14 +299,14 @@ class SimpleConv(nn.Module):
 
             if self.quantizer:
 
-                quantized, metrics = self.quantizer(x)  # [B, C, T]
+                quantized, quantizer_metrics = self.quantizer(x)  # [B, C, T]
 
                 if self.config.transformer_input == "concat":
                     x = torch.cat([x, quantized], dim=1)  # [B, 2C, T]
                 elif self.config.transformer_input == "quantized":
                     x = quantized
 
-            self.transformer_encoders(x, attn_mask=attention_mask)  # [B, C, T]
+            x = self.transformer_encoders(x, attn_mask=attention_mask)  # [B, C, T]
 
             if self.transformer_decoders:
                 if train:
