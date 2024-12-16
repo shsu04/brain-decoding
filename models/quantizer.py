@@ -108,7 +108,7 @@ class VQQuantizer(Quantizer):
 
         perplexity = torch.exp(
             torch.nansum(-avg_probs * torch.log(avg_probs + 1e-8), dim=1)
-        )
+        )  # [n_codebooks]
 
         codebook_loss = F.mse_loss(x_chunks.detach(), quantized)
         encoder_loss = F.mse_loss(x_chunks, quantized.detach())

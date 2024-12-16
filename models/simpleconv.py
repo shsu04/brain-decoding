@@ -35,6 +35,7 @@ class SimpleConv(nn.Module):
             self.config.kernel_size % 2 == 1
         ), "For padding to work, this must be verified"
 
+        self.condition_to_idx = {}
         if config.conditions is not None:
 
             assert (
@@ -42,7 +43,6 @@ class SimpleConv(nn.Module):
             ), "There must be at least one condition"
 
             # double dictionary to map condition type and name to index
-            self.condition_to_idx = {}
             for cond_type, cond_names in sorted(self.config.conditions.items()):
                 # add an additional condition in case not found during training
                 self.condition_to_idx[cond_type] = {
@@ -147,7 +147,8 @@ class SimpleConv(nn.Module):
             ], f"Invalid transformer input {self.config.transformer_input}"
 
             # Quantizer
-            if self.config.quantizer is not None:
+            if self.config.quantizer:
+
                 assert self.config.quantizer in [
                     "vq",
                     "gumbel",
@@ -273,21 +274,23 @@ class SimpleConv(nn.Module):
         if self.initial_linear is not None:
             x = self.initial_linear(x)
 
-        for cond_type, cond_layer in self.conditional_layers.items():
-            assert (
-                cond_type in conditions.keys()
-            ), f"The conditional type {cond_type} must be in the conditions"
-            x = cond_layer(x, condition=conditions[cond_type])
+        if self.conditional_layers is not None:
+            for cond_type, cond_layer in self.conditional_layers.items():
+                assert (
+                    cond_type in conditions.keys()
+                ), f"The conditional type {cond_type} must be in the conditions"
+                x = cond_layer(x, condition=conditions[cond_type])
 
         # CNN
         x = self.encoders(x)  # [B, C, T]
 
         # Transformers
-        decoder_inference = False
+        decoder_inference, quantizer_metrics = False, None
         if self.transformer_encoders:
 
             if self.quantizer:
-                quantized = self.quantizer(x)  # [B, C, T]
+
+                quantized, metrics = self.quantizer(x)  # [B, C, T]
 
                 if self.config.transformer_input == "concat":
                     x = torch.cat([x, quantized], dim=1)  # [B, 2C, T]
@@ -343,4 +346,4 @@ class SimpleConv(nn.Module):
             x = self.final(x)  # [B, C, T]
 
         assert x.shape[-1] == length
-        return x
+        return x, quantizer_metrics
