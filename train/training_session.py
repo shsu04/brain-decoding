@@ -49,11 +49,8 @@ class TrainingSession(ABC):
         assert len(studies) > 0, "At least one study root path must be provided"
         assert all(
             os.path.exists(data_path + "/" + study) for study in studies
-        ), "All study root paths must exist"
-        if os.path.exists(save_path):
-            raise ValueError(f"Save path {save_path} already exists")
-        
-        os.makedirs(save_path)
+        ), "All study root paths must exist"        
+        os.makedirs(save_path, exist_ok=True)
 
         logging.basicConfig(
             filename=os.path.join(save_path, "training_log.log"),

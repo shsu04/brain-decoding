@@ -279,7 +279,7 @@ class TrainingSessionV0(TrainingSession):
                     )  # [B, C, T]
 
                     # Compute loss
-                    mse_loss = self.mse_loss(pred=output, target=brain_batch)
+                    mse_loss = self.mse_loss(pred=output, target=audio_batch)
                     
                     clip_results = self.clip_loss(x_1=output, x_2=audio_batch)
                     clip_loss, clip_metrics = (
@@ -391,7 +391,7 @@ class TrainingSessionV0(TrainingSession):
         self.set_seed(int(self.config.seed))
         test_start_time = time.time()
 
-        test_datasets, test_dataloader = {}, {}
+        test_datasets, test_dataloader, test_sizes = {}, {}, {}
 
         # Create dataset and loader
         for test in self.dataset["test"].keys():
@@ -402,16 +402,14 @@ class TrainingSessionV0(TrainingSession):
                 test_datasets[test] = random.sample(
                     self.dataset["test"][test], self.config.random_test_size
                 )
+                
+            test_sizes[test] = len(test_datasets[test])
 
             test_dataloader[test] = self.get_dataloader(
-                buffer_size=buffer_size,
+                buffer_size=len(test_sizes[test]),
                 num_workers=num_workers,
                 max_cache_size=max_cache_size,
             )
-                
-            print(f"Test: {test}, Size of test_datasets[test]: {len(test_datasets[test])}")
-
-        test_sizes = {test: len(test_datasets[test]) for test in test_datasets.keys()}
 
         
         # Run tests
@@ -604,7 +602,7 @@ def load_training_session(
             config=config,
             studies=studies,
             data_path=data_path,
-            save_path="to be determined",
+            save_path="temp",
             clear_cache=clear_cache,
             cache_enabled=cache_enabled,
             max_cache_size=max_cache_size,

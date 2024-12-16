@@ -10,3 +10,4 @@ compressed_data/*
 decompressed_data/*
 cache/*
 saves/*
+temp
