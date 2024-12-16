@@ -56,14 +56,10 @@ class Study(ABC):
     def recording_exists(self, subject: str, session: str, task: str) -> bool:
         """Check if a recording exists for a given subject, session, and task."""
         try:
-            exists = any(
-                [
-                    r.subject_id == subject
-                    and r.session_id == session
-                    and r.task_id == task
-                    for r in self.recordings
-                ]
-            )
+            exists = self.recordings[self.subjects.index(subject)][
+                self.sessions.index(session)
+            ][self.tasks.index(task)]
+            
         except Exception as e:
             exists = False
         return exists
@@ -176,8 +172,10 @@ class Recording(ABC):
             "standard",
             "both",
         ], f"Invalid scaling type {scaling}"
-        assert baseline_window >= 0
-        assert low < high, "Low frequency must be less than high frequency."
+        if baseline_window:
+            assert baseline_window >= 0
+        if low is not None and high is not None:
+            assert low < high, "Low frequency must be less than high frequency."
 
         robust_scaler = RobustScaler() if scaling in ["robust", "both"] else None
         standard_scaler = StandardScaler() if scaling in ["standard", "both"] else None
