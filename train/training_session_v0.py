@@ -14,6 +14,7 @@ import torch
 from dataloader import DataLoader
 from dataloader.audio_batch import AudioBatch
 from losses.clip import CLIPLoss
+from losses.mse import mse_loss_per_batch
 from config import TrainingConfigV0
 from train.training_session import TrainingSession
 from models.simpleconv import SimpleConv
@@ -78,7 +79,7 @@ class TrainingSessionV0(TrainingSession):
             weight_decay=self.config.weight_decay,
         )
         self.scaler = torch.amp.GradScaler(device=device)
-        self.clip_loss, self.mse_loss = CLIPLoss(), torch.nn.MSELoss(reduction='mean')
+        self.clip_loss, self.mse_loss = CLIPLoss(), mse_loss_per_batch
 
     def train(
         self,
@@ -278,9 +279,8 @@ class TrainingSessionV0(TrainingSession):
                     )  # [B, C, T]
 
                     # Compute loss
-                    mse_loss = self.mse_loss(
-                        input=output, target=audio_batch,
-                    )
+                    mse_loss = self.mse_loss(pred=output, target=brain_batch)
+                    
                     clip_results = self.clip_loss(x_1=output, x_2=audio_batch)
                     clip_loss, clip_metrics = (
                         clip_results["loss"],
@@ -544,11 +544,11 @@ class TrainingSessionV0(TrainingSession):
             # Training session config
             if not os.path.exists(self.save_path):
                 os.makedirs(self.save_path)
-                config = self.config.to_dict()
-                with open(self.save_path + "/training_config.json", "w") as json_file:
-                    json.dump(config, json_file, indent=4)
-
+                
             
+            config = self.config.to_dict()
+            with open(self.save_path + "/training_config.json", "w") as json_file:
+                json.dump(config, json_file, indent=4)
             checkpoint_path = f"{self.save_path}/{name}"
             os.makedirs(checkpoint_path, exist_ok=True)
 
@@ -604,11 +604,12 @@ def load_training_session(
             config=config,
             studies=studies,
             data_path=data_path,
-            save_path=save_path,
+            save_path="to be determined",
             clear_cache=clear_cache,
             cache_enabled=cache_enabled,
             max_cache_size=max_cache_size,
         )
+        training_session.save_path = save_path
 
         # Load model
         training_session.model.load_state_dict(load["model"])
