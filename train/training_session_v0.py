@@ -93,7 +93,7 @@ class TrainingSessionV0(TrainingSession):
         gpu_ok = False
         torch.set_float32_matmul_precision("high")
         training_size = len(self.dataset["train"])
-        self.scaler = GradScaler()
+        self.scaler = torch.amp.GradScaler(deivce=device)
         self.model.to(device)
         self.clip_loss.to(device)
 
@@ -192,7 +192,7 @@ class TrainingSessionV0(TrainingSession):
     def run_batch(self, batch: AudioBatch, train: bool) -> tp.Dict[str, float]:
         """
         Per recording processing for training and testing. Returns average metrics
-        and losses for the recording. Returns metrics on CPU.
+        and losses for the recording. Returns metrics on CPU. 
         """
 
         # Some processing to ensure dims match
@@ -249,7 +249,7 @@ class TrainingSessionV0(TrainingSession):
             for i in range(0, total, self.config.batch_size)
         ]
 
-        with torch.amp.autocast(dtype=torch.bfloat16):
+        with torch.amp.autocast(dtype=torch.bfloat16, device_type=device):
 
             for start, end in batch_indices:
 
@@ -375,6 +375,7 @@ class TrainingSessionV0(TrainingSession):
         }
 
     def test(self, buffer_size: int, num_workers: int, max_cache_size: int):
+        """Max cache size in GB"""
 
         self.model.eval().to(self.device)
         self.set_seed(int(self.config.seed))
