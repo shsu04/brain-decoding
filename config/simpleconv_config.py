@@ -39,7 +39,16 @@ class SimpleConvConfig(Config):
         conv_dropout: float = 0.2,
         dropout_input: float = 0.2,
         batch_norm: bool = True,
+        # Quantizer
+        quantizer: str = "vq",  # vq or gumbel or none
+        num_codebooks: int = 1,
+        codebook_size: int = 512,
+        quantizer_commitment: float = 0.25,
+        quantizer_temp_init: float = 1.0,
+        quantizer_temp_min: float = 0.1,
+        quantizer_temp_decay: float = 0.999,
         # Transformers Encoders
+        transformer_input: str = "concat",  # concat or quantized or continuous
         transformer_encoder_emb: str = "groupconv",
         transformer_encoder_layers: int = 0,
         transformer_encoder_heads: int = 0,
@@ -63,7 +72,7 @@ class SimpleConvConfig(Config):
         self.layout_scaling = layout_scaling
         # Merger with spatial attn
         self.merger = merger
-        self.merger_emb_type = self.merger_emb_type
+        self.merger_emb_type = merger_emb_type
         self.merger_emb_dim = merger_emb_dim
         self.merger_channels = merger_channels
         self.merger_dropout = merger_dropout
@@ -84,7 +93,16 @@ class SimpleConvConfig(Config):
         self.dropout_input = dropout_input
         self.conv_dropout = conv_dropout
         self.batch_norm = batch_norm
+        # Quantizer
+        self.quantizer = quantizer
+        self.num_codebooks = num_codebooks
+        self.codebook_size = codebook_size
+        self.quantizer_commitment = quantizer_commitment
+        self.quantizer_temp_init = quantizer_temp_init
+        self.quantizer_temp_min = quantizer_temp_min
+        self.quantizer_temp_decay = quantizer_temp_decay
         # Transformer Encoders
+        self.transformer_input = transformer_input
         self.transformer_encoder_emb = transformer_encoder_emb
         self.transformer_encoder_layers = transformer_encoder_layers
         self.transformer_encoder_heads = transformer_encoder_heads

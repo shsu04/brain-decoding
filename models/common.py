@@ -4,7 +4,6 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import math
 import typing as tp
 import torch
 from torch import nn
@@ -200,9 +199,9 @@ class ConditionalLayers(nn.Module):
         self.conditions = conditions
         self.trained_indices = set()
         self.weights = nn.Parameter(
-            torch.randn(len(conditions), in_channels, out_channels)
+            torch.empty(len(conditions), in_channels, out_channels),
         )
-        self.weights.data *= 1 / in_channels**0.5
+        nn.init.kaiming_uniform_(self.weights, a=0)
 
     @property
     def trained_indices_list(self):
@@ -309,17 +308,21 @@ class ConvSequence(nn.Module):
 
             pad = kernel // 2 * dilation
 
-            layers.append(
-                Conv(
-                    chin,
-                    chout,
-                    kernel,
-                    stride,
-                    pad,
-                    dilation=dilation,
-                    groups=1,
-                )
+            conv_layer = Conv(
+                chin,
+                chout,
+                kernel,
+                stride,
+                pad,
+                dilation=dilation,
+                groups=1,
             )
+
+            nn.init.kaiming_uniform_(conv_layer.weight, a=0)
+            if conv_layer.bias is not None:
+                nn.init.zeros_(conv_layer.bias)
+
+            layers.append(conv_layer)
 
             dilation *= dilation_growth
 
@@ -336,12 +339,13 @@ class ConvSequence(nn.Module):
 
             # Add GLU layer if specified
             if glu and (k + 1) % glu == 0:
-                self.glus.append(
-                    nn.Sequential(
-                        nn.Conv1d(chout, chout * 2, 1 + 2, padding=1),
-                        nn.GLU(dim=1),
-                    )
+                glu_layer = nn.Sequential(
+                    nn.Conv1d(chout, chout * 2, 1 + 2, padding=1),
+                    nn.GLU(dim=1),
                 )
+                nn.init.kaiming_uniform_(glu_layer[0].weight, a=0)
+                self.glus.append(glu_layer)
+
             else:
                 self.glus.append(None)
 

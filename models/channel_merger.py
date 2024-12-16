@@ -47,6 +47,7 @@ class ChannelMerger(nn.Module):
             self.embedding = nn.Sequential(
                 nn.Linear(layout_dim, embedding_dim), nn.Tanh()
             )
+            nn.init.kaiming_uniform_(self.embedding, a=0)
         else:
             raise ValueError(f"Unknown embedding type: {embedding_type}")
 
@@ -56,18 +57,15 @@ class ChannelMerger(nn.Module):
             assert "unknown" in conditions, "Conditions must include an 'unknown' key"
             self.trained_indices = set()
             self.heads = nn.Parameter(
-                torch.randn(
+                torch.empty(
                     len(self.conditions),
                     merger_channels,
                     embedding_dim,
-                    requires_grad=True,
                 )
             )
         else:
-            self.heads = nn.Parameter(
-                torch.randn(merger_channels, embedding_dim, requires_grad=True)
-            )
-        self.heads.data /= embedding_dim**0.5
+            self.heads = nn.Parameter(torch.empty(merger_channels, embedding_dim))
+        nn.init.kaiming_uniform_(self.heads, a=0)
 
     @property
     def trained_indices_list(self):
@@ -231,9 +229,8 @@ class SphericalEmbedding(nn.Module):
         n_harmonics = (max_degree + 1) ** 2
 
         # Learnable weights for each harmonic component
-        self.harmonics_weights = nn.Parameter(
-            torch.randn(n_harmonics, dimension), requires_grad=True
-        )
+        self.harmonics_weights = nn.Parameter(torch.empty(n_harmonics, dimension))
+        nn.init.kaiming_uniform_(self.harmonics_weights, a=0)
 
     def _spherical_harmonic(self, l: int, m: int, theta: Tensor, phi: Tensor) -> Tensor:
         """

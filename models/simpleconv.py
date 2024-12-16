@@ -3,20 +3,22 @@
 #
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
+from tempfile import tempdir
 import typing as tp
 import torch
 from config import SimpleConvConfig
 from torch import nn
 from torch.nn import functional as F
-from .transformer import TransformerEncoder, TransformerDecoder
-from studies.study import Recording
 
+from studies.study import Recording
 from .common import (
     ConvSequence,
     ConditionalLayers,
     ChannelDropout,
 )
 from .channel_merger import ChannelMerger
+from .quantizer import Quantizer, VQQuantizer, GumbelQuantizer
+from .transformer import TransformerEncoder, TransformerDecoder
 
 
 class SimpleConv(nn.Module):
@@ -135,8 +137,42 @@ class SimpleConv(nn.Module):
         final_channels = conv_channel_sizes[-1]
 
         # Final transformer encoder
-        self.transformer_encoders = False
+        self.transformer_encoders, self.quantizer = False, False
         if self.config.transformer_encoder_layers > 0:
+
+            assert self.config.transformer_input in [
+                "continuous",
+                "quantized",
+                "concat",
+            ], f"Invalid transformer input {self.config.transformer_input}"
+
+            # Quantizer
+            if self.config.quantizer is not None:
+                assert self.config.quantizer in [
+                    "vq",
+                    "gumbel",
+                ], f"Invalid quantizer {self.config.quantizer}"
+
+                if self.config.quantizer == "vq":
+                    self.quantizer = VQQuantizer(
+                        dim=final_channels,
+                        num_codebooks=self.config.num_codebooks,
+                        codebook_size=self.config.codebook_size,
+                        commitment=self.config.quantizer_commitment,
+                    )
+                else:
+                    self.quantizer = GumbelQuantizer(
+                        dim=final_channels,
+                        num_codebooks=self.config.num_codebooks,
+                        codebook_size=self.config.codebook_size,
+                        temp_init=self.config.quantizer_temp_init,
+                        temp_min=self.config.quantizer_temp_min,
+                        temp_decay=self.config.quantizer_temp_decay,
+                    )
+
+                if self.config.transformer_input == "concat":
+                    final_channels *= 2
+
             self.transformer_encoders = TransformerEncoder(
                 d_model=final_channels,
                 nhead=self.config.transformer_encoder_heads,
@@ -173,15 +209,18 @@ class SimpleConv(nn.Module):
         )
 
         total_params = sum(p.numel() for p in self.parameters())
-        print(
-            f"\nSimpleConv: \tParams: {total_params}, \tcond: {list(self.config.conditions.keys())}"
-        )
-        print(
-            f"\t\tMerger: {self.merger is not None}, \t\tMerger chan: {self.config.merger_channels}"
-        )
         cnn_params = sum(p.numel() for p in self.encoders.parameters())
         print(
             f"\t\tConv blocks: {self.config.depth}, \tChannels: {channels}, \t\tParams: {cnn_params}"
+        )
+        print(
+            f"SimpleConv initialized with {total_params} parameters, cond: {list(self.config.conditions.keys())}"
+        )
+        print(
+            f"Merger {self.merger is not None}, merger channels {self.config.merger_channels}"
+        )
+        print(
+            f"ConvBlocks: {self.config.depth}, hidden_dim: {self.config.hidden_dim}, params {cnn_params}"
         )
 
     def forward(
@@ -246,6 +285,15 @@ class SimpleConv(nn.Module):
         # Transformers
         decoder_inference = False
         if self.transformer_encoders:
+
+            if self.quantizer:
+                quantized = self.quantizer(x)  # [B, C, T]
+
+                if self.config.transformer_input == "concat":
+                    x = torch.cat([x, quantized], dim=1)  # [B, 2C, T]
+                elif self.config.transformer_input == "quantized":
+                    x = quantized
+
             self.transformer_encoders(x, attn_mask=attention_mask)  # [B, C, T]
 
             if self.transformer_decoders:

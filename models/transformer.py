@@ -120,8 +120,10 @@ class TransformerEncoder(nn.Module):
         self.d_model = d_model
 
         total_params = sum(p.numel() for p in self.parameters())
-        print(f"\nTransEncoder \tParams: {total_params} \t\tEmb: {self.embedding_name}")
-        print(f"\t\tLayers: {layers}, \t\tD_model: {d_model}, \t\tNhead: {nhead}")
+        print(
+            f"TransformerEncoder initialized with {layers} layers, {d_model} d_model, {nhead} nhead"
+        )
+        print(f"\tEmbedding: {embedding}, params: {total_params}")
 
     def forward(self, x: torch.Tensor, attn_mask=None):
         """x: [B, C, T], attn_mask: [B, T]"""
@@ -192,11 +194,10 @@ class TransformerDecoder(nn.Module):
             num_layers=layers,
         )
         total_params = sum(p.numel() for p in self.parameters())
-        print(f"\nTransDecoder \tParams: {total_params}")
         print(
-            f"\t\tEmb: {self.embedding_name}, \tLayers: {layers}, \t\tD_model: {d_model}"
+            f"TransformerDecoder initialized with {layers} layers, {d_model} d_model, {nhead} nhead"
         )
-        print(f"\t\tNhead: {nhead}, \t\tMel_bins: {self.mel_bins}")
+        print(f"\tEmbedding: {embedding}, params: {total_params}")
 
     def forward(self, mel: torch.Tensor, encoder_output: torch.Tensor, src_mask=None):
         """Uses the encoder output to predict the mel spectrogram
