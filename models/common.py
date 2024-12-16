@@ -199,8 +199,9 @@ class ConditionalLayers(nn.Module):
         self.conditions = conditions
         self.trained_indices = set()
         self.weights = nn.Parameter(
-            torch.randn(len(conditions), in_channels, out_channels),
+            torch.empty(len(conditions), in_channels, out_channels),
         )
+        nn.init.kaiming_uniform_(self.weights, a=0)
 
     @property
     def trained_indices_list(self):
@@ -316,6 +317,8 @@ class ConvSequence(nn.Module):
                 dilation=dilation,
                 groups=1,
             )
+
+            nn.init.kaiming_uniform_(conv_layer.weight, a=0)
             if conv_layer.bias is not None:
                 nn.init.zeros_(conv_layer.bias)
 
@@ -340,6 +343,7 @@ class ConvSequence(nn.Module):
                     nn.Conv1d(chout, chout * 2, 1 + 2, padding=1),
                     nn.GLU(dim=1),
                 )
+                nn.init.kaiming_uniform_(glu_layer[0].weight, a=0)
                 self.glus.append(glu_layer)
 
             else:

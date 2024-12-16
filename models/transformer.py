@@ -42,6 +42,7 @@ class GroupedConvolution(nn.Module):
             padding="same",
             groups=d_model,
         )
+        nn.init.kaiming_normal_(self.conv.weight, a=0)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: [B, T, C] -> [B, C, T]
