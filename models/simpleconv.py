@@ -209,6 +209,7 @@ class SimpleConv(nn.Module):
                 2 * final_channels, self.config.out_channels, kernel, stride, pad
             ),
         )
+        nn.init.kaiming_uniform_(self.final[0].weight, a=0)
 
         total_params = sum(p.numel() for p in self.parameters())
         cnn_params = sum(p.numel() for p in self.encoders.parameters())
@@ -223,7 +224,7 @@ class SimpleConv(nn.Module):
             f"ConvBlocks: {self.config.depth}, hidden_dim: {self.config.hidden_dim}, params {cnn_params}"
         )
         
-        # Leave the temp param learnable
+        # Leave the temp param
         self.clip_loss = CLIPLoss()
 
     def forward(
