@@ -145,7 +145,7 @@ class SimpleConv(nn.Module):
         self.transformer_encoders, self.quantizer, self.layer_norm = False, False, False
         if self.config.transformer_encoder_layers > 0:
             
-            # self.layer_norm = nn.LayerNorm(normalized_shape=final_channels)
+            self.layer_norm = nn.LayerNorm(normalized_shape=final_channels)
 
             assert self.config.transformer_input in [
                 "continuous",
@@ -296,6 +296,11 @@ class SimpleConv(nn.Module):
         # Transformers
         decoder_inference, quantizer_metrics = False, None
         if self.transformer_encoders:
+            
+            if self.layer_norm:
+                x = self.layer_norm(
+                    x.transpose(1, 2) # [B, T, C]
+                ).transpose(1, 2)  # [B, C, T]
 
             if self.quantizer:
 

@@ -1,24 +1,16 @@
 from abc import ABC, abstractmethod
-import gc
 import random
-import time
-from numpy import record
-from tqdm import tqdm
 import numpy as np
-from config.simpleconv_config import SimpleConvConfig
-from models.simpleconv import SimpleConv
 from studies.study_factory import StudyFactory
 import typing as tp
 import json
 from itertools import product
 from torch.optim import AdamW
-from torch.cuda.amp import GradScaler, autocast
-from torch.utils.data import DataLoader
 import os
 import logging
 import shutil
 import torch
-from config import SimpleConvConfig, Config, TrainingConfig
+from config import TrainingConfig
 
 
 class TrainingSession(ABC):
