@@ -110,7 +110,7 @@ class TrainingSessionV0(TrainingSession):
             )
 
         # Fetch recordings
-        self.dataloader = self.get_dataloader(
+        dataloader = self.get_dataloader(
                 buffer_size=buffer_size,
                 num_workers=num_workers,
                 max_cache_size=max_cache_size,
@@ -129,7 +129,7 @@ class TrainingSessionV0(TrainingSession):
                 # For reproducibility
                 self.set_seed(int(self.config.seed + epoch))
                 random.shuffle(epoch_training_dataset)
-                self.dataloader.start_fetching(epoch_training_dataset, cache=True)
+                dataloader.start_fetching(epoch_training_dataset, cache=True)
 
             except Exception as e:
                 self.log_print(f"Error in epoch {epoch} during initialization, {e}")
@@ -140,7 +140,7 @@ class TrainingSessionV0(TrainingSession):
             # Run each batch
             while True:
 
-                batch = self.dataloader.get_recording()
+                batch = dataloader.get_recording()
                 if batch is None:
                     break
 
@@ -170,7 +170,7 @@ class TrainingSessionV0(TrainingSession):
                 pbar.update(1)
 
             pbar.close()
-            self.dataloader.stop()
+            dataloader.stop()
             elapsed_minutes = (time.time() - epoch_start_time) / 60
             self.log_print(
                 f"Epoch {epoch} completed in {elapsed_minutes:.2f}m. {elapsed_minutes / training_size:.2f}m per recording."
@@ -392,7 +392,7 @@ class TrainingSessionV0(TrainingSession):
         self.set_seed(int(self.config.seed))
         test_start_time = time.time()
 
-        test_datasets, test_sizes = {}, {}
+        test_datasets, test_sizes, test_dataloader = {}, {}, {}
 
         # Create dataset and loader
         for test in self.dataset["test"].keys():
@@ -405,19 +405,19 @@ class TrainingSessionV0(TrainingSession):
                 )
                 
             test_sizes[test] = len(test_datasets[test])
-            self.test_dataoader[test] = self.get_dataloader(
+            test_dataloader[test] = self.get_dataloader(
                 buffer_size=test_sizes[test],
                 num_workers=num_workers,
                 max_cache_size=max_cache_size,
             )
-            self.test_dataoader[test].start_fetching(test_datasets[test], cache=True)
+            test_dataloader[test].start_fetching(test_datasets[test], cache=True)
 
         # Run tests
         for test in test_datasets.keys():
             i = 0
             while True:
 
-                batch = self.test_dataoader[test].get_recording()
+                batch = test_dataloader[test].get_recording()
                 if batch is None:
                     break
 
@@ -447,7 +447,7 @@ class TrainingSessionV0(TrainingSession):
                     test_sizes[test] -= 1
                     continue
                 
-            self.test_dataoader[test].stop()
+            test_dataloader[test].stop()
 
         # Log info
         elapsed_minutes = (time.time() - test_start_time) / 60

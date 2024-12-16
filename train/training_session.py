@@ -106,8 +106,6 @@ class TrainingSession(ABC):
         self.error = None
         self.set_seed(int(self.config.seed))
         
-        self.dataloader, self.test_dataoader = None, {}
-
     @abstractmethod
     def train(self):
         pass

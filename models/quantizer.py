@@ -41,9 +41,8 @@ class VQQuantizer(Quantizer):
 
         # [n_codebooks, codebook_size, chunk_size]
         self.codebooks = nn.Parameter(
-            torch.empty(num_codebooks, codebook_size, self.chunk_size),
+            torch.randn(num_codebooks, codebook_size, self.chunk_size),
         )
-        nn.init.kaiming_uniform_(self.codebooks, a=0)
 
         print(
             f"VQQuantizer initialized with {num_codebooks} codebooks of size {codebook_size}"
@@ -150,14 +149,12 @@ class GumbelQuantizer(Quantizer):
         self.projections = nn.ModuleList(
             [nn.Conv1d(self.chunk_size, codebook_size, 1) for _ in range(num_codebooks)]
         )
-        nn.init.kaiming_uniform_(self.projections, a=0)
 
         # [n_codebooks, codebook_size, chunk_size]
         self.codebooks = nn.Parameter(
-            torch.empty(num_codebooks, codebook_size, self.chunk_size)
+            torch.randn(num_codebooks, codebook_size, self.chunk_size)
         )
-        nn.init.kaiming_uniform_(self.codebooks, a=0)
-
+        
         print(
             f"GumbelQuantizer initialized with {num_codebooks} codebooks of size {codebook_size}"
         )

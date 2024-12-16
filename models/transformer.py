@@ -1,8 +1,6 @@
 from torch import nn
 import torch
 import math
-import torchaudio.transforms as T
-
 
 class SinusoidalPositionalEncoding(nn.Module):
     def __init__(self, d_model: int, max_len: int = 5000):
