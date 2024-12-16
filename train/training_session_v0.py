@@ -376,8 +376,8 @@ class TrainingSessionV0(TrainingSession):
             "top_10_accuracy": recording_top_10,
         }
         
-        for metrics, value in metrics.items():
-            metrics[metrics] = value / batches if batches > 0 else 0
+        for k, v in metrics.items():
+            metrics[k] = v / batches if batches > 0 else 0
             
         return metrics
 
