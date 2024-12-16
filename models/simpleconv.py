@@ -226,7 +226,7 @@ class SimpleConv(nn.Module):
         self,
         x: torch.Tensor,
         recording: Recording,
-        conditions: tp.Dict[str, str],
+        conditions: tp.Dict[str, str] = None,
         mel: torch.Tensor = None,
         train: bool = False,
     ):

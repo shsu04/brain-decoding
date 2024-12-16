@@ -77,6 +77,7 @@ class TrainingSessionV0(TrainingSession):
             lr=self.config.learning_rate,
             weight_decay=self.config.weight_decay,
         )
+        self.scaler = torch.amp.GradScaler(device=device)
         self.clip_loss, self.mse_loss = CLIPLoss(), torch.nn.MSELoss(reduction='mean')
 
     def train(
@@ -94,7 +95,6 @@ class TrainingSessionV0(TrainingSession):
         gpu_ok = False
         torch.set_float32_matmul_precision("high")
         training_size = len(self.dataset["train"])
-        self.scaler = torch.amp.GradScaler(device=device)
         self.model.to(device)
         self.clip_loss.to(device)
 
@@ -109,12 +109,11 @@ class TrainingSessionV0(TrainingSession):
             )
 
         # Fetch recordings
-        if self.dataloader is None:
-            self.dataloader = self.get_dataloader(
-                buffer_size=buffer_size,
-                num_workers=num_workers,
-                max_cache_size=max_cache_size,
-            )
+        dataloader = self.get_dataloader(
+            buffer_size=buffer_size,
+            num_workers=num_workers,
+            max_cache_size=max_cache_size,
+        )
 
         for epoch in range(current_epoch + 1, self.config.epochs + 1):
             try:
@@ -129,16 +128,18 @@ class TrainingSessionV0(TrainingSession):
                 # For reproducibility
                 self.set_seed(int(self.config.seed + epoch))
                 random.shuffle(epoch_training_dataset)
-                self.dataloader.start_fetching(epoch_training_dataset, cache=True)
+                dataloader.start_fetching(epoch_training_dataset, cache=True)
 
             except Exception as e:
                 self.log_print(f"Error in epoch {epoch} during initialization, {e}")
                 self.save(f"error_epoch_{epoch}")
 
+            pbar = tqdm(total=training_size, desc="Training Epoch " + str(epoch))
+            
             # Run each batch
             while True:
 
-                batch = self.dataloader.get_recording()
+                batch = dataloader.get_recording()
                 if batch is None:
                     break
 
@@ -165,6 +166,8 @@ class TrainingSessionV0(TrainingSession):
                     )
                     raise e
                     continue
+                
+                pbar.update(1)
 
             elapsed_minutes = (time.time() - epoch_start_time) / 60
             self.log_print(
@@ -388,7 +391,7 @@ class TrainingSessionV0(TrainingSession):
         self.set_seed(int(self.config.seed))
         test_start_time = time.time()
 
-        test_datasets = {}
+        test_datasets, test_dataloader = {}, {}
 
         # Create dataset and loader
         for test in self.dataset["test"].keys():
@@ -400,22 +403,26 @@ class TrainingSessionV0(TrainingSession):
                     self.dataset["test"][test], self.config.random_test_size
                 )
 
-            if self.test_dataloader.get(test) is None:
-                self.test_dataloader[test] = self.get_dataloader(
-                    buffer_size=buffer_size,
-                    num_workers=num_workers,
-                    max_cache_size=max_cache_size,
-                )
-            self.test_dataloader[test].start_fetching(test_datasets[test], cache=True)
+            test_dataloader[test] = self.get_dataloader(
+                buffer_size=buffer_size,
+                num_workers=num_workers,
+                max_cache_size=max_cache_size,
+            )
+                
+            print(f"Test: {test}, Size of test_datasets[test]: {len(test_datasets[test])}")
 
         test_sizes = {test: len(test_datasets[test]) for test in test_datasets.keys()}
 
+        
         # Run tests
         for test in test_datasets.keys():
+            
+            test_dataloader[test].start_fetching(test_datasets[test], cache=True)
 
+            i = 0
             while True:
 
-                batch = self.test_dataloader[test].get_recording()
+                batch = test_dataloader[test].get_recording()
                 if batch is None:
                     break
 
@@ -428,7 +435,7 @@ class TrainingSessionV0(TrainingSession):
 
                     # Log results
                     self.logger.info(
-                        f"Testing {test}/{test_sizes[test]}. Runtime {time.time() - start_time:.2f}s."
+                        f"Testing {test} {i}/{test_sizes[test]}. Runtime {time.time() - start_time:.2f}s."
                     )
                     self.logger.info(
                         f'Loss: {results["loss"]:.4f}, Clip Loss: {results["clip_loss"]:.4f}, MSE Loss: {results["mse_loss"]:.4f}, Commitment Loss: {results["commitment_loss"]:.4f}'
@@ -436,7 +443,8 @@ class TrainingSessionV0(TrainingSession):
                     self.logger.info(
                         f'Accuracy: {results["accuracy"]:.4f}, Top 1: {results["top_1_accuracy"]:.4f}, Top 5: {results["top_5_accuracy"]:.4f}, Top 10: {results["top_10_accuracy"]:.4f}, Perplexity: {results["perplexity"]:.4f}'
                     )
-
+                    i += 1
+                    
                 except Exception as e:
                     self.log_print(
                         f"Error in testing {test}, {batch.recording.study_name} {batch.recording.subject_id} {batch.recording.session_id} {batch.recording.task_id}. Skipping."
@@ -513,18 +521,17 @@ class TrainingSessionV0(TrainingSession):
         if self.recordings is None:
             self.partition_datasets()
 
-        if self.dataloader is None:
-            self.dataloader = self.get_dataloader(
-                buffer_size, num_workers, max_cache_size
-            )
+        dataloader = self.get_dataloader(
+            buffer_size, num_workers, max_cache_size
+        )
 
         total_recordings, remaining = len(self.recordings), len(self.recordings)
         pbar = tqdm(total=total_recordings, desc="Loading recordings")
 
-        self.dataloader.start_fetching(self.recordings)
+        dataloader.start_fetching(self.recordings)
 
         while True:
-            recording = self.dataloader.get_recording()
+            recording = dataloader.get_recording()
             if recording is None:
                 break
             remaining -= 1
@@ -541,7 +548,9 @@ class TrainingSessionV0(TrainingSession):
                 with open(self.save_path + "/training_config.json", "w") as json_file:
                     json.dump(config, json_file, indent=4)
 
+            
             checkpoint_path = f"{self.save_path}/{name}"
+            os.makedirs(checkpoint_path, exist_ok=True)
 
             # Save model
             torch.save(
@@ -589,7 +598,7 @@ def load_training_session(
     try:
         load = torch.load(f"{save_path}/model.pt")
         config = load["config"]
-        config = TrainingConfigV0().from_dict(config)
+        config = TrainingConfigV0(brain_encoder_config=None, data_partition=None).from_dict(config)
 
         training_session = TrainingSessionV0(
             config=config,
