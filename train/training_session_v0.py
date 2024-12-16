@@ -1,6 +1,7 @@
 import gc
 import random
 import time
+from tkinter import E
 from numpy import int0
 from tqdm import tqdm
 import typing as tp
@@ -159,8 +160,9 @@ class TrainingSessionV0(TrainingSession):
                 except Exception as e:
                     # Do log errors
                     self.log_print(
-                        f"Error in epoch {epoch}, {batch.recording.study_name} {batch.recording.subject_id} {batch.recording.session_id} {batch.recording.task_id}. Skipping."
+                        f"Error in epoch {epoch}, {batch.recording.study_name} {batch.recording.subject_id} {batch.recording.session_id} {batch.recording.task_id}. Skipping. {e}"
                     )
+                    raise e
                     continue
 
             elapsed_minutes = (time.time() - epoch_start_time) / 60
@@ -194,7 +196,7 @@ class TrainingSessionV0(TrainingSession):
         """
 
         # Some processing to ensure dims match
-        brain_segments, audio_segments, recording = batch
+        brain_segments, audio_segments, recording = batch.brain_segments, batch.audio_segments, batch.recording
         brain_segments, audio_segments = self.discard_nan(
             brain_segments["all"], audio_segments
         )
