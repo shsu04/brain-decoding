@@ -192,7 +192,11 @@ class DataLoader:
         self.stop_event.set()
         if self.fetch_thread and self.fetch_thread.is_alive():
             self.fetch_thread.join()
-
+            
+        # Drain the queue
+        while not self.queue.empty():
+            self.queue.get_nowait()
+            
     def get_approximate_cache_size(self, cache_dir: str) -> float:
         """Quick estimate of cache size in GB. Not thread safe, but fast."""
         try:

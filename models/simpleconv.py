@@ -343,7 +343,7 @@ class SimpleConv(nn.Module):
         if not decoder_inference:
             x = self.final(x)  # [B, C, T]
             
-        x = torch.log1p(x)
+        x = torch.log1p(torch.clamp(x, min=0))
 
         assert x.shape[-1] == length
         return x, quantizer_metrics

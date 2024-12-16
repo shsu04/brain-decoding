@@ -110,8 +110,7 @@ class TrainingSessionV0(TrainingSession):
             )
 
         # Fetch recordings
-        if not self.dataloader:
-            self.dataloader = self.get_dataloader(
+        self.dataloader = self.get_dataloader(
                 buffer_size=buffer_size,
                 num_workers=num_workers,
                 max_cache_size=max_cache_size,
@@ -407,16 +406,19 @@ class TrainingSessionV0(TrainingSession):
                 )
                 
             test_sizes[test] = len(test_datasets[test])
+            self.test_dataoader[test] = self.get_dataloader(
+                buffer_size=test_datasets[test],
+                num_workers=num_workers,
+                max_cache_size=max_cache_size,
+            )
+            self.test_dataoader[test].start_fetching(test_datasets[test], cache=True)
 
         # Run tests
         for test in test_datasets.keys():
-            
-            self.dataloader.start_fetching(test_datasets[test], cache=True)
-
             i = 0
             while True:
 
-                batch = self.dataloader.get_recording()
+                batch = self.test_dataoader[test].get_recording()
                 if batch is None:
                     break
 
@@ -446,7 +448,7 @@ class TrainingSessionV0(TrainingSession):
                     test_sizes[test] -= 1
                     continue
                 
-            self.dataloader.stop()
+            self.test_dataoader[test].stop()
 
         # Log info
         elapsed_minutes = (time.time() - test_start_time) / 60

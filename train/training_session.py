@@ -77,8 +77,8 @@ class TrainingSession(ABC):
                     max_cache_size=max_cache_size,
                 )
                 if clear_cache:
-                    shutil.rmtree(study.cache_dir)
-                    os.makedirs(study.cache_dir)
+                    shutil.rmtree(self.studies[study].cache_dir)
+                    os.makedirs(self.studies[study].cache_dir)
                     self.log_print(f"Cleared cache for study {study}")
             except ValueError as e:
                 self.log_print(f"Error loading study {study}: {e}")
@@ -106,7 +106,7 @@ class TrainingSession(ABC):
         self.error = None
         self.set_seed(int(self.config.seed))
         
-        self.dataloader = None
+        self.dataloader, self.test_dataoader = None, {}
 
     @abstractmethod
     def train(self):
