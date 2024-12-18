@@ -5,6 +5,7 @@ from .config import Config
 class SimpleConvConfig(Config):
     def __init__(
         self,
+        mel_normalization=True,
         # Str to list of possible conditions
         conditions: dict[str, list] = None,
         # Channels
@@ -62,6 +63,7 @@ class SimpleConvConfig(Config):
         super(SimpleConvConfig, self).__init__()
         self.initial_batch_norm = initial_batch_norm
         self.conditions = conditions
+        self.mel_normalization = mel_normalization
         # Channels
         self.in_channels = in_channels
         self.out_channels = out_channels

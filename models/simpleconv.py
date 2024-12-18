@@ -369,5 +369,15 @@ class SimpleConv(nn.Module):
         if not decoder_inference:
             x = self.final(x)  # [B, C, T]
 
+            # Follow Whisper's mel spectrogram normalization
+            if self.config.mel_normalization:
+                x = F.relu(x)  # Positive energy
+                x = torch.clamp(x, min=1e-10).log10()
+                # Compresses dynamic range
+                # Noise floor relative to loudest part of each frame
+                x = torch.maximum(x, x.max(-1, keepdim=True)[0] - 8.0)
+                # Normalize to [0, 1], shift negative log values to positive
+                x = (x + 4.0) / 4.0
+
         assert x.shape[-1] == length
         return x, quantizer_metrics

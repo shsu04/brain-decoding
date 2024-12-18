@@ -415,6 +415,9 @@ class TrainingSessionV0(TrainingSession):
         # Run tests
         for test in test_datasets.keys():
             i = 0
+
+            acc, top_1, top_5, top_10, perplexity = 0, 0, 0, 0, 0
+
             while True:
 
                 batch = test_dataloader[test].get_recording()
@@ -438,6 +441,13 @@ class TrainingSessionV0(TrainingSession):
                     self.logger.info(
                         f'Accuracy: {results["accuracy"]:.4f}, Top 1: {results["top_1_accuracy"]:.4f}, Top 5: {results["top_5_accuracy"]:.4f}, Top 10: {results["top_10_accuracy"]:.4f}, Perplexity: {results["perplexity"]:.4f}'
                     )
+
+                    acc += results["accuracy"]
+                    top_1 += results["top_1_accuracy"]
+                    top_5 += results["top_5_accuracy"]
+                    top_10 += results["top_10_accuracy"]
+                    perplexity += results["perplexity"]
+
                     i += 1
 
                 except Exception as e:
@@ -446,6 +456,10 @@ class TrainingSessionV0(TrainingSession):
                     )
                     test_sizes[test] -= 1
                     continue
+
+            print(
+                f"Test {test} completed. Accuracy: {acc/test_sizes[test]:.4f}, Top 1: {top_1/test_sizes[test]:.4f}, Top 5: {top_5/test_sizes[test]:.4f}, Top 10: {top_10/test_sizes[test]:.4f}, Perplexity: {perplexity/test_sizes[test]:.4f}"
+            )
 
             test_dataloader[test].stop()
 
