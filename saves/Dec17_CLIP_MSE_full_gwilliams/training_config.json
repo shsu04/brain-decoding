@@ -1,0 +1,120 @@
+{
+    "data_partition": {
+        "gwilliams2023": {
+            "testing_subjects": [
+                19,
+                20,
+                21
+            ],
+            "testing_tasks": [
+                0
+            ]
+        }
+    },
+    "new_freq": 100,
+    "frequency_bands": {
+        "all": [
+            0.5,
+            80
+        ]
+    },
+    "max_random_shift": 1.0,
+    "window_size": 4,
+    "window_stride": 1,
+    "baseline_window": null,
+    "notch_filter": true,
+    "brain_clipping": 20,
+    "scaling": "both",
+    "delay": 0.15,
+    "audio_model": "openai/whisper-large-v3",
+    "audio_sample_rate": 16000,
+    "hop_length": 160,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.0001,
+    "epochs": 50,
+    "batch_size": 256,
+    "use_clip_loss": true,
+    "use_mse_loss": true,
+    "alpha": 0.6,
+    "random_test_size": 10,
+    "seed": 42,
+    "brain_encoder_config": {
+        "initial_batch_norm": true,
+        "conditions": {
+            "study": [
+                "gwilliams2023"
+            ],
+            "subject": [
+                "Gwilliams2023_17",
+                "Gwilliams2023_08",
+                "Gwilliams2023_12",
+                "Gwilliams2023_01",
+                "Gwilliams2023_14",
+                "Gwilliams2023_26",
+                "Gwilliams2023_13",
+                "Gwilliams2023_10",
+                "Gwilliams2023_03",
+                "Gwilliams2023_15",
+                "Gwilliams2023_23",
+                "Gwilliams2023_07",
+                "Gwilliams2023_04",
+                "Gwilliams2023_25",
+                "Gwilliams2023_02",
+                "Gwilliams2023_09",
+                "Gwilliams2023_22",
+                "Gwilliams2023_16",
+                "Gwilliams2023_19",
+                "Gwilliams2023_20",
+                "Gwilliams2023_11",
+                "Gwilliams2023_18",
+                "Gwilliams2023_06",
+                "Gwilliams2023_05",
+                "Gwilliams2023_24",
+                "Gwilliams2023_27",
+                "Gwilliams2023_21"
+            ]
+        },
+        "mel_normalization": false,
+        "in_channels": 208,
+        "out_channels": 128,
+        "hidden_dim": 256,
+        "dropout": 0.2,
+        "layout_dim": 3,
+        "layout_proj": false,
+        "layout_scaling": "midpoint",
+        "merger": true,
+        "merger_emb_type": "spherical",
+        "merger_emb_dim": 512,
+        "merger_channels": 256,
+        "merger_dropout": true,
+        "merger_conditional": null,
+        "initial_linear": 256,
+        "initial_depth": 1,
+        "conditional_layers": true,
+        "conditional_layers_dim": "hidden_dim",
+        "depth": 6,
+        "kernel_size": 3,
+        "growth": 1.0,
+        "dilation_growth": 2,
+        "dilation_period": 5,
+        "glu": 1,
+        "dropout_input": 0.2,
+        "conv_dropout": 0.2,
+        "batch_norm": true,
+        "quantizer": false,
+        "num_codebooks": 0,
+        "codebook_size": 0,
+        "quantizer_commitment": 0,
+        "quantizer_temp_init": 0,
+        "quantizer_temp_min": 0,
+        "quantizer_temp_decay": 0,
+        "transformer_input": "continuous",
+        "transformer_encoder_emb": "groupconv",
+        "transformer_encoder_layers": 6,
+        "transformer_encoder_heads": 8,
+        "transformer_decoder_emb": null,
+        "transformer_decoder_layers": 0,
+        "transformer_decoder_heads": 0,
+        "transformer_decoder_dim": 0
+    }
+}

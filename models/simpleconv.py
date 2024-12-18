@@ -223,12 +223,15 @@ class SimpleConv(nn.Module):
         nn.init.kaiming_uniform_(self.final[0].weight, a=0)
 
         total_params = sum(p.numel() for p in self.parameters())
+        conditional_params = sum(
+            p.numel() for p in self.conditional_layers.parameters()
+        )
         cnn_params = sum(p.numel() for p in self.encoders.parameters())
         conditions = (
             list(self.config.conditions.keys()) if self.config.conditions else []
         )
         print(
-            f"SimpleConv initialized with {total_params} parameters, cond: {conditions}"
+            f"SimpleConv initialized with {total_params - conditional_params} parameters, cond: {conditions}"
         )
         print(
             f"Merger {self.merger is not None}, merger channels {self.config.merger_channels}"

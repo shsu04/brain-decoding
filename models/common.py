@@ -199,7 +199,7 @@ class ConditionalLayers(nn.Module):
         self.conditions = conditions
         self.trained_indices = set()
         self.weights = nn.Parameter(
-            torch.empty(len(conditions), in_channels, out_channels),
+            torch.empty((len(conditions), in_channels, out_channels)),
         )
         nn.init.kaiming_uniform_(self.weights, a=0)
 

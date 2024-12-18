@@ -140,12 +140,10 @@ class BatchFetcher(ABC):
             dtype=torch.float32,
         )
 
-        start_indices = torch.tensor(
-            [
-                int((t[0] + recording.start_time + self.delay) * self.new_freq)
-                for t in brain_window_timestamps
-            ]
-        )
+        start_time = torch.tensor([t[0] for t in brain_window_timestamps])
+        start_indices = (
+            (start_time + recording.start_time + self.delay) * self.new_freq
+        ).to(torch.int64)
         end_indices = start_indices + window_size_points
 
         # Extract windows in batches for memory efficiency

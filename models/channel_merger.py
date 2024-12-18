@@ -58,13 +58,15 @@ class ChannelMerger(nn.Module):
             self.trained_indices = set()
             self.heads = nn.Parameter(
                 torch.empty(
-                    len(self.conditions),
-                    merger_channels,
-                    embedding_dim,
+                    (
+                        len(self.conditions),
+                        merger_channels,
+                        embedding_dim,
+                    )
                 )
             )
         else:
-            self.heads = nn.Parameter(torch.empty(merger_channels, embedding_dim))
+            self.heads = nn.Parameter(torch.empty((merger_channels, embedding_dim)))
         nn.init.kaiming_uniform_(self.heads, a=0)
 
     @property
@@ -80,7 +82,7 @@ class ChannelMerger(nn.Module):
         # If conditional, choose heads based on condition
         else:
             _, chout, pos_dim = self.heads.shape
-            
+
             # Take mean of trained indices
             if condition == "mean" and len(self.trained_indices) > 0:
                 # [B, ch_out, emb_dim]
@@ -229,7 +231,7 @@ class SphericalEmbedding(nn.Module):
         n_harmonics = (max_degree + 1) ** 2
 
         # Learnable weights for each harmonic component
-        self.harmonics_weights = nn.Parameter(torch.empty(n_harmonics, dimension))
+        self.harmonics_weights = nn.Parameter(torch.empty((n_harmonics, dimension)))
         nn.init.kaiming_uniform_(self.harmonics_weights, a=0)
 
     def _spherical_harmonic(self, l: int, m: int, theta: Tensor, phi: Tensor) -> Tensor:

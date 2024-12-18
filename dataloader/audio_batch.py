@@ -362,12 +362,12 @@ class AudioBatchFetcher(BatchFetcher):
         """
         audio_segments = []
 
-        # Get the audio segments based on the time stamps and sample rate
-        for start, end in time_stamps:
-            start, end = int(start * self.audio_sample_rate), int(
-                end * self.audio_sample_rate
-            )
-            audio_segments.append(audio[start:end])
+        time_stamps = torch.tensor(time_stamps)  # Shape: [N, 2]
+        start_samples = (time_stamps[:, 0] * self.audio_sample_rate).to(torch.int64)
+        end_samples = (time_stamps[:, 1] * self.audio_sample_rate).to(torch.int64)
+        audio_segments = [
+            audio[start:end] for start, end in zip(start_samples, end_samples)
+        ]
 
         # Batch process the audio segments
         inputs = self.audio_processor(

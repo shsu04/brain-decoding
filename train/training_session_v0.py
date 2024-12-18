@@ -248,8 +248,8 @@ class TrainingSessionV0(TrainingSession):
         # Shuffle segments
         shuffle_indices = torch.randperm(brain_segments.shape[0])
         brain_segments, audio_segments = (
-            brain_segments[shuffle_indices].to(self.device),
-            audio_segments[shuffle_indices].to(self.device),
+            brain_segments[shuffle_indices],
+            audio_segments[shuffle_indices],
         )  # [B, C, T], [B, mel_bins, T]
 
         # Process by specified batch size
@@ -269,8 +269,8 @@ class TrainingSessionV0(TrainingSession):
 
                     # Slice by batch
                     brain_batch, audio_batch = (
-                        brain_segments[start:end],
-                        audio_segments[start:end],
+                        brain_segments[start:end].to(self.device),
+                        audio_segments[start:end].to(self.device),
                     )
 
                     # Forward pass
