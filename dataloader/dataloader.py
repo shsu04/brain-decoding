@@ -83,15 +83,14 @@ class DataLoader:
         self.stop_event = threading.Event()
         self.max_cache_size_gb = max_cache_size_gb
         self.cache_dir = cache_dir
+        self._cache_check_counter = 0  # New: For periodic cache checking
 
         # Dictionary of batch type to list of fetchers
         self.fetchers = {}
 
         # Create pool of workers
         for batch_type, count in batch_types.items():
-
             batch_fetchers = []
-
             for _ in range(count):
                 batch_fetchers.append(
                     BatchFetcherFactory.create_batch_fetcher(
@@ -105,25 +104,35 @@ class DataLoader:
                         **batch_kwargs[batch_type],
                     )
                 )
-
             self.fetchers[batch_type] = batch_fetchers
 
         self.current_worker = 0
         self.fetch_thread = None
         self.pending_futures = []
+        self._worker_lock = threading.Lock()  # New: Thread safety for worker selection
+
+    def get_approximate_cache_size(self, cache_dir: str) -> float:
+        """Quick estimate of cache size in GB. Not thread safe, but fast."""
+        try:
+            total_size = sum(
+                os.path.getsize(os.path.join(dirpath, f))
+                for dirpath, _, filenames in os.walk(cache_dir)
+                for f in filenames
+            )
+            return total_size / (1024**3)  # Convert to GB
+        except:
+            return 0  # If error reading size, assume safe to continue
 
     def start_fetching(self, recordings: list[Recording], cache: bool = True):
         """Start the background fetching thread.
 
         Args:
-            recordings: List of recordings to fetch. The batch type is determiend
+            recordings: List of recordings to fetch. The batch type is determined
                 by recording.type parameter.
         """
 
         def _fetch_worker():
-
             for recording in recordings:
-
                 if self.stop_event.is_set():
                     break
 
@@ -133,24 +142,27 @@ class DataLoader:
                     )
                     continue
 
-                # Check cache size and adjust the cache flag
-                current_cache_size = self.get_approximate_cache_size(self.cache_dir)
+                # New: Check cache size periodically (every 10 recordings) to reduce I/O overhead
+                self._cache_check_counter += 1
                 cache_flag = cache
-
-                if current_cache_size >= self.max_cache_size_gb:
-                    cache_flag = False
+                if self._cache_check_counter >= 10:
+                    current_cache_size = self.get_approximate_cache_size(self.cache_dir)
+                    if current_cache_size >= self.max_cache_size_gb:
+                        cache_flag = False
+                    self._cache_check_counter = 0
 
                 try:
-                    # Circular queue
-                    worker = self.fetchers[recording.type][self.current_worker]
-                    self.current_worker = (self.current_worker + 1) % len(
-                        self.fetchers[recording.type]
-                    )
-                    # launch fetch and store future
+                    # New: Thread-safe worker selection
+                    with self._worker_lock:
+                        worker = self.fetchers[recording.type][self.current_worker]
+                        self.current_worker = (self.current_worker + 1) % len(
+                            self.fetchers[recording.type]
+                        )
+
+                    # Launch fetch and store future
                     future = worker.fetch.remote(recording, cache_flag)
                     self.pending_futures.append(future)
                 except ValueError as e:
-                    # If message same as "...", print and skip
                     if "Number of brain and audio windows do not match" in str(e):
                         print(f"Recording not found. Skipping {recording.cache_path}.")
                     else:
@@ -159,18 +171,29 @@ class DataLoader:
                     print(f"Error fetching {recording.cache_path}: {e}")
                     continue
 
-                # Wait if buffer full
-                while len(self.pending_futures) > self.buffer_size:
+                # New: Process multiple futures when buffer is full
+                while len(self.pending_futures) >= self.buffer_size:
                     done_futures, self.pending_futures = ray.wait(
-                        self.pending_futures, num_returns=1, timeout=None
+                        self.pending_futures,
+                        num_returns=min(
+                            5, len(self.pending_futures)
+                        ),  # Process up to 5 at once
                     )
-                    batch = ray.get(done_futures[0])
-                    self.queue.put(batch)
+                    for future in done_futures:
+                        batch = ray.get(future)
+                        self.queue.put(batch)
 
-            # Wait for remaining futures
-            for future in self.pending_futures:
-                batch = ray.get(future)
-                self.queue.put(batch)
+            # Process remaining futures
+            while self.pending_futures:
+                done_futures, self.pending_futures = ray.wait(
+                    self.pending_futures,
+                    num_returns=min(
+                        5, len(self.pending_futures)
+                    ),  # Process up to 5 at once
+                )
+                for future in done_futures:
+                    batch = ray.get(future)
+                    self.queue.put(batch)
 
         self.fetch_thread = threading.Thread(target=_fetch_worker)
         self.fetch_thread.start()
@@ -194,15 +217,3 @@ class DataLoader:
         # Drain the queue
         while not self.queue.empty():
             self.queue.get_nowait()
-
-    def get_approximate_cache_size(self, cache_dir: str) -> float:
-        """Quick estimate of cache size in GB. Not thread safe, but fast."""
-        try:
-            total_size = sum(
-                os.path.getsize(os.path.join(dirpath, f))
-                for dirpath, _, filenames in os.walk(cache_dir)
-                for f in filenames
-            )
-            return total_size / (1024**3)  # Convert to GB
-        except:
-            return 0  # If error reading size, assume safe to continue

@@ -215,22 +215,24 @@ class Recording(ABC):
                 n_jobs=n_jobs,
             )
 
-        # Standard scaling
-        if standard_scaler:
+        if brain_clipping:
+            # First calculate channel-wise standard deviation
+            def clip_by_std(x):
+                std = np.std(x)
+                return np.clip(x, -brain_clipping * std, brain_clipping * std)
+
             raw = raw.apply_function(
-                lambda x: standard_scaler.fit_transform(x.reshape(-1, 1)).ravel(),
+                clip_by_std,
                 picks=self.channel_names,
                 channel_wise=True,
                 verbose=False,
                 n_jobs=n_jobs,
             )
 
-        # Clipping
-        if brain_clipping:
+        # Standard scaling
+        if standard_scaler:
             raw = raw.apply_function(
-                lambda x: np.clip(
-                    x, -brain_clipping, brain_clipping
-                ),  # Clip by multiples of standard deviations
+                lambda x: standard_scaler.fit_transform(x.reshape(-1, 1)).ravel(),
                 picks=self.channel_names,
                 channel_wise=True,
                 verbose=False,
