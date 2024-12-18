@@ -1,37 +1,34 @@
 import torch
 import matplotlib.pyplot as plt
-import librosa
+import numpy as np
 
 
 def mel_spectrogram(
     x: torch.Tensor,
     max_plots: int = 4,
     x_pred: torch.Tensor = None,
-    audio_sample_rate: int = 16000,
-    audio_hop_length: int = 512,
-    frequency_scale: str = "mel",  # Add parameter to choose between 'mel' and 'hz'
+    sample_rate: int = 16000,
+    hop_length: int = 512,
+    frequency_scale: str = "mel",
 ):
-    """Plot log-mel spectrogram of the audio data.
-    Plot side by side the original and predicted audio data if provided.
+    """Plot mel spectrogram with correct time axis.
 
     Arguments:
-        x -- audio data tensor of shape [B, mel_bins, T]
+        x -- mel spectrogram tensor of shape [B, mel_bins, T]
         max_plots -- maximum number of plots to display (default: {4})
-        x_pred -- predicted audio data tensor of shape [B, mel_bins, T] (default: {None})
-        audio_sample_rate -- sample rate of the audio data (default: {16000})
-        audio_hop_length -- hop length of the audio data (default: {512})
+        x_pred -- predicted mel spectrogram tensor of shape [B, mel_bins, T] (default: {None})
+        sample_rate -- sample rate of the original audio (default: {16000})
+        hop_length -- hop length used in creating the mel spectrogram (default: {512})
         frequency_scale -- y-axis scale ('mel' or 'hz') (default: {'mel'})
     """
     # Convert tensor to numpy array
     if torch.is_tensor(x):
         specs = x.detach().cpu().numpy()
-
     if x_pred is not None and torch.is_tensor(x_pred):
         specs_pred = x_pred.detach().cpu().numpy()
 
     num_specs = min(max_plots, specs.shape[0])
     cols = 2 if x_pred is not None else 1
-
     fig, axes = plt.subplots(num_specs, cols, figsize=(7 * cols, 2 * num_specs))
 
     for i in range(num_specs):
@@ -42,35 +39,47 @@ def mel_spectrogram(
             ax = axes[i, 0] if cols == 2 else axes[i]
             ax_pred = None if cols == 1 else axes[i, 1]
 
+        # Calculate time axis values
+        time_steps = specs[i].shape[1]
+        times = np.arange(time_steps) * hop_length / sample_rate
+
         # Plot original spectrogram
-        img = librosa.display.specshow(
+        img = ax.imshow(
             specs[i],
-            sr=audio_sample_rate,
-            hop_length=audio_hop_length,
-            x_axis="time",
-            y_axis=frequency_scale,  # 'mel' or 'hz'
-            ax=ax,
+            aspect="auto",
+            origin="lower",
+            interpolation="nearest",
             cmap="viridis",
         )
+
+        # Set correct time axis
+        ax.set_xticks(np.linspace(0, time_steps - 1, 5))
+        ax.set_xticklabels([f"{t:.2f}" for t in np.linspace(0, times[-1], 5)])
+
         plt.colorbar(img, ax=ax, format="%+2.0f dB")
+        ax.set_xlabel("Time (s)")
         y_label = "Frequency (Hz)" if frequency_scale == "hz" else "Mel Frequency Bins"
         ax.set_ylabel(y_label)
-        ax.set_title(f"Original Log-Mel Spectrogram {i+1}")
+        ax.set_title(f"Original Mel Spectrogram {i+1}")
 
         # Plot predicted spectrogram if available
         if x_pred is not None:
-            img_pred = librosa.display.specshow(
+            img_pred = ax_pred.imshow(
                 specs_pred[i],
-                sr=audio_sample_rate,
-                hop_length=audio_hop_length,
-                x_axis="time",
-                y_axis=frequency_scale,  # 'mel' or 'hz'
-                ax=ax_pred,
+                aspect="auto",
+                origin="lower",
+                interpolation="nearest",
                 cmap="viridis",
             )
+
+            # Set correct time axis
+            ax_pred.set_xticks(np.linspace(0, time_steps - 1, 5))
+            ax_pred.set_xticklabels([f"{t:.2f}" for t in np.linspace(0, times[-1], 5)])
+
             plt.colorbar(img_pred, ax=ax_pred, format="%+2.0f dB")
+            ax_pred.set_xlabel("Time (s)")
             ax_pred.set_ylabel(y_label)
-            ax_pred.set_title(f"Predicted Log-Mel Spectrogram {i+1}")
+            ax_pred.set_title(f"Predicted Mel Spectrogram {i+1}")
 
     plt.tight_layout()
     plt.show()
