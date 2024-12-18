@@ -7,13 +7,11 @@ from tqdm import tqdm
 import typing as tp
 import json
 from torch.optim import AdamW
-from torch.cuda.amp import GradScaler
 import os
 import torch
 
 from dataloader import DataLoader
 from dataloader.audio_batch import AudioBatch
-from losses.clip import CLIPLoss
 from losses.mse import mse_loss_per_batch
 from config import TrainingConfigV0
 from train.training_session import TrainingSession
@@ -134,8 +132,10 @@ class TrainingSessionV0(TrainingSession):
                 self.log_print(f"Error in epoch {epoch} during initialization, {e}")
                 self.save(f"error_epoch_{epoch}")
 
-            pbar = tqdm(total=len(epoch_training_dataset), desc="Training Epoch " + str(epoch))
-            
+            pbar = tqdm(
+                total=len(epoch_training_dataset), desc="Training Epoch " + str(epoch)
+            )
+
             # Run each batch
             while True:
 
@@ -165,7 +165,7 @@ class TrainingSessionV0(TrainingSession):
                         f"Error in epoch {epoch}, {batch.recording.study_name} {batch.recording.subject_id} {batch.recording.session_id} {batch.recording.task_id}. Skipping. {e}"
                     )
                     raise e
-                
+
                 pbar.update(1)
 
             pbar.close()
@@ -196,11 +196,15 @@ class TrainingSessionV0(TrainingSession):
     def run_batch(self, batch: AudioBatch, train: bool) -> tp.Dict[str, float]:
         """
         Per recording processing for training and testing. Returns average metrics
-        and losses for the recording. Returns metrics on CPU. 
+        and losses for the recording. Returns metrics on CPU.
         """
 
         # Some processing to ensure dims match
-        brain_segments, audio_segments, recording = batch.brain_segments, batch.audio_segments, batch.recording
+        brain_segments, audio_segments, recording = (
+            batch.brain_segments,
+            batch.audio_segments,
+            batch.recording,
+        )
         brain_segments, audio_segments = self.discard_nan(
             brain_segments["all"], audio_segments
         )
@@ -236,10 +240,10 @@ class TrainingSessionV0(TrainingSession):
 
         # Models config decides if it is used
         conditions = {
-            "study": f'{recording.study_name}',
-            "subject": f'{recording.study_name}_{recording.subject_id}',
+            "study": f"{recording.study_name}",
+            "subject": f"{recording.study_name}_{recording.subject_id}",
         }
-        
+
         # Shuffle segments
         shuffle_indices = torch.randperm(brain_segments.shape[0])
         brain_segments, audio_segments = (
@@ -279,7 +283,7 @@ class TrainingSessionV0(TrainingSession):
 
                     # Compute loss
                     mse_loss = self.mse_loss(pred=output, target=audio_batch)
-                    
+
                     clip_results = self.clip_loss(x_1=output, x_2=audio_batch)
                     clip_loss, clip_metrics = (
                         clip_results["loss"],
@@ -368,19 +372,17 @@ class TrainingSessionV0(TrainingSession):
             "loss": recording_loss,
             "clip_loss": recording_clip_loss,
             "mse_loss": recording_mse_loss,
-            "commitment_loss": (
-                recording_commitment_loss
-            ),
+            "commitment_loss": (recording_commitment_loss),
             "perplexity": recording_perplexity,
             "accuracy": recording_correct,
             "top_1_accuracy": recording_top_1,
             "top_5_accuracy": recording_top_5,
             "top_10_accuracy": recording_top_10,
         }
-        
+
         for k, v in metrics.items():
             metrics[k] = v / batches if batches > 0 else 0
-            
+
         return metrics
 
     def test(self, buffer_size: int, num_workers: int, max_cache_size: int):
@@ -401,7 +403,7 @@ class TrainingSessionV0(TrainingSession):
                 test_datasets[test] = random.sample(
                     self.dataset["test"][test], self.config.random_test_size
                 )
-                
+
             test_sizes[test] = len(test_datasets[test])
             test_dataloader[test] = self.get_dataloader(
                 buffer_size=test_sizes[test],
@@ -437,14 +439,14 @@ class TrainingSessionV0(TrainingSession):
                         f'Accuracy: {results["accuracy"]:.4f}, Top 1: {results["top_1_accuracy"]:.4f}, Top 5: {results["top_5_accuracy"]:.4f}, Top 10: {results["top_10_accuracy"]:.4f}, Perplexity: {results["perplexity"]:.4f}'
                     )
                     i += 1
-                    
+
                 except Exception as e:
                     self.log_print(
                         f"Error in testing {test}, {batch.recording.study_name} {batch.recording.subject_id} {batch.recording.session_id} {batch.recording.task_id}. Skipping."
                     )
                     test_sizes[test] -= 1
                     continue
-                
+
             test_dataloader[test].stop()
 
         # Log info
@@ -516,9 +518,7 @@ class TrainingSessionV0(TrainingSession):
         if self.recordings is None:
             self.partition_datasets()
 
-        dataloader = self.get_dataloader(
-            buffer_size, num_workers, max_cache_size
-        )
+        dataloader = self.get_dataloader(buffer_size, num_workers, max_cache_size)
 
         total_recordings, remaining = len(self.recordings), len(self.recordings)
         pbar = tqdm(total=total_recordings, desc="Loading recordings")
@@ -539,8 +539,7 @@ class TrainingSessionV0(TrainingSession):
             # Training session config
             if not os.path.exists(self.save_path):
                 os.makedirs(self.save_path)
-                
-            
+
             config = self.config.to_dict()
             with open(self.save_path + "/training_config.json", "w") as json_file:
                 json.dump(config, json_file, indent=4)
@@ -593,7 +592,9 @@ def load_training_session(
     try:
         load = torch.load(f"{save_path}/model.pt")
         config = load["config"]
-        config = TrainingConfigV0(brain_encoder_config=None, data_partition=None).from_dict(config)
+        config = TrainingConfigV0(
+            brain_encoder_config=None, data_partition=None
+        ).from_dict(config)
 
         training_session = TrainingSessionV0(
             config=config,

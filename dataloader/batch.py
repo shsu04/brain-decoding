@@ -5,6 +5,7 @@ Used by DataLoader, created by DataLoaderFactory.
 
 from abc import ABC, abstractmethod
 import time
+from tracemalloc import start
 from studies import Study, Recording
 import torch
 import mne
@@ -140,7 +141,7 @@ class BatchFetcher(ABC):
 
         start_indices = torch.tensor(
             [
-                (int(t[0] + recording.start_time) * self.new_freq)
+                int((t[0] + recording.start_time) * self.new_freq)
                 for t in brain_window_timestamps
             ]
         )
@@ -154,7 +155,7 @@ class BatchFetcher(ABC):
             batch_end_idx = end_indices[batch_start:batch_end]
 
             # Extract all windows for this batch at once
-            max_end_idx = min(batch_end_idx.max().item(), brain_tensor.shape[1])
+            max_end_idx = brain_tensor.shape[1]
 
             for i, (start_idx, end_idx) in enumerate(
                 zip(batch_start_idx, batch_end_idx)

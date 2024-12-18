@@ -59,7 +59,7 @@ class Study(ABC):
             exists = self.recordings[self.subjects.index(subject)][
                 self.sessions.index(session)
             ][self.tasks.index(task)]
-            
+
         except Exception as e:
             exists = False
         return exists
