@@ -25,6 +25,7 @@ dependencies:
   
   # Utils (direct)
   - tqdm=4.66.4
+  - ipykernel
   
   # Pip packages (direct)
   - pip
