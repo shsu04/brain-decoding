@@ -44,6 +44,7 @@ class AudioBatchFetcher(BatchFetcher):
         brain_clipping: int,
         baseline_window: float,
         new_freq: int,
+        delay: float,
         # Specific to this batch type
         max_random_shift: float,
         window_size: int,
@@ -69,6 +70,7 @@ class AudioBatchFetcher(BatchFetcher):
             brain_clipping -- standard deviation to clip the brain data to
             baseline_window -- window size to use for baseline normalization
             new_freq -- new frequency to resample the brain data to
+            delay -- delay to apply to the brain data
         """
         assert audio_sample_rate // hop_length == new_freq
 
@@ -79,6 +81,7 @@ class AudioBatchFetcher(BatchFetcher):
         self.baseline_window = baseline_window
         self.new_freq = new_freq
         self.n_jobs = n_jobs
+        self.delay = delay
 
         # Specific to this batch type
         self.max_random_shift = max_random_shift

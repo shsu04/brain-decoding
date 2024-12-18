@@ -479,6 +479,7 @@ class TrainingSessionV0(TrainingSession):
             brain_clipping=self.config.brain_clipping,
             baseline_window=self.config.baseline_window,
             new_freq=self.config.new_freq,
+            delay=self.config.delay,
             batch_types={"audio": num_workers},
             batch_kwargs={
                 "audio": {

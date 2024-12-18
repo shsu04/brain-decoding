@@ -3,6 +3,7 @@ import typing as tp
 from .simpleconv_config import SimpleConvConfig
 from .config import Config
 
+
 class TrainingConfig(Config):
     def __init__(self):
         pass
@@ -24,6 +25,7 @@ class TrainingConfigV0(TrainingConfig):
         baseline_window: int = 0.5,
         notch_filter: bool = True,
         scaling: str = "minmax",
+        delay: float = 0,
         # Audio
         audio_model: str = "openai/whisper-large-v3",
         audio_sample_rate: int = 16000,
@@ -56,6 +58,7 @@ class TrainingConfigV0(TrainingConfig):
         self.notch_filter = notch_filter
         self.brain_clipping = brain_clipping
         self.scaling = scaling
+        self.delay = delay
 
         # Audio
         self.audio_model = audio_model
@@ -97,6 +100,7 @@ class TrainingConfigV0(TrainingConfig):
         self.notch_filter = config["notch_filter"]
         self.brain_clipping = config["brain_clipping"]
         self.scaling = config["scaling"]
+        self.delay = config["delay"]
         self.audio_model = config["audio_model"]
         self.audio_sample_rate = config["audio_sample_rate"]
         self.hop_length = config["hop_length"]

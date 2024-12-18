@@ -25,6 +25,7 @@ class BatchFetcher(ABC):
         brain_clipping: int,
         baseline_window: float,
         new_freq: int,
+        delay: float,
         n_jobs: int = 1,
     ):
         super(BatchFetcher, self).__init__()
@@ -35,6 +36,7 @@ class BatchFetcher(ABC):
         self.brain_clipping = brain_clipping
         self.baseline_window = baseline_window
         self.new_freq = new_freq
+        self.delay = delay
         self.n_jobs = n_jobs
 
     @abstractmethod
@@ -140,7 +142,7 @@ class BatchFetcher(ABC):
 
         start_indices = torch.tensor(
             [
-                int((t[0] + recording.start_time) * self.new_freq)
+                int((t[0] + recording.start_time + self.delay) * self.new_freq)
                 for t in brain_window_timestamps
             ]
         )

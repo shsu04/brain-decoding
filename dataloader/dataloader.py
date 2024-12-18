@@ -28,6 +28,7 @@ class DataLoader:
         brain_clipping: int,
         baseline_window: float,
         new_freq: int,
+        delay: float,
         # Specifies batch type creation
         batch_types: dict[str, int],
         batch_kwargs: dict[str, dict],
@@ -45,6 +46,7 @@ class DataLoader:
             brain_clipping -- standard deviation to clip the brain data to
             baseline_window -- window size to use for baseline normalization
             new_freq -- new frequency to resample the brain data to
+            delay -- delay in seconds to apply to the brain data
 
             batch_types -- dictionary of batch types to create and their counts
             batch_kwargs -- dictionary of batch type kwargs
@@ -95,6 +97,7 @@ class DataLoader:
                 batch_fetchers.append(
                     BatchFetcherFactory.create_batch_fetcher(
                         batch_type,
+                        delay=delay,
                         notch_filter=notch_filter,
                         frequency_bands=frequency_bands,
                         scaling=scaling,

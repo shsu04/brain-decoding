@@ -27,9 +27,13 @@ def mel_spectrogram(
     if x_pred is not None and torch.is_tensor(x_pred):
         specs_pred = x_pred.detach().cpu().numpy()
 
-    # # Find global min and max values across both spectrograms
-    # vmin = specs.min()
-    # vmax = specs.max()
+    # Find global min and max values across both spectrograms
+    vmin = specs.min()
+    vmax = specs.max()
+
+    if x_pred is not None:
+        vmin = min(vmin, specs_pred.min())
+        vmax = max(vmax, specs_pred.max())
 
     num_specs = min(max_plots, specs.shape[0])
     cols = 2 if x_pred is not None else 1
@@ -54,8 +58,8 @@ def mel_spectrogram(
             origin="lower",
             interpolation="nearest",
             cmap="viridis",
-            # vmin=vmin,
-            # vmax=vmax,
+            vmin=vmin,
+            vmax=vmax,
         )
 
         # Set correct time axis
@@ -76,8 +80,8 @@ def mel_spectrogram(
                 origin="lower",
                 interpolation="nearest",
                 cmap="viridis",
-                # vmin=vmin,
-                # vmax=vmax,
+                vmin=vmin,
+                vmax=vmax,
             )
 
             # Set correct time axis
