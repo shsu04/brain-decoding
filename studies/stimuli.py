@@ -66,41 +66,49 @@ class Stimuli:
         # Recreate the lock
         self.lock = threading.Lock()
 
-    def load_audio(self, name: str) -> np.ndarray:
+    def load_audio(self, names: list[str]) -> dict[str, np.ndarray]:
         """
         Fetch the audio from the cache if it exists, otherwise load it from the disk.
 
         Arguments:
-            name -- name of the audio file to load. Must be in the list of stimuli names.
+            names -- names of the audio file to load. Each must be in the list of stimuli names.
                     In addition, root_path/name must be the target file.
 
         Returns:
-            audio -- audio data as a numpy array, dim = (seconds * sample_rate,)
+            audios -- audio data as a dict of numpy arrays, dim = (seconds * sample_rate,)
         """
         with self.lock:
-            if name not in self.names:
-                raise ValueError(
-                    f"Stimuli name {name} not found in the list of stimuli."
-                )
 
-            # Check cache
-            if self.cache_enabled and name in self.cache:
-                return self.cache[name]
+            audios = {}
 
-            audio_path = f"{self.root_path}/{name}"
+            for name in names:
+                if name not in self.names:
+                    raise ValueError(
+                        f"Stimuli name {name} not found in the list of stimuli."
+                    )
 
-            # Stimuli event names sometimes need to be adjusted in the study
-            # load events function for this to work
-            if not os.path.exists(audio_path):
-                raise FileNotFoundError(f"Stimuli {name} not found in {self.root_path}")
+                # Check cache
+                if self.cache_enabled and name in self.cache:
+                    return self.cache[name]
 
-            audio, _ = librosa.load(audio_path, sr=16000)
-            audio = audio.astype(np.float32)
+                audio_path = f"{self.root_path}/{name}"
 
-            # If caching is enabled, add to cache.
-            if self.cache_enabled:
-                if len(self.cache) >= self.max_cache_size:
-                    self.cache.popitem()
-                self.cache[name] = audio
+                # Stimuli event names sometimes need to be adjusted in the study
+                # load events function for this to work
+                if not os.path.exists(audio_path):
+                    raise FileNotFoundError(
+                        f"Stimuli {name} not found in {self.root_path}"
+                    )
 
-            return audio
+                audio, _ = librosa.load(audio_path, sr=16000)
+                audio = audio.astype(np.float32)
+
+                # If caching is enabled, add to cache.
+                if self.cache_enabled:
+                    if len(self.cache) >= self.max_cache_size:
+                        self.cache.popitem()
+                    self.cache[name] = audio
+
+                audios[name] = audio
+
+            return audios

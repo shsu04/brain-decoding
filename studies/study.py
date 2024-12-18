@@ -117,7 +117,7 @@ class Recording(ABC):
         pass
 
     @abstractmethod
-    def load_stimuli(self, name: str, options: str) -> dict[str, np.ndarray]:
+    def load_stimuli(self, names: list[str], options: str) -> dict[str, np.ndarray]:
         """Each study has their own stimuli, e.g. audio, visual, etc."""
         pass
 

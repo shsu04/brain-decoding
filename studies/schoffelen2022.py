@@ -508,5 +508,5 @@ class Schoffelen2022Recording(Recording):
         return results
 
     # Thread-safe between recording instances
-    def load_stimuli(self, name: str, options: str = None) -> np.ndarray:
-        return self.stimuli.load_audio(name=name)
+    def load_stimuli(self, names: list[str], options: str = None) -> np.ndarray:
+        return self.stimuli.load_audio(names=names)

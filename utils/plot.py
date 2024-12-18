@@ -8,7 +8,7 @@ def mel_spectrogram(
     max_plots: int = 4,
     x_pred: torch.Tensor = None,
     sample_rate: int = 16000,
-    hop_length: int = 512,
+    hop_length: int = 160,
     frequency_scale: str = "mel",
 ):
     """Plot mel spectrogram with correct time axis.

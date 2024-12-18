@@ -320,10 +320,13 @@ class AudioBatchFetcher(BatchFetcher):
         """
         audio_segments = []
 
+        # dict of audio_name: audio_data (np.array)
+        audios = recording.load_stimuli(list(audio_window_timestamps.keys()))
+
         for sound_file in sorted(list(audio_window_timestamps.keys())):
 
             audio_segment = self.pre_process_audio(
-                audio=recording.load_stimuli(sound_file),
+                audio=audios[sound_file],
                 time_stamps=audio_window_timestamps[sound_file],
             )  # [B, mel_bins, T]
             audio_segment = audio_segment[
