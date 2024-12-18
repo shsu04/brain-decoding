@@ -164,15 +164,11 @@ class TrainingSessionV0(TrainingSession):
                     self.log_print(
                         f"Error in epoch {epoch}, {batch.recording.study_name} {batch.recording.subject_id} {batch.recording.session_id} {batch.recording.task_id}. Skipping. {e}"
                     )
+                    self.save(f"error_epoch_{epoch}")
                     raise e
 
                 pbar.update(1)
-
             pbar.close()
-            elapsed_minutes = (time.time() - epoch_start_time) / 60
-            self.log_print(
-                f"Epoch {epoch} completed in {elapsed_minutes:.2f}m. {elapsed_minutes / training_size:.2f}m per recording."
-            )
 
             # Testing
             try:
@@ -187,6 +183,11 @@ class TrainingSessionV0(TrainingSession):
                 self.log_print(f"Error in epoch {epoch} during testing, {e}")
                 self.save(f"error_epoch_{epoch}")
                 raise e
+
+            elapsed_minutes = (time.time() - epoch_start_time) / 60
+            self.log_print(
+                f"Epoch {epoch} completed in {elapsed_minutes:.2f}m. {elapsed_minutes / training_size:.2f}m per recording."
+            )
 
             # Save model
             self.save(f"epoch_{epoch}")
@@ -358,7 +359,6 @@ class TrainingSessionV0(TrainingSession):
                     missed_recordings += end - start
                     missed_batches += 1
                     raise e
-                    continue
 
         gc.collect()
         torch.cuda.empty_cache()
