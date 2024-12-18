@@ -4,8 +4,6 @@ Used by DataLoader, created by DataLoaderFactory.
 """
 
 from abc import ABC, abstractmethod
-import time
-from tracemalloc import start
 from studies import Study, Recording
 import torch
 import mne
