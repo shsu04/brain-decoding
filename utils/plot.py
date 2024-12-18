@@ -11,7 +11,7 @@ def mel_spectrogram(
     hop_length: int = 160,
     frequency_scale: str = "mel",
 ):
-    """Plot mel spectrogram with correct time axis.
+    """Plot mel spectrogram with correct time axis and normalized dB scale.
 
     Arguments:
         x -- mel spectrogram tensor of shape [B, mel_bins, T]
@@ -26,6 +26,13 @@ def mel_spectrogram(
         specs = x.detach().cpu().numpy()
     if x_pred is not None and torch.is_tensor(x_pred):
         specs_pred = x_pred.detach().cpu().numpy()
+
+    # Find global min and max values across both spectrograms
+    vmin = specs.min()
+    vmax = specs.max()
+    if x_pred is not None:
+        vmin = min(vmin, specs_pred.min())
+        vmax = max(vmax, specs_pred.max())
 
     num_specs = min(max_plots, specs.shape[0])
     cols = 2 if x_pred is not None else 1
@@ -43,13 +50,15 @@ def mel_spectrogram(
         time_steps = specs[i].shape[1]
         times = np.arange(time_steps) * hop_length / sample_rate
 
-        # Plot original spectrogram
+        # Plot original spectrogram with normalized scale
         img = ax.imshow(
             specs[i],
             aspect="auto",
             origin="lower",
             interpolation="nearest",
             cmap="viridis",
+            vmin=vmin,
+            vmax=vmax,
         )
 
         # Set correct time axis
@@ -62,7 +71,7 @@ def mel_spectrogram(
         ax.set_ylabel(y_label)
         ax.set_title(f"Original Mel Spectrogram {i+1}")
 
-        # Plot predicted spectrogram if available
+        # Plot predicted spectrogram if available, using same scale
         if x_pred is not None:
             img_pred = ax_pred.imshow(
                 specs_pred[i],
@@ -70,6 +79,8 @@ def mel_spectrogram(
                 origin="lower",
                 interpolation="nearest",
                 cmap="viridis",
+                vmin=vmin,
+                vmax=vmax,
             )
 
             # Set correct time axis
