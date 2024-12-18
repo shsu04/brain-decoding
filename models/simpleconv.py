@@ -85,6 +85,11 @@ class SimpleConv(nn.Module):
             )
             channels = self.config.merger_channels
 
+        # Batch norm if needed, each channel independently
+        self.initial_batch_norm = None
+        if self.config.batch_norm:
+            self.initial_batch_norm = nn.BatchNorm1d(channels)
+
         # Project MEG channels with a linear layer
         self.initial_linear = None
         if self.config.initial_linear:
@@ -115,9 +120,9 @@ class SimpleConv(nn.Module):
                     conditions=self.condition_to_idx[cond_type],
                 )
                 channels = dim
-                
+
                 print(
-                    f'Conditional layer {cond_type} initialized with {len(self.conditional_layers[cond_type].conditions)} conditions'
+                    f"Conditional layer {cond_type} initialized with {len(self.conditional_layers[cond_type].conditions)} conditions"
                 )
 
         # Convolutional blocks parameter
@@ -144,7 +149,7 @@ class SimpleConv(nn.Module):
         # Final transformer encoder
         self.transformer_encoders, self.quantizer, self.layer_norm = False, False, False
         if self.config.transformer_encoder_layers > 0:
-            
+
             self.layer_norm = nn.LayerNorm(normalized_shape=final_channels)
 
             assert self.config.transformer_input in [
@@ -219,7 +224,9 @@ class SimpleConv(nn.Module):
 
         total_params = sum(p.numel() for p in self.parameters())
         cnn_params = sum(p.numel() for p in self.encoders.parameters())
-        conditions = list(self.config.conditions.keys()) if self.config.conditions else []
+        conditions = (
+            list(self.config.conditions.keys()) if self.config.conditions else []
+        )
         print(
             f"SimpleConv initialized with {total_params} parameters, cond: {conditions}"
         )
@@ -229,7 +236,7 @@ class SimpleConv(nn.Module):
         print(
             f"ConvBlocks: {self.config.depth}, hidden_dim: {self.config.hidden_dim}, params {cnn_params}"
         )
-        
+
         # Leave the temp param
         self.clip_loss = CLIPLoss()
 
@@ -280,6 +287,9 @@ class SimpleConv(nn.Module):
                 condition=condition,
             )
 
+        if self.initial_batch_norm is not None:
+            x = self.initial_batch_norm(x)
+
         if self.initial_linear is not None:
             x = self.initial_linear(x)
 
@@ -296,11 +306,11 @@ class SimpleConv(nn.Module):
         # Transformers
         decoder_inference, quantizer_metrics = False, None
         if self.transformer_encoders:
-            
+
             if self.layer_norm:
-                x = self.layer_norm(
-                    x.transpose(1, 2) # [B, T, C]
-                ).transpose(1, 2)  # [B, C, T]
+                x = self.layer_norm(x.transpose(1, 2)).transpose(  # [B, T, C]
+                    1, 2
+                )  # [B, C, T]
 
             if self.quantizer:
 
@@ -358,6 +368,6 @@ class SimpleConv(nn.Module):
         # Final projection, except when it is alreay done in the decoder
         if not decoder_inference:
             x = self.final(x)  # [B, C, T]
-            
+
         assert x.shape[-1] == length
         return x, quantizer_metrics

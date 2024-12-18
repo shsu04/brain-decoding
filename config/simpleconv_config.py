@@ -12,6 +12,7 @@ class SimpleConvConfig(Config):
         out_channels: int = 128,
         hidden_dim: int = 512,
         dropout: float = 0.3,
+        initial_batch_norm: bool = False,
         # Sensor layout settings
         layout_dim: int = 2,
         layout_proj: bool = False,
@@ -59,7 +60,7 @@ class SimpleConvConfig(Config):
         transformer_decoder_dim: int = 0,
     ):
         super(SimpleConvConfig, self).__init__()
-
+        self.initial_batch_norm = initial_batch_norm
         self.conditions = conditions
         # Channels
         self.in_channels = in_channels
