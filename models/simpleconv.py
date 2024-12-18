@@ -357,8 +357,13 @@ class SimpleConv(nn.Module):
                                 mel=mel, encoder_output=x, src_mask=attention_mask
                             )  # [B, d_model, t + 1]
 
+                            output = self.final(output)  # [B, C, t + 1]
+
+                            if self.config.mel_normalization:
+                                output = self.whisper_normalization(output)
+
                             # [B, d_model, 1] -> [B, mel, 1]
-                            next_mel = self.final(output[..., -1:])
+                            next_mel = output[..., -1:]
                             mel = torch.cat([mel, next_mel], dim=-1)  # [B, mel, t + 1]
 
                         # [B, mel_bins, T + 1] -> [B, mel_bins, T]
@@ -369,15 +374,26 @@ class SimpleConv(nn.Module):
         if not decoder_inference:
             x = self.final(x)  # [B, C, T]
 
-            # Follow Whisper's mel spectrogram normalization
             if self.config.mel_normalization:
-                x = F.relu(x)  # Positive energy
-                x = torch.clamp(x, min=1e-10).log10()
-                # Compresses dynamic range
-                # Noise floor relative to loudest part of each frame
-                x = torch.maximum(x, x.max(-1, keepdim=True)[0] - 8.0)
-                # Normalize to [0, 1], shift negative log values to positive
-                x = (x + 4.0) / 4.0
+                x = self.whisper_normalization(x)
 
         assert x.shape[-1] == length
         return x, quantizer_metrics
+
+    def whisper_normalization(self, x: torch.Tensor):
+        """Follow Whisper's mel spectrogram normalization"""
+
+        # Ensure no negative energy
+        x = F.relu(x)
+        x = torch.clamp(x, min=1e-10).log10()
+
+        # Dynamic range compression
+        batch_max = (
+            x.view(x.size(0), -1).max(dim=1, keepdim=True)[0].unsqueeze(-1)
+        )  # Shape: [B, 1, 1]
+        x = torch.maximum(x, batch_max - 8.0)
+
+        # Normalize to [0, 1]
+        x = (x + 4.0) / 4.0
+
+        return x

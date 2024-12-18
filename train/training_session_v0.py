@@ -457,7 +457,7 @@ class TrainingSessionV0(TrainingSession):
                     test_sizes[test] -= 1
                     continue
 
-            print(
+            self.log_print(
                 f"Test {test} completed. Accuracy: {acc/test_sizes[test]:.4f}, Top 1: {top_1/test_sizes[test]:.4f}, Top 5: {top_5/test_sizes[test]:.4f}, Top 10: {top_10/test_sizes[test]:.4f}, Perplexity: {perplexity/test_sizes[test]:.4f}"
             )
 

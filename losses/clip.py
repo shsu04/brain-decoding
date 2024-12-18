@@ -26,7 +26,7 @@ class CLIPLoss(nn.Module):
         # Diagonal targets
         targets = torch.arange(x_1.size(0), device=x_1.device)
         probs = F.log_softmax(logits, dim=-1)  # [B]
-        clip_loss = F.cross_entropy(probs, targets, reduction='mean') 
+        clip_loss = F.cross_entropy(probs, targets, reduction="mean")
 
         return {
             "loss": clip_loss,  # Still on device
@@ -86,7 +86,7 @@ class CLIPLoss(nn.Module):
         correct_predictions = (predicted_labels == targets).cpu().sum().item()
         correct = correct_predictions
 
-        metrics =  {
+        metrics = {
             "correct": correct,
             "top_10_correct": top10_correct,
             "top_5_correct": top5_correct,
@@ -94,5 +94,5 @@ class CLIPLoss(nn.Module):
         }
         for k, v in metrics.items():
             metrics[k] = v / batch_size if batch_size > 0 else 0
-            
+
         return metrics
