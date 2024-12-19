@@ -81,21 +81,9 @@ class TrainingSessionV0(TrainingSession):
 
         # Set all training parameters
         self.device = device
-        gpu_ok = False
-        torch.set_float32_matmul_precision("high")
-        training_size = len(self.dataset["train"])
         self.model.to(device)
         self.clip_loss.to(device)
-
-        # Check if GPU is NVIDIA V100, A100, or H100
-        if torch.cuda.is_available():
-            device_cap = torch.cuda.get_device_capability()
-            if device_cap in ((7, 0), (8, 0), (9, 0)):
-                gpu_ok = True
-        if not gpu_ok:
-            self.log_print(
-                "GPU is not NVIDIA V100, A100, or H100. Speedup numbers may be lower than expected."
-            )
+        training_size = len(self.dataset["train"])
 
         for epoch in range(current_epoch + 1, self.config.epochs + 1):
             try:
@@ -268,7 +256,7 @@ class TrainingSessionV0(TrainingSession):
             for i in range(0, total, self.config.batch_size)
         ]
 
-        with torch.amp.autocast(dtype=torch.bfloat16, device_type=device):
+        with torch.amp.autocast(dtype=self.autocast_dtype, device_type=device):
 
             for start, end in batch_indices:
 

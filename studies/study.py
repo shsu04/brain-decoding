@@ -171,6 +171,7 @@ class Recording(ABC):
             "robust",
             "standard",
             "both",
+            None,
         ], f"Invalid scaling type {scaling}"
         if baseline_window:
             assert baseline_window >= 0

@@ -41,7 +41,7 @@ class TrainingSession(ABC):
         assert len(studies) > 0, "At least one study root path must be provided"
         assert all(
             os.path.exists(data_path + "/" + study) for study in studies
-        ), "All study root paths must exist"        
+        ), "All study root paths must exist"
         os.makedirs(save_path, exist_ok=True)
 
         logging.basicConfig(
@@ -97,7 +97,7 @@ class TrainingSession(ABC):
 
         self.error = None
         self.set_seed(int(self.config.seed))
-        
+
         # Set conditions
         if self.config.brain_encoder_config.conditions is not None:
             if "study" in self.config.brain_encoder_config.conditions:
@@ -110,7 +110,21 @@ class TrainingSession(ABC):
                 for recording in self.recordings:
                     subjects.add(f"{recording.study_name}_{recording.subject_id}")
                 self.config.brain_encoder_config.conditions["subject"] = list(subjects)
-        
+
+        # Check if GPU is NVIDIA V100, A100, or H100
+        torch.set_float32_matmul_precision("high")
+        gpu_ok = False
+        if torch.cuda.is_available():
+            device_cap = torch.cuda.get_device_capability()
+            if device_cap in ((7, 0), (8, 0), (9, 0)):
+                gpu_ok = True
+                self.autocast_dtype = torch.bfloat16
+        if not gpu_ok:
+            self.log_print(
+                "GPU is not NVIDIA V100, A100, or H100. Speedup numbers may be lower than expected."
+            )
+            self.autocast_dtype = torch.float16
+
     @abstractmethod
     def train(self):
         pass
@@ -126,7 +140,6 @@ class TrainingSession(ABC):
     @abstractmethod
     def save(self):
         pass
-
 
     def pre_process_all_recordings(self):
         pass
