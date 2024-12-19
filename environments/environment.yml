@@ -36,4 +36,5 @@ dependencies:
     - mne-bids==0.14 
     - ray
     - ipywidgets
+    - accelerate
 
