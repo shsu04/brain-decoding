@@ -67,6 +67,8 @@ class TrainingSessionV0(TrainingSession):
         self.scaler = torch.amp.GradScaler(device=device)
         self.clip_loss, self.mse_loss = self.model.clip_loss, mse_loss_per_batch
 
+        self.highest_epoch, self.highest_metrics, self.highest_top_10 = 0, None, 0
+
     def train(
         self,
         device: str,
@@ -138,7 +140,7 @@ class TrainingSessionV0(TrainingSession):
 
                     # Don't print, just log
                     self.logger.info(
-                        f"Epoch {epoch}, Remaining {remaining}/{training_size}. Runtime {time.time() - start_time:.2f}s."
+                        f"Epoch {epoch}, Remaining {remaining}/{training_size}. Runtime {time.time() - start_time:.2f}s. Cache path {batch.recording.cache_path}"
                     )
                     self.logger.info(
                         f'Loss: {results["loss"]:.4f}, Clip Loss: {results["clip_loss"]:.4f}, MSE Loss: {results["mse_loss"]:.4f}, Commitment Loss: {results["commitment_loss"]:.4f}'
@@ -167,6 +169,7 @@ class TrainingSessionV0(TrainingSession):
                         num_workers=num_workers,
                         max_cache_size=max_cache_size,
                     )
+
             except Exception as e:
                 self.log_print(f"Error in epoch {epoch} during testing, {e}")
                 self.save(f"error_epoch_{epoch}")
@@ -180,7 +183,26 @@ class TrainingSessionV0(TrainingSession):
             # Save model
             self.save(f"epoch_{epoch}")
 
+            # Early stopping
+            sum_top_10 = 0
+
+            for test in self.metrics["test"].keys():
+                top_10 = self.metrics["test"][test][-1]["top_10_accuracy"]
+                sum_top_10 += top_10
+
+            if sum_top_10 > self.highest_top_10:
+                self.highest_top_10 = sum_top_10
+                self.highest_epoch = epoch
+                self.highest_metrics = self.metrics["test"][test][-1]
+
+            if epoch - self.highest_epoch > 10:
+                self.log_print(
+                    f"Early stopping at epoch {epoch}. Highest top 10 accuracy at epoch {self.highest_epoch}."
+                )
+                break
+
         self.log_print("Training completed.")
+        self.log_print(f"Highest metrics: {self.highest_metrics}")
 
     def run_batch(self, batch: AudioBatch, train: bool) -> tp.Dict[str, float]:
         """
@@ -421,7 +443,7 @@ class TrainingSessionV0(TrainingSession):
 
                     # Log results
                     self.logger.info(
-                        f"Testing {test} {i}/{test_sizes[test]}. Runtime {time.time() - start_time:.2f}s."
+                        f"Testing {test} {i}/{test_sizes[test]}. Runtime {time.time() - start_time:.2f}s. Cache path {batch.recording.cache_path}."
                     )
                     self.logger.info(
                         f'Loss: {results["loss"]:.4f}, Clip Loss: {results["clip_loss"]:.4f}, MSE Loss: {results["mse_loss"]:.4f}, Commitment Loss: {results["commitment_loss"]:.4f}'

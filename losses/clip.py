@@ -18,7 +18,7 @@ class CLIPLoss(nn.Module):
         """
         assert x_1.size() == x_2.size()
 
-        inv_norms = 1 / (1e-8 + x_1.norm(dim=(1, 2), p=2))
+        inv_norms = 1 / (1e-8 + x_1.norm(dim=(1, 2), p=2))  # [B]
 
         # Compute similarity, [B, C, T] x [B, C, T] -> [B, B]
         logits = torch.einsum("bct,dct,d->bd", x_1, x_2, inv_norms) * self.temperature
