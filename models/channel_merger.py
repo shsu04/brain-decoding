@@ -47,7 +47,6 @@ class ChannelMerger(nn.Module):
             self.embedding = nn.Sequential(
                 nn.Linear(layout_dim, embedding_dim), nn.Tanh()
             )
-            nn.init.kaiming_uniform_(self.embedding, a=0)
         else:
             raise ValueError(f"Unknown embedding type: {embedding_type}")
 
@@ -209,14 +208,11 @@ class FourierEmbedding(nn.Module):
 
         return emb
 
-
 class SphericalEmbedding(nn.Module):
     """
     Projects positions onto a unit sphere and computes spherical harmonic
-    coefficients for each sensor location. Then learns optimal weighting
-    of harmonic components to describe each sensor location in high dim.
+    coefficients for each sensor location, implemented fully in PyTorch.
     """
-
     def __init__(self, dimension: int = 256, max_degree: int = 8):
         """
         Args:
@@ -226,62 +222,121 @@ class SphericalEmbedding(nn.Module):
         super().__init__()
         self.max_degree = max_degree
         self.dimension = dimension
-
+        
         # Number of spherical harmonic components
         n_harmonics = (max_degree + 1) ** 2
-
+        
         # Learnable weights for each harmonic component
         self.harmonics_weights = nn.Parameter(torch.empty((n_harmonics, dimension)))
         nn.init.kaiming_uniform_(self.harmonics_weights, a=0)
 
+    def _associated_legendre(self, l: int, m: int, x: Tensor) -> Tensor:
+        """
+        Compute associated Legendre polynomial P_l^m(x) using recursive formula.
+        
+        Args:
+            l (int): Degree
+            m (int): Order (abs(m) <= l)
+            x (Tensor): Input values between -1 and 1 [B, C]
+            
+        Returns:
+            Tensor: P_l^m(x) values [B, C]
+        """
+        # Handle negative m values
+        m = abs(m)
+        
+        if l < m:
+            return torch.zeros_like(x)
+        
+        # Start with P_m^m
+        pmm = torch.ones_like(x)
+        if m > 0:
+            somx2 = torch.sqrt((1 - x) * (1 + x))
+            fact = 1.0
+            for i in range(1, m + 1):
+                pmm = -pmm * fact * somx2
+                fact += 2.0
+        
+        if l == m:
+            return pmm
+        
+        # Compute P_(m+1)^m
+        pmmp1 = x * (2 * m + 1) * pmm
+        
+        if l == m + 1:
+            return pmmp1
+        
+        # Use recursion formula for higher l
+        for ll in range(m + 2, l + 1):
+            pll = (x * (2 * ll - 1) * pmmp1 - (ll + m - 1) * pmm) / (ll - m)
+            pmm = pmmp1
+            pmmp1 = pll
+            
+        return pmmp1
+
+    def _normalization(self, l: int, m: int) -> float:
+        """
+        Compute normalization factor for spherical harmonics.
+        """
+        m = abs(m)
+        return math.sqrt((2 * l + 1) * math.factorial(l - m) / 
+                        (4 * math.pi * math.factorial(l + m)))
+
     def _spherical_harmonic(self, l: int, m: int, theta: Tensor, phi: Tensor) -> Tensor:
         """
-        Computes spherical harmonic Y_l^m(theta, phi) for given angles.
-
+        Compute spherical harmonic Y_l^m(theta, phi) for given angles.
+        
         Args:
-            l (int): Degree of the spherical harmonic, level of detail.
-            m (int): Order of the spherical harmonic, orientation.
-            theta (Tensor): Polar angle (in radians) [B, C].
-            phi (Tensor): Azimuthal angle (in radians) [B, C].
-
+            l (int): Degree of the spherical harmonic
+            m (int): Order of the spherical harmonic
+            theta (Tensor): Polar angle (in radians) [B, C]
+            phi (Tensor): Azimuthal angle (in radians) [B, C]
+            
         Returns:
-            Tensor: Real part of the spherical harmonic Y_l^m [B, C].
+            Tensor: Real part of the spherical harmonic Y_l^m [B, C]
         """
-        # Compute spherical harmonics using scipy's sph_harm
-        Y_lm = np.vectorize(lambda t, p: sph_harm(m, l, p, t), otypes=[np.complex128])
-        theta_np, phi_np = theta.cpu().numpy(), phi.cpu().numpy()
-        Y = torch.from_numpy(Y_lm(theta_np, phi_np).real).to(theta.device)
-        return Y
+        # Compute associated Legendre polynomial
+        x = torch.cos(theta)
+        Plm = self._associated_legendre(l, m, x)
+        
+        # Normalization
+        norm = self._normalization(l, m)
+        
+        # Angular part
+        if m > 0:
+            return norm * Plm * torch.cos(m * phi) * math.sqrt(2)
+        elif m < 0:
+            return norm * Plm * torch.sin(-m * phi) * math.sqrt(2)
+        else:
+            return norm * Plm
 
     def forward(self, positions: Tensor) -> Tensor:
         """
         Args:
-            positions: Positions in 3D space [B, C, 3].
-
+            positions: Positions in 3D space [B, C, 3]
+            
         Returns:
-            embeddings: Spherical harmonic embeddings [B, C, D].
+            embeddings: Spherical harmonic embeddings [B, C, D]
         """
-        # Normalize positions to project onto the unit sphere
+        # Normalize positions to project onto unit sphere
         radius = torch.norm(positions, dim=-1, keepdim=True)  # [B, C, 1]
         positions = positions / (radius + 1e-8)
-
-        # Convert to spherical coordinates, clamp to avoid NaNs
-        theta = torch.acos(
-            torch.clamp(positions[..., 2], -1.0, 1.0)
-        )  # angle from z-axis
+        
+        # Convert to spherical coordinates
+        theta = torch.acos(torch.clamp(positions[..., 2], -1.0, 1.0))  # angle from z-axis
         phi = torch.atan2(positions[..., 1], positions[..., 0])  # angle around z
-
+        
         # Compute spherical harmonics for each (l, m) pair
         harmonics = []
         for l in range(self.max_degree + 1):
             for m in range(-l, l + 1):
                 Y = self._spherical_harmonic(l, m, theta, phi)  # [B, C]
                 harmonics.append(Y)
-
+                
         harmonics = torch.stack(harmonics, dim=-1).float()  # [B, C, n_harmonics]
-
+        
         # Compute weighted sum of harmonics
         embeddings = torch.matmul(harmonics, self.harmonics_weights)  # [B, C, D]
         embeddings *= radius  # scale back to retain magnitude
-
+        
         return embeddings

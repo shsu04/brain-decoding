@@ -494,7 +494,8 @@ class Schoffelen2022Recording(Recording):
             end_times = annotations_df[
                 annotations_df["type"].str.contains("phoneme_onset")
                 & annotations_df["type"].shift(-1).str.contains("wav_onset")
-            ]
+            ]            
+            end_times = end_times.drop_duplicates(subset='type', keep='first')
             # So that columns are onset, sound, end
             sound_events["end"] = end_times["onset"].values
             # stimuli/{tasknum}_{num}.wav is the path to the audio file
