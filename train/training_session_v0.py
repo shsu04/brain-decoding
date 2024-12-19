@@ -31,7 +31,8 @@ class TrainingSessionV0(TrainingSession):
         cache_enabled: bool = True,
         max_cache_size: int = 100,
     ):
-        """Initializes a training session with the provided configuration and data.
+        """
+        Initializes a training session with the provided configuration and data.
         This version deals with audio batches.
 
         Arguments:
@@ -55,19 +56,6 @@ class TrainingSessionV0(TrainingSession):
             cache_enabled=cache_enabled,
             max_cache_size=max_cache_size,
         )
-
-        # Set conditions
-        if self.config.brain_encoder_config.conditions is not None:
-            if "study" in self.config.brain_encoder_config.conditions:
-                self.config.brain_encoder_config.conditions["study"] = list(
-                    studies.keys()
-                )
-
-            if "subject" in self.config.brain_encoder_config.conditions:
-                subjects = set()
-                for recording in self.recordings:
-                    subjects.add(f"{recording.study_name}_{recording.subject_id}")
-                self.config.brain_encoder_config.conditions["subject"] = list(subjects)
 
         self.model = SimpleConv(self.config.brain_encoder_config)
 

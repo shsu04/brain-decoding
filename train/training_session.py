@@ -98,6 +98,19 @@ class TrainingSession(ABC):
         self.error = None
         self.set_seed(int(self.config.seed))
         
+        # Set conditions
+        if self.config.brain_encoder_config.conditions is not None:
+            if "study" in self.config.brain_encoder_config.conditions:
+                self.config.brain_encoder_config.conditions["study"] = list(
+                    studies.keys()
+                )
+
+            if "subject" in self.config.brain_encoder_config.conditions:
+                subjects = set()
+                for recording in self.recordings:
+                    subjects.add(f"{recording.study_name}_{recording.subject_id}")
+                self.config.brain_encoder_config.conditions["subject"] = list(subjects)
+        
     @abstractmethod
     def train(self):
         pass
