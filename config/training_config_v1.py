@@ -3,11 +3,13 @@ from .simpleconv_config import SimpleConvConfig
 from .config import Config
 from .training_config import TrainingConfig
 
+
 class TrainingConfigV1(TrainingConfig):
     """
-    Config class for Whisper latent alignment, architecture exploration, 
+    Config class for Whisper latent alignment, architecture exploration,
     and dataset integration
     """
+
     def __init__(
         self,
         brain_encoder_config: SimpleConvConfig,
@@ -45,6 +47,7 @@ class TrainingConfigV1(TrainingConfig):
             "cosine_similarity": 0.0,
             "mse_loss": 0.0,
         },
+        latent_alignment_layers: tp.List[int] = [-1],
     ):
         self.brain_encoder_config = brain_encoder_config
         # key: study_name, value: dict with keys: "testing_subjects", "testing_tasks",
@@ -69,20 +72,35 @@ class TrainingConfigV1(TrainingConfig):
         self.audio_model = audio_model
         self.audio_sample_rate = audio_sample_rate
         self.hop_length = hop_length
-        
+
         # Hyperparameters
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.epochs = epochs
-        self.use_mse_loss = use_mse_loss
         self.alpha = alpha
         self.random_test_size = random_test_size
         self.seed = seed
-        
-        assert all([v >= 0 for v in mel_alignment_objectives.values()]), "Weighting must be non-negative"
-        assert all([k in ["clip_loss", "mse_loss"] for k in mel_alignment_objectives.keys()]), "Invalid objective"
+
+        # MEL ALIGNMENT
+        assert all(
+            [v >= 0 for v in mel_alignment_objectives.values()]
+        ), "Weighting must be non-negative"
+        assert all(
+            [k in ["clip_loss", "mse_loss"] for k in mel_alignment_objectives.keys()]
+        ), "Invalid objective"
         self.mel_alignment_objectives = mel_alignment_objectives
 
-        assert all([v >= 0 for v in latent_alignment_objectives.values()]), "Weighting must be non-negative"
-        assert all([k in ["cosine_similarity", "mse_loss"] for k in latent_alignment_objectives.keys()]), "Invalid objective"
+        # LATENT ALIGNMENT
+        assert all(
+            [v >= 0 for v in latent_alignment_objectives.values()]
+        ), "Weighting must be non-negative"
+        assert all(
+            [
+                k in ["cosine_similarity", "mse_loss"]
+                for k in latent_alignment_objectives.keys()
+            ]
+        ), "Invalid objective"
+
         self.latent_alignment_objectives = latent_alignment_objectives
+        assert all([i < 32 for i in latent_alignment_layers]), "Invalid layer index"
+        self.latent_alignment_layers = latent_alignment_layers
