@@ -37,4 +37,5 @@ dependencies:
     - ray
     - ipywidgets
     - accelerate
+    - seaborn
 

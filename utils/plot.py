@@ -112,11 +112,10 @@ def plot_training_metrics(metrics):
     ax4 = plt.subplot(224)
 
     # Training Loss Plot [ax1]
-    epochs = range(len(metrics["train"]))
-    loss_metrics = ["loss", "clip_loss", "mse_loss", "commitment_loss"]
+    batches = range(len(metrics["train"]))
     for metric in loss_metrics:
         values = [epoch[metric] for epoch in metrics["train"]]
-        ax1.plot(epochs, values, label=metric)
+        ax1.plot(batches, values, label=metric)
     ax1.set_title("Training Losses")
     ax1.set_xlabel("Epoch")
     ax1.set_ylabel("Loss")
