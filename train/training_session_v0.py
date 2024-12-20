@@ -172,16 +172,22 @@ class TrainingSessionV0(TrainingSession):
             self.save(f"epoch_{epoch}")
 
             # Early stopping
-            sum_top_10 = 0
-
-            for test in self.metrics["test"].keys():
-                top_10 = self.metrics["test"][test][-1]["top_10_accuracy"]
-                sum_top_10 += top_10
+            sum_top_10 = sum(
+                [
+                    self.metrics["test"][test][-1]["top_10_accuracy"]
+                    for test in self.metrics["test"].keys()
+                ]
+            )
 
             if sum_top_10 > self.highest_top_10:
+
                 self.highest_top_10 = sum_top_10
                 self.highest_epoch = epoch
-                self.highest_metrics = self.metrics["test"][test][-1]
+
+                self.highest_metrics = {
+                    self.metrics["test"][test][-1]
+                    for test in self.metrics["test"].keys()
+                }
 
             if epoch - self.highest_epoch > 10:
                 self.log_print(

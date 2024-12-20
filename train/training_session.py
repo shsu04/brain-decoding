@@ -123,7 +123,7 @@ class TrainingSession(ABC):
             self.log_print(
                 "GPU is not NVIDIA V100, A100, or H100. Speedup numbers may be lower than expected."
             )
-            self.autocast_dtype = torch.float16
+            self.autocast_dtype = torch.float32
 
     @abstractmethod
     def train(self):
