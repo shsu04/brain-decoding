@@ -25,4 +25,5 @@ class StudyFactory:
             batch_type=batch_type,
             cache_enabled=cache_enabled,
             max_cache_size=max_cache_size,
+            cache_name=study_name,
         )

@@ -15,18 +15,20 @@ filterwarnings("ignore")
 
 
 class Gwilliams2023(Study):
+
     def __init__(
         self,
         batch_type: str,
         path: str = "data/gwilliams2023",
         cache_enabled: bool = True,
         max_cache_size: int = 100,
+        cache_name: str = "cache",
     ):
         root_dir = os.path.join(os.getcwd(), path)
         assert os.path.exists(root_dir), f"{root_dir} does not exist"
 
         self.root_dir = root_dir
-        self.cache_dir = os.path.join(os.getcwd(), "cache", "gwilliams2023")
+        self.cache_dir = os.path.join(os.getcwd(), cache_name, "gwilliams2023")
 
         # Create cache directory
         if not os.path.exists(self.cache_dir):

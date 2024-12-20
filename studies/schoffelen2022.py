@@ -22,12 +22,13 @@ class Schoffelen2022(Study):
         path: str = "data/schoffelen2022",
         cache_enabled: bool = True,
         max_cache_size: int = 100,
+        cache_name: str = "cache",
     ):
         root_dir = os.path.join(os.getcwd(), path)
         assert os.path.exists(root_dir), f"{root_dir} does not exist"
 
         self.root_dir = root_dir
-        self.cache_dir = os.path.join(os.getcwd(), "cache", "schoffelen2022")
+        self.cache_dir = os.path.join(os.getcwd(), cache_name, "schoffelen2022")
 
         # Create cache directory
         if not os.path.exists(self.cache_dir):
@@ -494,8 +495,8 @@ class Schoffelen2022Recording(Recording):
             end_times = annotations_df[
                 annotations_df["type"].str.contains("phoneme_onset")
                 & annotations_df["type"].shift(-1).str.contains("wav_onset")
-            ]            
-            end_times = end_times.drop_duplicates(subset='type', keep='first')
+            ]
+            end_times = end_times.drop_duplicates(subset="type", keep="first")
             # So that columns are onset, sound, end
             sound_events["end"] = end_times["onset"].values
             # stimuli/{tasknum}_{num}.wav is the path to the audio file
