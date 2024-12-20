@@ -602,6 +602,8 @@ class TrainingSessionV0(TrainingSession):
                 {
                     "metrics": self.metrics,
                     "error": str(self.error) if self.error else "No errors.",
+                    "highest_epoch": self.highest_epoch,
+                    "highest_metrics": self.highest_metrics,
                 },
                 f"{checkpoint_path}/metrics.pt",
             )
@@ -656,6 +658,8 @@ def load_training_session(
         if os.path.exists(metrics_path):
             metrics = torch.load(metrics_path)
             training_session.metrics = metrics.get("metrics", {})
+            training_session.highest_epoch = metrics.get("highest_epoch", 0)
+            training_session.highest_metrics = metrics.get("highest_metrics", {})
         else:
             training_session.metrics = {}
             training_session.logger.warning(
