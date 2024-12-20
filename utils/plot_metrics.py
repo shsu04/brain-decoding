@@ -372,6 +372,10 @@ def display_best_performance_barchart(
 
     for i, tm in enumerate(test_metrics):
         ax = axes[i]
+
+        ax.grid(True, zorder=0)
+        ax.set_axisbelow(True)
+
         for j, study_title in enumerate(study_titles):
             vals = [
                 best_perf[tm][subset].get(study_title, np.nan)
