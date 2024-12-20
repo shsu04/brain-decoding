@@ -200,14 +200,14 @@ def display_metrics(
     for i, tm in enumerate(train_metrics):
         ax = train_axes[i]
         ax.set_ylabel(tm.replace("_", " ").title())
-        ax.set_xlabel("Step (Train Recordings)")
+        ax.set_xlabel("Epoch (Train Recordings)")
         ax.set_title("Training " + tm.replace("_", " ").title())
 
     # Set labels and titles for testing metrics
     for j, tm in enumerate(test_metrics):
         ax = test_axes[j]
         ax.set_ylabel(tm.replace("_", " ").title())
-        ax.set_xlabel("Step (Test Recordings)")
+        ax.set_xlabel(f"Epoch {chosen_test_subset}")
         # Include the chosen subset in the title if available
         title_str = "Testing " + tm.replace("_", " ").title()
         # if chosen_test_subset is not None:
@@ -384,7 +384,7 @@ def display_best_performance_barchart(
         ax.set_xticks(x_positions)
         formatted_subsets = [s.replace("_", " ").title() for s in test_subsets]
         ax.set_xticklabels(formatted_subsets, rotation=0)
-        ax.set_title("Best " + tm.replace("_", " ").title())
+        ax.set_title(tm.replace("_", " ").title())
         ax.set_ylabel(tm.replace("_", " ").title())
 
         if i == n_metrics - 1:
