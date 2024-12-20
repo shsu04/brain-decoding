@@ -114,6 +114,8 @@ class TrainingSessionV0(TrainingSession):
                 total=len(epoch_training_dataset), desc="Training Epoch " + str(epoch)
             )
 
+            all_metrics = []
+
             # Run each batch
             while True:
 
@@ -124,7 +126,7 @@ class TrainingSessionV0(TrainingSession):
                 try:
                     start_time = time.time()
                     results = self.run_batch(batch, train=True)
-                    self.metrics["train"].append(results)
+                    all_metrics.append(results)
 
                     # Don't print, just log
                     self.logger.info(
@@ -147,6 +149,12 @@ class TrainingSessionV0(TrainingSession):
 
                 pbar.update(1)
             pbar.close()
+
+            final_metrics = {
+                metric: sum([batch[metric] for batch in all_metrics]) / len(all_metrics)
+                for metric in all_metrics[0].keys()
+            }
+            self.metrics["train"].append(final_metrics)
 
             # Testing
             try:
@@ -185,7 +193,7 @@ class TrainingSessionV0(TrainingSession):
                 self.highest_epoch = epoch
 
                 self.highest_metrics = {
-                    self.metrics["test"][test][-1]
+                    test: self.metrics["test"][test][-1]
                     for test in self.metrics["test"].keys()
                 }
 
@@ -196,7 +204,10 @@ class TrainingSessionV0(TrainingSession):
                 break
 
         self.log_print("Training completed.")
-        self.log_print(f"Highest metrics: {self.highest_metrics}")
+        for test, metrics in self.highest_metrics.items():
+            self.log_print(
+                f"{test}: Acc: {metrics['accuracy']:.4f}, Top 1: {metrics['top_1_accuracy']:.4f}, Top 5: {metrics['top_5_accuracy']:.4f}, Top 10: {metrics['top_10_accuracy']:.4f}"
+            )
 
     def run_batch(self, batch: AudioBatch, train: bool) -> tp.Dict[str, float]:
         """
@@ -422,6 +433,8 @@ class TrainingSessionV0(TrainingSession):
 
             acc, top_1, top_5, top_10, perplexity = 0, 0, 0, 0, 0
 
+            all_metrics = []
+
             while True:
 
                 batch = test_dataloader[test].get_recording()
@@ -433,7 +446,7 @@ class TrainingSessionV0(TrainingSession):
                     start_time = time.time()
 
                     results = self.run_batch(batch, train=False)
-                    self.metrics["test"][test].append(results)
+                    all_metrics.append(results)
 
                     # Log results
                     self.logger.info(
@@ -460,6 +473,12 @@ class TrainingSessionV0(TrainingSession):
                     )
                     test_sizes[test] -= 1
                     continue
+
+            final_metrics = {
+                metric: sum([batch[metric] for batch in all_metrics]) / len(all_metrics)
+                for metric in all_metrics[0].keys()
+            }
+            self.metrics["test"][test].append(final_metrics)
 
             self.log_print(
                 f"Test {test} completed. Accuracy: {acc/test_sizes[test]:.4f}, Top 1: {top_1/test_sizes[test]:.4f}, Top 5: {top_5/test_sizes[test]:.4f}, Top 10: {top_10/test_sizes[test]:.4f}, Perplexity: {perplexity/test_sizes[test]:.4f}"
@@ -583,6 +602,8 @@ class TrainingSessionV0(TrainingSession):
                 {
                     "metrics": self.metrics,
                     "error": str(self.error) if self.error else "No errors.",
+                    "highest_epoch": self.highest_epoch,
+                    "highest_metrics": self.highest_metrics,
                 },
                 f"{checkpoint_path}/metrics.pt",
             )
@@ -637,6 +658,8 @@ def load_training_session(
         if os.path.exists(metrics_path):
             metrics = torch.load(metrics_path)
             training_session.metrics = metrics.get("metrics", {})
+            training_session.highest_epoch = metrics.get("highest_epoch", 0)
+            training_session.highest_metrics = metrics.get("highest_metrics", {})
         else:
             training_session.metrics = {}
             training_session.logger.warning(

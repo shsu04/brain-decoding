@@ -45,6 +45,7 @@ class AudioBatchFetcher(BatchFetcher):
         baseline_window: float,
         new_freq: int,
         delay: float,
+        seed: int,
         # Specific to this batch type
         max_random_shift: float,
         window_size: int,
@@ -82,6 +83,8 @@ class AudioBatchFetcher(BatchFetcher):
         self.new_freq = new_freq
         self.n_jobs = n_jobs
         self.delay = delay
+        self.seed = seed
+        np.random.seed(self.seed)
 
         # Specific to this batch type
         self.max_random_shift = max_random_shift
@@ -309,6 +312,9 @@ class AudioBatchFetcher(BatchFetcher):
                 start_time += np.random.uniform(
                     self.window_stride, self.window_stride + self.max_random_shift
                 )  # some randomness
+
+                self.seed += 1
+                np.random.seed(self.seed)
 
         return audio_window_timestamps, brain_window_timestamps
 
