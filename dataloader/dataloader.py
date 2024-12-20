@@ -32,6 +32,7 @@ class DataLoader:
         # Specifies batch type creation
         batch_types: dict[str, int],
         batch_kwargs: dict[str, dict],
+        seed: int = 0,
     ):
         """Initialize the parallel data loader with Ray workers.
 
@@ -104,6 +105,7 @@ class DataLoader:
                         brain_clipping=brain_clipping,
                         baseline_window=baseline_window,
                         new_freq=new_freq,
+                        seed=seed,
                         **batch_kwargs[batch_type],
                     )
                 )

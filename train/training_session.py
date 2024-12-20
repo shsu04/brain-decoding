@@ -146,7 +146,6 @@ class TrainingSession(ABC):
 
     def set_seed(self, seed: int):
         random.seed(seed)
-        np.random.seed(seed)
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 

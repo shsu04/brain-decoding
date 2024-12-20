@@ -185,7 +185,7 @@ class TrainingSessionV0(TrainingSession):
                 self.highest_epoch = epoch
 
                 self.highest_metrics = {
-                    self.metrics["test"][test][-1]
+                    test: self.metrics["test"][test][-1]
                     for test in self.metrics["test"].keys()
                 }
 
@@ -196,7 +196,10 @@ class TrainingSessionV0(TrainingSession):
                 break
 
         self.log_print("Training completed.")
-        self.log_print(f"Highest metrics: {self.highest_metrics}")
+        for test, metrics in self.highest_metrics.items():
+            self.log_print(
+                f"{test}: Acc: {metrics['accuracy']:.4f}, Top 1: {metrics['top_1_accuracy']:.4f}, Top 5: {metrics['top_5_accuracy']:.4f}, Top 10: {metrics['top_10_accuracy']:.4f}"
+            )
 
     def run_batch(self, batch: AudioBatch, train: bool) -> tp.Dict[str, float]:
         """
