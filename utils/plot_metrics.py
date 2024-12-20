@@ -235,20 +235,27 @@ def display_best_performance_barchart(
     """
     Displays a bar chart of the best (maximum) test performance across different test subsets
     for multiple experiments (studies). Each test metric gets its own subplot. The x-axis
-    represents the given test subsets (e.g., 'unseen sub', 'unseen task', 'unseen both'), and
-    each study's best score is shown side-by-side in a grouped bar format.
+    represents the given test subsets, and each study's best score is shown side-by-side in a grouped bar.
+
+    Now updated to replicate the training logic:
+    We first determine the "best epoch" by summing a chosen metric (e.g., top_10_accuracy)
+    across all test subsets and identifying the epoch with the highest sum. We then take that epoch's values
+    for all requested test metrics.
 
     Arguments:
         studies: A dictionary where keys are titles (labels) for the experiments and
                  values are paths to the corresponding saved training sessions (containing metrics.pt).
-        test_metrics: A list of test metrics to consider.
+        test_metrics: A list of test metrics to consider for plotting.
         test_subsets: A list of test subsets (categories) to plot on the x-axis.
     """
 
-    # Check input validity
     if len(test_metrics) == 0 or len(test_subsets) == 0:
         print("No test metrics or test subsets provided.")
         return
+
+    # This is the metric we use to determine the best epoch, similar to the training loop.
+    # You can change it if you use a different metric to select the best epoch.
+    summation_metric = "top_10_accuracy"
 
     # Try to use seaborn-whitegrid style; if not available, revert to default
     try:
@@ -259,7 +266,7 @@ def display_best_performance_barchart(
         )
         plt.style.use("default")
 
-    # Configure fonts and style for a compact, paper-friendly figure
+    # Configure fonts and style
     mpl.rcParams.update(
         {
             "font.size": 18,
@@ -275,85 +282,112 @@ def display_best_performance_barchart(
     # Prepare figure with one subplot per test metric
     n_metrics = len(test_metrics)
     fig, axes = plt.subplots(1, n_metrics, figsize=(6 * n_metrics, 5), squeeze=False)
-    axes = axes[0]  # since we got (1, n) shape, select the row
+    axes = axes[0]  # (1, n) shape, select the row
 
-    # Number of categories and studies
     n_categories = len(test_subsets)
     study_titles = list(studies.keys())
     n_studies = len(study_titles)
 
-    # We'll load all data and store best performance in a dict of dicts:
-    # best_perf[metric][subset][study_title] = best value
+    # We'll store the best epoch performance for each study here:
+    # best_perf[metric][subset][study_title] = value at best epoch
     best_perf = {m: {s: {} for s in test_subsets} for m in test_metrics}
 
-    # Load the data
     for title, save_path in studies.items():
         metrics_path = os.path.join(save_path, "metrics.pt")
         if not os.path.exists(metrics_path):
             print(
                 f"Warning: No metrics found at {metrics_path} for '{title}'. Skipping."
             )
+            for tm in test_metrics:
+                for subset in test_subsets:
+                    best_perf[tm][subset][title] = np.nan
             continue
 
         data = torch.load(metrics_path)
         metrics = data.get("metrics", {})
         test_dict = metrics.get("test", {})
 
-        # For each requested test_subset and test_metric, find the best performance
+        # Check if we have data for all subsets
+        # We'll only consider epochs that appear consistently across subsets
+        # If a subset doesn't exist, mark as NaN
+        subset_data_lists = []
         for subset in test_subsets:
-            if subset not in test_dict:
-                # No data for this subset in this study
-                for tm in test_metrics:
-                    best_perf[tm][subset][title] = np.nan
-                continue
+            if subset in test_dict and len(test_dict[subset]) > 0:
+                subset_data_lists.append(test_dict[subset])
+            else:
+                # Missing or empty subset data
+                subset_data_lists.append([])
 
-            test_data_list = test_dict[subset]
-            if len(test_data_list) == 0:
-                # No test records for this subset in this study
-                for tm in test_metrics:
-                    best_perf[tm][subset][title] = np.nan
-                continue
-
-            # For each metric, find the best (max) value
+        # If any subset is empty, we can't find a proper best epoch; just NaN them out
+        if any(len(lst) == 0 for lst in subset_data_lists):
             for tm in test_metrics:
-                # Extract values for this metric if available
-                values = [m[tm] for m in test_data_list if tm in m]
-                if len(values) == 0:
-                    # This metric isn't available at all here
+                for subset in test_subsets:
                     best_perf[tm][subset][title] = np.nan
-                else:
-                    # Take the max as the best performance
-                    best_perf[tm][subset][title] = np.max(values)
+            continue
 
-    # Now plot the bar charts
-    bar_width = 0.8 / n_studies  # Divide the available space for each category
+        # All subsets have data; assume they're aligned by epoch index
+        # Find the best epoch by summing summation_metric across subsets
+        # Number of epochs:
+        n_epochs = len(subset_data_lists[0])
+
+        # Verify all subsets have the same number of epochs
+        if not all(len(lst) == n_epochs for lst in subset_data_lists):
+            print(
+                f"Warning: Inconsistent number of epochs across subsets for '{title}'. "
+                "This might indicate mismatched runs. Setting values to NaN."
+            )
+            for tm in test_metrics:
+                for subset in test_subsets:
+                    best_perf[tm][subset][title] = np.nan
+            continue
+
+        # Compute sum over subsets for each epoch
+        best_sum = -np.inf
+        best_epoch = 0
+        for e in range(n_epochs):
+            # Sum the summation_metric across all subsets at epoch e
+            current_sum = 0
+            valid = True
+            for lst in subset_data_lists:
+                val = lst[e].get(summation_metric, None)
+                if val is None:
+                    valid = False
+                    break
+                current_sum += val
+            if valid and current_sum > best_sum:
+                best_sum = current_sum
+                best_epoch = e
+
+        # Now best_epoch is the epoch with the highest sum of summation_metric
+        # Extract values for requested test_metrics from that epoch
+        for subset_i, subset in enumerate(test_subsets):
+            epoch_data = test_dict[subset][best_epoch]
+            for tm in test_metrics:
+                val = epoch_data.get(tm, np.nan)
+                best_perf[tm][subset][title] = val
+
+    # Now plot the bar charts using best_perf
+    bar_width = 0.8 / n_studies
     x_positions = np.arange(n_categories)
 
     for i, tm in enumerate(test_metrics):
         ax = axes[i]
-        # For each study, create a set of bars
         for j, study_title in enumerate(study_titles):
-            # Extract the performance values in the order of test_subsets
             vals = [
                 best_perf[tm][subset].get(study_title, np.nan)
                 for subset in test_subsets
             ]
-
-            # Positions for this study's bars
             offset = (j - (n_studies - 1) / 2) * bar_width
             bar_positions = x_positions + offset
             ax.bar(bar_positions, vals, width=bar_width, label=study_title)
 
         ax.set_xticks(x_positions)
-        # Format subsets nicely by replacing underscores
         formatted_subsets = [s.replace("_", " ").title() for s in test_subsets]
         ax.set_xticklabels(formatted_subsets, rotation=0)
-
         ax.set_title("Best " + tm.replace("_", " ").title())
         ax.set_ylabel(tm.replace("_", " ").title())
 
         if i == n_metrics - 1:
-            # Put legend in the last subplot or outside
             ax.legend(study_titles, loc="upper left", bbox_to_anchor=(1.0, 1.0))
 
     plt.tight_layout()
