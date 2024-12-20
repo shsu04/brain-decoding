@@ -114,6 +114,8 @@ class TrainingSessionV0(TrainingSession):
                 total=len(epoch_training_dataset), desc="Training Epoch " + str(epoch)
             )
 
+            all_metrics = []
+
             # Run each batch
             while True:
 
@@ -124,7 +126,7 @@ class TrainingSessionV0(TrainingSession):
                 try:
                     start_time = time.time()
                     results = self.run_batch(batch, train=True)
-                    self.metrics["train"].append(results)
+                    all_metrics.append(results)
 
                     # Don't print, just log
                     self.logger.info(
@@ -147,6 +149,12 @@ class TrainingSessionV0(TrainingSession):
 
                 pbar.update(1)
             pbar.close()
+
+            final_metrics = {
+                metric: sum([batch[metric] for batch in all_metrics]) / len(all_metrics)
+                for metric in all_metrics[0].keys()
+            }
+            self.metrics["train"].append(final_metrics)
 
             # Testing
             try:
@@ -425,6 +433,8 @@ class TrainingSessionV0(TrainingSession):
 
             acc, top_1, top_5, top_10, perplexity = 0, 0, 0, 0, 0
 
+            all_metrics = []
+
             while True:
 
                 batch = test_dataloader[test].get_recording()
@@ -436,7 +446,7 @@ class TrainingSessionV0(TrainingSession):
                     start_time = time.time()
 
                     results = self.run_batch(batch, train=False)
-                    self.metrics["test"][test].append(results)
+                    all_metrics.append(results)
 
                     # Log results
                     self.logger.info(
@@ -463,6 +473,12 @@ class TrainingSessionV0(TrainingSession):
                     )
                     test_sizes[test] -= 1
                     continue
+
+            final_metrics = {
+                metric: sum([batch[metric] for batch in all_metrics]) / len(all_metrics)
+                for metric in all_metrics[0].keys()
+            }
+            self.metrics["test"][test].append(final_metrics)
 
             self.log_print(
                 f"Test {test} completed. Accuracy: {acc/test_sizes[test]:.4f}, Top 1: {top_1/test_sizes[test]:.4f}, Top 5: {top_5/test_sizes[test]:.4f}, Top 10: {top_10/test_sizes[test]:.4f}, Perplexity: {perplexity/test_sizes[test]:.4f}"

@@ -313,8 +313,8 @@ class AudioBatchFetcher(BatchFetcher):
                     self.window_stride, self.window_stride + self.max_random_shift
                 )  # some randomness
 
-                # self.seed += 1
-                # np.random.seed(self.seed)
+                self.seed += 1
+                np.random.seed(self.seed)
 
         return audio_window_timestamps, brain_window_timestamps
 
