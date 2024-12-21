@@ -3,6 +3,7 @@
 #
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
+
 from tempfile import tempdir
 import typing as tp
 import torch
@@ -17,7 +18,7 @@ from .common import (
     ChannelDropout,
 )
 from .channel_merger import ChannelMerger
-from .quantizer import Quantizer, VQQuantizer, GumbelQuantizer
+from .quantizer import VQQuantizer, GumbelQuantizer
 from .rnn import RNNEncoder, TransformerDecoder
 from losses import CLIPLoss
 
@@ -268,65 +269,62 @@ class SimpleConv(nn.Module):
             torch.Tensor -- mel spectrogram of shape [B, mel_bins, T], UNSHIFTED.
         """
 
-        length = sum(x[i].shape[-1] for i in range(len(x)))
+        x_aggregated = []
+        condition_indices_map = {cond_type: [] for cond_type in self.condition_to_idx}
 
-        x_aggregated, attention_mask = [], None
+        attention_mask = None
 
-        # Loop through the list of inputs and conditions
+        # Merge and gather condition indices per batch
         for i in range(len(x)):
 
-            # We ignore mel since its only taken after x is concatted.
             x_i, recording_i, conditions_i = x[i], recording[i], conditions[i]
-
-            # # For transformer later, to not attend to padding time steps, of shape [B, T]
-            # if self.rnn_encoders:
-            #     mask_shape_tensor = x_i.clone().transpose(1, 2)  # [B, T, C]
-            #     sequence_condition = mask_shape_tensor.sum(dim=2) == 0  # [B, T]
-            #     attention_mask_i = (
-            #         sequence_condition  # True for padding positions (to be masked)
-            #     )
-            #     attention_mask_i = attention_mask_i.to(x.device)
-            # else:
-            #     attention_mask_i = None
-            # AGGREGATE MASKS AFTER LOOP
-            # Leave this for now, until batch length is fixed from fetcher.
 
             if self.dropout is not None:
                 x_i = self.dropout(x=x_i, recording=recording_i)
 
+            # Merger, all batches onwards should have same number of channels
             if self.merger is not None:
-
                 if self.config.merger_conditional is not None:
-                    assert (
-                        self.config.merger_conditional in conditions_i.keys()
-                    ), f"The merger conditional type {self.config.merger_conditional} must be in the conditions"
-                    condition_i = conditions_i[self.config.merger_conditional]
+                    cond_name = conditions_i.get(
+                        self.config.merger_conditional, "unknown"
+                    )
                 else:
-                    condition_i = None
+                    cond_name = None
+                x_i = self.merger(x=x_i, recording=recording_i, condition=cond_name)
 
-                x_i = self.merger(
-                    x=x_i,
-                    recording=recording_i,
-                    condition=condition_i,
-                )
-
-            if self.initial_batch_norm is not None:
-                x_i = self.initial_batch_norm(x_i)
-
-            if self.initial_linear is not None:
-                x_i = self.initial_linear(x_i)
-
-            if self.conditional_layers is not None:
-                for cond_type, cond_layer in self.conditional_layers.items():
-                    assert (
-                        cond_type in conditions_i.keys()
-                    ), f"The conditional type {cond_type} must be in the conditions"
-                    x_i = cond_layer(x_i, condition=conditions_i[cond_type])
+            # Gather condition indices, one per condition type
+            for cond_type in self.condition_to_idx:
+                c_str = conditions_i.get(cond_type, "unknown")  # name
+                idx = self.condition_to_idx[cond_type].get(
+                    c_str, self.condition_to_idx[cond_type]["unknown"]
+                )  # index
+                index_tensor = torch.full(
+                    (x_i.size(0),), idx, dtype=torch.long, device=x_i.device
+                )  # [B_i]
+                condition_indices_map[cond_type].append(index_tensor)
 
             x_aggregated.append(x_i)
 
-        # Aggregation, at this point channels numbers are identical.
-        x, mel = torch.concat(x_aggregated, dim=0), torch.concat(mel, dim=0)
+        # CONCATENATE BATCHES
+        x = torch.cat(x_aggregated, dim=0)  # [B_i * i, C, T]
+
+        condition_indices_map = {
+            cond_type: torch.cat(indices, dim=0)
+            for cond_type, indices in condition_indices_map.items()
+        }  # Each cond type has a tensor of indices [B_i * i] = [B]
+
+        if mel is not None:
+            mel = torch.cat(mel, dim=0)  # [B_i * i, mel_bins, T]
+
+        if self.initial_batch_norm is not None:
+            x_i = self.initial_batch_norm(x_i)
+
+        if self.initial_linear is not None:
+            x_i = self.initial_linear(x_i)
+
+        if self.conditional_layers is not None:
+            for cond_type, cond_layer in self.conditional_layers.items():
+                x = cond_layer(x, condition_indices_map[cond_type])
 
         # CNN
         x = self.encoders(x)  # [B, C, T]
@@ -341,27 +339,27 @@ class SimpleConv(nn.Module):
                 )  # [B, C, T]
 
             if self.quantizer:
-
                 quantized, quantizer_metrics = self.quantizer(x)  # [B, C, T]
-
                 if self.config.transformer_input == "concat":
                     x = torch.cat([x, quantized], dim=1)  # [B, 2C, T]
                 elif self.config.transformer_input == "quantized":
                     x = quantized
 
+            # Leave this for now until recordings come with attn mask
+            attention_mask = None
             x = self.rnn_encoders(x, attn_mask=attention_mask)  # [B, C, T]
 
             if self.transformer_decoders:
                 if train:
                     assert (
                         mel is not None
-                    ), "Mel spectrogram must be provided for training"
+                    ), "Mel spectrogram must be provided for decoder training"
 
-                    (b_1, _, t_1), (b_2, _, t_2) = x.shape, mel.shape
-
-                    assert (
-                        b_1 == b_2 and t_1 == t_2
-                    ), f"Batch size and time steps must match. {b_1} != {b_2} or {t_1} != {t_2}"
+                    (b_1, c_1, t_1), (b_2, mel_bins, t_2) = x.shape, mel.shape
+                    assert b_1 == b_2 and t_1 == t_2, (
+                        f"Encoder shape [B={b_1},C={c_1},T={t_1}] does not match "
+                        f"decoder shape [B={b_2},mel={mel_bins},T={t_2}]"
+                    )
 
                     # Shift mel spectrogram to the right
                     mel = F.pad(mel, (1, 0), "constant", 0)[
@@ -371,9 +369,10 @@ class SimpleConv(nn.Module):
                         mel=mel, encoder_output=x, src_mask=attention_mask
                     )  # [B, C, T]
 
-                # Inference with auto-regressive decoding
                 else:
+                    # Inference with auto-regressive decoding
                     self.transformer_decoders.eval()
+
                     with torch.no_grad():
 
                         mel_bins = self.transformer_decoders.mel_bins
@@ -396,16 +395,16 @@ class SimpleConv(nn.Module):
 
                         # [B, mel_bins, T + 1] -> [B, mel_bins, T]
                         x = mel[..., 1:]
-                        decoder_inference = True
 
-        # Final projection, except when it is alreay done in the decoder
+                    decoder_inference = True
+
+        # 7) Final projection (unless the decoder already produced x)
         if not decoder_inference:
             x = self.final(x)  # [B, C, T]
 
             if self.config.mel_normalization:
                 x = self.whisper_normalization(x)
 
-        assert x.shape[-1] == length
         return x, quantizer_metrics
 
     def whisper_normalization(self, x: torch.Tensor):

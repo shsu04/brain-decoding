@@ -12,7 +12,8 @@ from studies.study import Recording
 
 
 class PositionGetter:
-    INVALID = -0.1
+    # definitely out of range regardless of scaling type
+    INVALID = -2.0
 
     def __init__(
         self, dim: int = None, proj: bool = False, scaling: str = "midpoint"
@@ -160,29 +161,36 @@ class ChannelDropout(nn.Module):
         B, C, T = x.shape
 
         # Mask out invalid channels
-        positions = self.position_getter.get_positions(x, recording)
-        valid = (~self.position_getter.is_invalid(positions)).float()
+        positions = self.position_getter.get_positions(x, recording)  # [B, C, dim]
+        valid_mask = ~self.position_getter.is_invalid(positions)  # [B, C]
 
-        x = x * valid[:, :, None]
+        x = x * valid_mask.unsqueeze(-1)  # [B, C, 1]
 
         if self.training:
 
             # Spatial dropout by random center and radius
             center_to_ban = torch.rand(self.position_getter.dim, device=x.device)
-            kept = (positions - center_to_ban).norm(dim=-1) > self.dropout
-            x = x * kept.float()[:, :, None]
+            dist = (positions - center_to_ban).norm(dim=-1)
+
+            # Keep channels outside the dropout radius or invalid
+            kept = (dist > self.dropout) | ~valid_mask  # [B, C]
+
+            # Zero out channels for dropout
+            x = x * kept.unsqueeze(-1).float()
 
             # Rescale by probability of being kept over n_tests
-            proba_kept = torch.zeros(B, C, device=x.device)
             n_tests = 100
+            prob_kept = torch.zeros_like(kept, dtype=torch.float)
 
             for _ in range(n_tests):
                 center_to_ban = torch.rand(self.position_getter.dim, device=x.device)
-                kept = (positions - center_to_ban).norm(dim=-1) > self.dropout
-                proba_kept += kept.float() / n_tests
+                dist = (positions - center_to_ban).norm(dim=-1)
+                tmp_kept = (dist > self.dropout) | ~valid_mask
+                prob_kept += tmp_kept.float() / n_tests
 
             # Rescale by inverse probability of being kept
-            x = x / (1e-8 + proba_kept[:, :, None])
+            x = x / (prob_kept.unsqueeze(-1) + 1e-8)
+
         return x
 
 
@@ -207,12 +215,17 @@ class ConditionalLayers(nn.Module):
     def trained_indices_list(self):
         return list(self.trained_indices)
 
-    def forward(self, x: torch.Tensor, condition: str) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        condition: tp.Union[str, torch.LongTensor],
+    ) -> torch.Tensor:
         """Applies a conditional linear transformation to the input tensor.
 
         Arguments:
             x -- input tensor with shape [B, C, T]
-            condition -- string specifying condition, can be "mean"
+            condition -- string specifying condition or selected indices of shape [B]
+                This is different to channel merger as merging occurs before concatenation.
 
         Returns:
             torch.Tensor -- output tensor with shape [B, C, T]
@@ -220,27 +233,31 @@ class ConditionalLayers(nn.Module):
         S, C, D = self.weights.shape
         B, C, T = x.shape
 
-        if condition == "mean" and len(self.trained_indices) > 0:
-            weights = (
-                torch.stack([self.weights[self.trained_indices_list]])
-                .mean(dim=0)
-                .expand(B, -1, -1)
-                .to(x.device)
-            )
-        else:
-            # Expand cond to shape B
-            if condition not in self.conditions.keys():
+        # If a single condition string, fallback to old logic:
+        if isinstance(condition, str):
+            if condition not in self.conditions:
                 index = self.conditions["unknown"]
             else:
                 index = self.conditions[condition]
                 if self.training:
                     self.trained_indices.add(index)
+            w = self.weights[index]  # [C, D]
+            # [B, C, T] x [C, D] => [B, D, T]
+            return torch.einsum("bct,cd->bdt", x, w)
 
-            # Gather weight matrices for each condition
-            conditions = torch.full((B,), index, dtype=torch.long).to(x.device)
-            weights = self.weights.gather(0, conditions.view(-1, 1, 1).expand(-1, C, D))
+        # Otherwise, we assume condition is a LongTensor of shape [B]
+        assert (
+            condition.dim() == 1 and condition.shape[0] == B
+        ), f"condition indices must be [B], got {condition.shape}"
 
-        return torch.einsum("bct,bcd->bdt", x, weights)
+        # Add to trained indices
+        if self.training:
+            unique_ids = condition.unique()
+            for idx in unique_ids.tolist():
+                self.trained_indices.add(int(idx))
+
+        W = self.weights[condition]  # [B, C, D]
+        return torch.einsum("bct,bcd->bdt", x, W)  # [B, D, T]
 
     def __repr__(self):
         S, C, D = self.weights.shape
