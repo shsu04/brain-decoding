@@ -1,6 +1,8 @@
 from torch import nn
 import torch
 import math
+from torchaudio.models import Conformer
+
 
 class SinusoidalPositionalEncoding(nn.Module):
     def __init__(self, d_model: int, max_len: int = 5000):
@@ -86,9 +88,9 @@ class TransformerEmbedding(nn.Module):
         return self.dropout(x)
 
 
-class TransformerEncoder(nn.Module):
+class RNNEncoder(nn.Module):
     """
-    Transformer encoder model for time series data with custom embedding options
+    Transformer / Conformer encoder model for time series data with custom embedding options
     Note, no final projection is done here. Optionally, concat a channel-reduced
     spectral embedding to the input features.
     """
@@ -100,40 +102,78 @@ class TransformerEncoder(nn.Module):
         dropout: float,
         layers: int,
         embedding: str,
+        rnn_type: str = "transformer",
+        # Conformer params
+        depthwise_conv_kernel_size: int = 31,
+        use_group_norm: bool = True,
+        convolution_first: bool = False,
     ):
         super().__init__()
+
+        assert rnn_type in [
+            "transformer",
+            "conformer",
+        ], f"rnn_type {rnn_type} not supported."
+
+        self.d_model = d_model
         self.embedding_name = embedding
         self.embedding = TransformerEmbedding(
             embedding=embedding, d_model=d_model, dropout=dropout
         )
-        self.encoders = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=d_model,
-                nhead=nhead,
-                batch_first=True,
-                dropout=dropout,
-                dim_feedforward=4 * d_model,
-            ),
-            num_layers=layers,
-        )
-        self.d_model = d_model
+        self.rnn_type = rnn_type
+
+        if rnn_type == "transformer":
+            self.encoders = nn.TransformerEncoder(
+                nn.TransformerEncoderLayer(
+                    d_model=d_model,
+                    nhead=nhead,
+                    batch_first=True,
+                    dropout=dropout,
+                    dim_feedforward=4 * d_model,
+                ),
+                num_layers=layers,
+            )
+        else:
+            self.encoders = Conformer(
+                input_dim=d_model,
+                num_heads=nhead,
+                ffn_dim=4 * d_model,
+                num_layers=layers,
+                depthwise_conv_kernel_size=depthwise_conv_kernel_size,
+                use_group_norm=use_group_norm,
+                convolution_first=convolution_first,
+            )
 
         total_params = sum(p.numel() for p in self.parameters())
         print(
-            f"TransformerEncoder initialized with {layers} layers, {d_model} d_model, {nhead} nhead"
+            f"RNNEncoder initialized as {rnn_type} with {layers} layers, {d_model} d_model, {nhead} nhead"
         )
         print(f"\tEmbedding: {embedding}, params: {total_params}")
 
     def forward(self, x: torch.Tensor, attn_mask=None):
         """x: [B, C, T], attn_mask: [B, T]"""
         x = self.embedding(x.transpose(1, 2))  # [B, C, T] -> [B, T, C]
-        x = self.encoders(
-            x,
-            mask=None,
-            src_key_padding_mask=attn_mask,
-            is_causal=False,
-        )  # [B, T, C]
+
+        if self.rnn_type == "transformer":
+            x = self.encoders(
+                x,
+                mask=None,
+                src_key_padding_mask=attn_mask,
+                is_causal=False,
+            )  # [B, T, C]
+        else:
+            if attn_mask is None:
+                lengths = torch.full((x.shape[0],), x.shape[1], dtype=torch.long).to(
+                    x.device
+                )
+            else:
+                # Transform mask [B, T] -> [B,]
+                lengths = (attn_mask == False).sum(dim=1).to(torch.int32).to(x.device)
+
+            x = self.encoders(x, lengths=lengths)  # [B, T, C]
+
         x = x.transpose(1, 2)  # [B, C, T]
+
         return x
 
 

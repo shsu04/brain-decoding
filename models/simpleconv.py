@@ -18,7 +18,7 @@ from .common import (
 )
 from .channel_merger import ChannelMerger
 from .quantizer import Quantizer, VQQuantizer, GumbelQuantizer
-from .transformer import TransformerEncoder, TransformerDecoder
+from .rnn import RNNEncoder, TransformerDecoder
 from losses import CLIPLoss
 
 
@@ -186,12 +186,17 @@ class SimpleConv(nn.Module):
                 if self.config.transformer_input == "concat":
                     final_channels *= 2
 
-            self.transformer_encoders = TransformerEncoder(
+            self.rnn_encoders = RNNEncoder(
                 d_model=final_channels,
                 nhead=self.config.transformer_encoder_heads,
                 dropout=self.config.conv_dropout,
                 layers=self.config.transformer_encoder_layers,
                 embedding=self.config.transformer_encoder_emb,
+                rnn_type=self.config.rnn_type,
+                # Conformer params
+                depthwise_conv_kernel_size=self.config.depthwise_conv_kernel_size,
+                use_group_norm=self.config.use_group_norm,
+                convolution_first=self.config.convolution_first,
             )
 
         # Final transformer decoder
@@ -261,7 +266,7 @@ class SimpleConv(nn.Module):
         length = x.shape[-1]
 
         # For transformer later, to not attend to padding time steps, of shape [B, T]
-        if self.transformer_encoders:
+        if self.rnn_encoders:
             mask_shape_tensor = x.clone().transpose(1, 2)  # [B, T, C]
             sequence_condition = mask_shape_tensor.sum(dim=2) == 0  # [B, T]
             attention_mask = (
@@ -308,7 +313,7 @@ class SimpleConv(nn.Module):
 
         # Transformers
         decoder_inference, quantizer_metrics = False, None
-        if self.transformer_encoders:
+        if self.rnn_encoders:
 
             if self.layer_norm:
                 x = self.layer_norm(x.transpose(1, 2)).transpose(  # [B, T, C]
@@ -324,7 +329,7 @@ class SimpleConv(nn.Module):
                 elif self.config.transformer_input == "quantized":
                     x = quantized
 
-            x = self.transformer_encoders(x, attn_mask=attention_mask)  # [B, C, T]
+            x = self.rnn_encoders(x, attn_mask=attention_mask)  # [B, C, T]
 
             if self.transformer_decoders:
                 if train:

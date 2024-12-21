@@ -54,6 +54,11 @@ class SimpleConvConfig(Config):
         transformer_encoder_emb: str = "groupconv",
         transformer_encoder_layers: int = 0,
         transformer_encoder_heads: int = 0,
+        # Conformer encoder variant
+        rnn_type: str = "transformer",
+        depthwise_conv_kernel_size: int = 31,
+        use_group_norm: bool = True,
+        convolution_first: bool = False,
         # Transformer Decoders
         transformer_decoder_emb: str = "groupconv",
         transformer_decoder_layers: int = 0,
@@ -109,6 +114,11 @@ class SimpleConvConfig(Config):
         self.transformer_encoder_emb = transformer_encoder_emb
         self.transformer_encoder_layers = transformer_encoder_layers
         self.transformer_encoder_heads = transformer_encoder_heads
+        # Conformer variant
+        self.rnn_type = rnn_type
+        self.depthwise_conv_kernel_size = depthwise_conv_kernel_size
+        self.use_group_norm = use_group_norm
+        self.convolution_first = convolution_first
         # Transformer Decoders
         self.transformer_decoder_emb = transformer_decoder_emb
         self.transformer_decoder_layers = transformer_decoder_layers
