@@ -265,16 +265,18 @@ class SimpleConv(nn.Module):
         """
         length = x.shape[-1]
 
-        # For transformer later, to not attend to padding time steps, of shape [B, T]
-        if self.rnn_encoders:
-            mask_shape_tensor = x.clone().transpose(1, 2)  # [B, T, C]
-            sequence_condition = mask_shape_tensor.sum(dim=2) == 0  # [B, T]
-            attention_mask = (
-                sequence_condition  # True for padding positions (to be masked)
-            )
-            attention_mask = attention_mask.to(x.device)
-        else:
-            attention_mask = None
+        # # For transformer later, to not attend to padding time steps, of shape [B, T]
+        # if self.rnn_encoders:
+        #     mask_shape_tensor = x.clone().transpose(1, 2)  # [B, T, C]
+        #     sequence_condition = mask_shape_tensor.sum(dim=2) == 0  # [B, T]
+        #     attention_mask = (
+        #         sequence_condition  # True for padding positions (to be masked)
+        #     )
+        #     attention_mask = attention_mask.to(x.device)
+        # else:
+        #     attention_mask = None
+
+        attention_mask = None  # Leave this for now.
 
         if self.dropout is not None:
             x = self.dropout(x=x, recording=recording)
