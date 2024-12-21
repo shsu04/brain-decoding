@@ -42,10 +42,21 @@ class ChannelMerger(nn.Module):
             self.embedding = FourierEmbedding(dimension=embedding_dim)
         elif embedding_type == "linear":
             self.embedding = nn.Sequential(
-                nn.Linear(layout_dim, embedding_dim), nn.Tanh()
+                nn.Linear(layout_dim, embedding_dim),
+                nn.ReLU(),
+            )
+        elif embedding_type == "mlp":
+            self.embedding = nn.Sequential(
+                nn.Linear(layout_dim, embedding_dim),
+                nn.ReLU(),
+                nn.Linear(embedding_dim, embedding_dim),
+                nn.ReLU(),
             )
         else:
             raise ValueError(f"Unknown embedding type: {embedding_type}")
+
+        self.layer_norm = nn.LayerNorm(embedding_dim)
+        self.temperature = nn.Parameter(torch.tensor(1.0))
 
         # Learnable heads for each condition
         self.conditions = conditions
@@ -115,15 +126,14 @@ class ChannelMerger(nn.Module):
             torch.Tensor -- output tensor with shape [B, merger_channels, T]
         """
         B, C, T = x.shape
-
-        positions = self.position_getter.get_positions(x, recording)  # [B, C, 2]
+        positions = self.position_getter.get_positions(x, recording)  # [B, C, dim]
 
         # Mask invalid channels, [B, C]
         score_offset = torch.zeros(B, C, device=x.device)
         score_offset[self.position_getter.is_invalid(positions)] = float("-inf")
 
         # Spatial embedding, [B, C, dim] -> [B, C, emb_dim]
-        embedding = self.embedding(positions)
+        embedding = self.layer_norm(self.embedding(positions))
 
         # Dropout around random center's radius
         if self.training and self.dropout:
@@ -137,7 +147,9 @@ class ChannelMerger(nn.Module):
         heads = self.get_heads(B=B, condition=condition, device=x.device)
 
         # How well pos emb aligns with learnable heads
-        scores = torch.einsum("bcd,bod->boc", embedding, heads)  # [B, C, ch_out]
+        scores = (
+            torch.einsum("bcd,bod->boc", embedding, heads) / self.temperature
+        )  # [B, C, ch_out]
         scores += score_offset[:, None]  # mask
 
         # Create each output channel as a weighted sum of input channels

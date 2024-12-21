@@ -6,7 +6,7 @@ import torch.nn.functional as F
 class CLIPLoss(nn.Module):
     def __init__(self):
         super().__init__()
-        self.temperature = nn.Parameter(torch.tensor(0.7))
+        self.temperature = nn.Parameter(torch.tensor(1.0))
 
     def forward(self, x_1: torch.Tensor, x_2: torch.Tensor):
         """
@@ -21,7 +21,7 @@ class CLIPLoss(nn.Module):
         inv_norms = 1 / (1e-8 + x_1.norm(dim=(1, 2), p=2))  # [B]
 
         # Compute similarity, [B, C, T] x [B, C, T] -> [B, B]
-        logits = torch.einsum("bct,dct,d->bd", x_1, x_2, inv_norms) * self.temperature
+        logits = torch.einsum("bct,dct,d->bd", x_1, x_2, inv_norms) / self.temperature
 
         # Diagonal targets
         targets = torch.arange(x_1.size(0), device=x_1.device)
