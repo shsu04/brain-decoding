@@ -30,6 +30,7 @@ class TrainingSessionV0(TrainingSession):
         clear_cache: bool = False,
         cache_enabled: bool = True,
         max_cache_size: int = 100,
+        cache_name: str = "cache",
     ):
         """
         Initializes a training session with the provided configuration and data.
@@ -55,6 +56,7 @@ class TrainingSessionV0(TrainingSession):
             clear_cache=clear_cache,
             cache_enabled=cache_enabled,
             max_cache_size=max_cache_size,
+            cache_name=cache_name,
         )
 
         self.model = SimpleConv(self.config.brain_encoder_config)
