@@ -17,6 +17,7 @@ class StudyFactory:
         path: str,
         cache_enabled: bool,
         max_cache_size: int,
+        cache_name: str,
     ) -> Study:
         if study_name not in STUDIES:
             raise ValueError(f"Study {study_name} not found")
@@ -25,5 +26,5 @@ class StudyFactory:
             batch_type=batch_type,
             cache_enabled=cache_enabled,
             max_cache_size=max_cache_size,
-            cache_name=study_name,
+            cache_name=cache_name,
         )
