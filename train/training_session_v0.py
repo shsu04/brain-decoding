@@ -292,11 +292,11 @@ class TrainingSessionV0(TrainingSession):
 
                     # Forward pass
                     (output, quantizer_metrics) = self.model(
-                        x=brain_batch,
-                        recording=recording,
-                        conditions=conditions,
-                        mel=audio_batch,
-                        train=True,
+                        x=[brain_batch],
+                        recording=[recording],
+                        conditions=[conditions],
+                        mel=[audio_batch],
+                        train=train,
                     )  # [B, C, T]
 
                     # Compute loss

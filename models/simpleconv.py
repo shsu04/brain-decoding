@@ -250,65 +250,83 @@ class SimpleConv(nn.Module):
 
     def forward(
         self,
-        x: torch.Tensor,
-        recording: Recording,
-        conditions: tp.Dict[str, str] = None,
-        mel: torch.Tensor = None,
+        x: tp.List[torch.Tensor],
+        recording: tp.List[Recording],
+        conditions: tp.List[tp.Dict[str, str]] = None,
+        mel: tp.List[torch.Tensor] = None,
         train: bool = False,
     ):
         """
+        Amended version to work with lists of these parameters to ensure batches from
+        different studies can be incorperated. This allows backwards compatibility with
+        phase1 experiements with minimal changes to TrainingSessionV0.
+
         Arguments:
             x -- meg scans of shape [B, C, T]
             recording -- Recording object with the layout and subject index
             conditions -- dictionary of conditions_type : condition_name
             torch.Tensor -- mel spectrogram of shape [B, mel_bins, T], UNSHIFTED.
         """
-        length = x.shape[-1]
 
-        # # For transformer later, to not attend to padding time steps, of shape [B, T]
-        # if self.rnn_encoders:
-        #     mask_shape_tensor = x.clone().transpose(1, 2)  # [B, T, C]
-        #     sequence_condition = mask_shape_tensor.sum(dim=2) == 0  # [B, T]
-        #     attention_mask = (
-        #         sequence_condition  # True for padding positions (to be masked)
-        #     )
-        #     attention_mask = attention_mask.to(x.device)
-        # else:
-        #     attention_mask = None
+        length = sum(x[i].shape[-1] for i in range(len(x)))
 
-        attention_mask = None  # Leave this for now.
+        x_aggregated, attention_mask = [], None
 
-        if self.dropout is not None:
-            x = self.dropout(x=x, recording=recording)
+        # Loop through the list of inputs and conditions
+        for i in range(len(x)):
 
-        if self.merger is not None:
+            # We ignore mel since its only taken after x is concatted.
+            x_i, recording_i, conditions_i = x[i], recording[i], conditions[i]
 
-            if self.config.merger_conditional is not None:
-                assert (
-                    self.config.merger_conditional in conditions.keys()
-                ), f"The merger conditional type {self.config.merger_conditional} must be in the conditions"
-                condition = conditions[self.config.merger_conditional]
-            else:
-                condition = None
+            # # For transformer later, to not attend to padding time steps, of shape [B, T]
+            # if self.rnn_encoders:
+            #     mask_shape_tensor = x_i.clone().transpose(1, 2)  # [B, T, C]
+            #     sequence_condition = mask_shape_tensor.sum(dim=2) == 0  # [B, T]
+            #     attention_mask_i = (
+            #         sequence_condition  # True for padding positions (to be masked)
+            #     )
+            #     attention_mask_i = attention_mask_i.to(x.device)
+            # else:
+            #     attention_mask_i = None
+            # AGGREGATE MASKS AFTER LOOP
+            # Leave this for now, until batch length is fixed from fetcher.
 
-            x = self.merger(
-                x=x,
-                recording=recording,
-                condition=condition,
-            )
+            if self.dropout is not None:
+                x_i = self.dropout(x=x_i, recording=recording_i)
 
-        if self.initial_batch_norm is not None:
-            x = self.initial_batch_norm(x)
+            if self.merger is not None:
 
-        if self.initial_linear is not None:
-            x = self.initial_linear(x)
+                if self.config.merger_conditional is not None:
+                    assert (
+                        self.config.merger_conditional in conditions_i.keys()
+                    ), f"The merger conditional type {self.config.merger_conditional} must be in the conditions"
+                    condition_i = conditions_i[self.config.merger_conditional]
+                else:
+                    condition_i = None
 
-        if self.conditional_layers is not None:
-            for cond_type, cond_layer in self.conditional_layers.items():
-                assert (
-                    cond_type in conditions.keys()
-                ), f"The conditional type {cond_type} must be in the conditions"
-                x = cond_layer(x, condition=conditions[cond_type])
+                x_i = self.merger(
+                    x=x_i,
+                    recording=recording_i,
+                    condition=condition_i,
+                )
+
+            if self.initial_batch_norm is not None:
+                x_i = self.initial_batch_norm(x_i)
+
+            if self.initial_linear is not None:
+                x_i = self.initial_linear(x_i)
+
+            if self.conditional_layers is not None:
+                for cond_type, cond_layer in self.conditional_layers.items():
+                    assert (
+                        cond_type in conditions_i.keys()
+                    ), f"The conditional type {cond_type} must be in the conditions"
+                    x_i = cond_layer(x_i, condition=conditions_i[cond_type])
+
+            x_aggregated.append(x_i)
+
+        # Aggregation, at this point channels numbers are identical.
+        x, mel = torch.concat(x_aggregated, dim=0), torch.concat(mel, dim=0)
 
         # CNN
         x = self.encoders(x)  # [B, C, T]
