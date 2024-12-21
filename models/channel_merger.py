@@ -40,9 +40,6 @@ class ChannelMerger(nn.Module):
         if embedding_type == "fourier":
             assert layout_dim == 2 and layout_scaling == "minmax"
             self.embedding = FourierEmbedding(dimension=embedding_dim)
-        elif embedding_type == "spherical":
-            assert layout_dim == 3 and layout_scaling == "midpoint"
-            self.embedding = SphericalEmbedding(dimension=embedding_dim)
         elif embedding_type == "linear":
             self.embedding = nn.Sequential(
                 nn.Linear(layout_dim, embedding_dim), nn.Tanh()
