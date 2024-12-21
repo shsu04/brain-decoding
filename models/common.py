@@ -273,13 +273,14 @@ class ConvSequence(nn.Module):
         kernel: int = 4,
         dilation_growth: int = 1,
         dilation_period: tp.Optional[int] = None,
-        stride: int = 2,
+        stride: int = 1,
         dropout: float = 0.0,
         decode: bool = False,
         batch_norm: bool = False,
         dropout_input: float = 0,
         glu: int = 0,
         activation: tp.Any = None,
+        half: bool = False,
     ) -> None:
         """
         Arguments:
@@ -296,6 +297,8 @@ class ConvSequence(nn.Module):
             dropout_input -- Dropout rate for input (default: {0})
             glu -- If > 0, uses GLU activation every `glu` layers (default: {0})
             activation -- Activation function (default: {None})
+            half_sr -- If True, uses stride 2 for second to last layer (default: {False})
+                This downsamples the input by 2x.
         """
 
         super().__init__()
@@ -329,7 +332,7 @@ class ConvSequence(nn.Module):
                 chin,
                 chout,
                 kernel,
-                stride,
+                stride if (not half and not (k == len(channels) - 3)) else 2,
                 pad,
                 dilation=dilation,
                 groups=1,
