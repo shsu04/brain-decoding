@@ -317,10 +317,10 @@ class SimpleConv(nn.Module):
             mel = torch.cat(mel, dim=0)  # [B_i * i, mel_bins, T]
 
         if self.initial_batch_norm is not None:
-            x_i = self.initial_batch_norm(x_i)
+            x = self.initial_batch_norm(x)
 
         if self.initial_linear is not None:
-            x_i = self.initial_linear(x_i)
+            x = self.initial_linear(x)
 
         if self.conditional_layers is not None:
             for cond_type, cond_layer in self.conditional_layers.items():
