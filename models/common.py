@@ -332,7 +332,7 @@ class ConvSequence(nn.Module):
                 chin,
                 chout,
                 kernel,
-                stride if (not half and not (k == len(channels) - 3)) else 2,
+                2 if (half and (k == len(channels) - 3)) else stride,
                 pad,
                 dilation=dilation,
                 groups=1,
@@ -360,7 +360,12 @@ class ConvSequence(nn.Module):
             # Add GLU layer if specified
             if glu and (k + 1) % glu == 0:
                 glu_layer = nn.Sequential(
-                    nn.Conv1d(chout, chout * 2, 1 + 2, padding=1),
+                    nn.Conv1d(
+                        in_channels=chout,
+                        out_channels=chout * 2,
+                        kernel_size=1 + 2,
+                        padding=1,
+                    ),
                     nn.GLU(dim=1),
                 )
                 nn.init.kaiming_uniform_(glu_layer[0].weight, a=0)
@@ -380,7 +385,7 @@ class ConvSequence(nn.Module):
                 x = x + old_x
 
             glu = self.glus[module_idx]
-
+            
             if glu is not None:
                 x = glu(x)
 
