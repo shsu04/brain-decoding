@@ -149,7 +149,7 @@ class SimpleConv(nn.Module):
         final_channels = conv_channel_sizes[-1]
 
         # Final transformer encoder
-        self.transformer_encoders, self.quantizer, self.layer_norm = False, False, False
+        self.rnn_encoders, self.quantizer, self.layer_norm = False, False, False
         if self.config.transformer_encoder_layers > 0:
 
             self.layer_norm = nn.LayerNorm(normalized_shape=final_channels)

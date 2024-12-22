@@ -73,7 +73,6 @@ class AudioBatchFetcher(BatchFetcher):
             new_freq -- new frequency to resample the brain data to
             delay -- delay to apply to the brain data
         """
-        assert audio_sample_rate // hop_length == new_freq
 
         self.notch_filter = notch_filter
         self.frequency_bands = frequency_bands
@@ -155,13 +154,10 @@ class AudioBatchFetcher(BatchFetcher):
                     + f" {brain_segments[list(self.frequency_bands.keys())[0]].shape[-1]}"
                 )
 
-            # B, and T mismatch between brain and audio
+            # B mismatch between brain and audio
             if (
                 brain_segments[list(self.frequency_bands.keys())[0]].shape[0]
                 != audio_segments.shape[0]
-            ) or (
-                brain_segments[list(self.frequency_bands.keys())[0]].shape[-1]
-                != audio_segments.shape[-1]
             ):
                 raise ValueError("Number of brain and audio windows do not match")
 
