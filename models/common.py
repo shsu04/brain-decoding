@@ -297,7 +297,7 @@ class ConvSequence(nn.Module):
             dropout_input -- Dropout rate for input (default: {0})
             glu -- If > 0, uses GLU activation every `glu` layers (default: {0})
             activation -- Activation function (default: {None})
-            half_sr -- If True, uses stride 2 for second to last layer (default: {False})
+            half -- If True, uses stride 2 for third to last layer (default: {False})
                 This downsamples the input by 2x.
         """
 
@@ -332,7 +332,7 @@ class ConvSequence(nn.Module):
                 chin,
                 chout,
                 kernel,
-                2 if (half and (k == len(channels) - 3)) else stride,
+                2 if (half and (k == len(channels) - 4)) else stride,
                 pad,
                 dilation=dilation,
                 groups=1,
@@ -385,7 +385,7 @@ class ConvSequence(nn.Module):
                 x = x + old_x
 
             glu = self.glus[module_idx]
-            
+
             if glu is not None:
                 x = glu(x)
 
