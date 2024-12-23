@@ -331,7 +331,7 @@ class ConvSequence(nn.Module):
             conv_layer = Conv(
                 chin,
                 chout,
-                kernel,
+                5 if (half and (k <= len(channels) - 4)) else kernel,
                 2 if (half and (k == len(channels) - 4)) else stride,
                 pad,
                 dilation=dilation,

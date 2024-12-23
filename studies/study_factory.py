@@ -4,7 +4,7 @@ from .study import Study
 
 STUDIES = {
     "gwilliams2023": Gwilliams2023,
-    "Armeini2022": Armeini2022,
+    "armeini2022": Armeini2022,
 }
 
 
