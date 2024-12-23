@@ -1,6 +1,4 @@
-from asyncio import tasks
 from itertools import product
-import json
 import os
 import copy
 import pathlib
@@ -8,14 +6,19 @@ import mne
 import mne_bids
 import numpy as np
 import pandas as pd
+
+
 from warnings import filterwarnings
 from .study import Study, Recording
 from .stimuli import Stimuli
+from .download import download_radboud, verify_manifest
 
 filterwarnings("ignore")
 
 
 class Armeini2022(Study):
+
+    paper_link = "https://www.nature.com/articles/s41597-022-01382-7"
 
     def __init__(
         self,
@@ -26,6 +29,15 @@ class Armeini2022(Study):
         cache_name: str = "cache",
     ):
         root_dir = os.path.join(os.getcwd(), path)
+
+        # Download
+        if not os.path.exists(root_dir):
+            download_bool = input(
+                f"{root_dir} not found. Do you want to download it? [y/n]: "
+            )
+            if download_bool == "y":
+                self.download(root_dir)
+
         assert os.path.exists(root_dir), f"{root_dir} does not exist"
 
         self.root_dir = root_dir
@@ -332,7 +344,6 @@ class Armeini2022(Study):
             "MZP01-4304",
         ]
 
-        self.source_link = "https://www.nature.com/articles/s41597-022-01382-7"
         self.batch_type = batch_type
         print(f"Loading {self.__class__.__name__} with batch type {self.batch_type}")
 
@@ -390,6 +401,21 @@ class Armeini2022(Study):
                     type=self.batch_type,
                 )
             )
+
+    def download(self, root_dir: str):
+        print(f"Downloading Armeini2022 data to {root_dir}...")
+        download_radboud(
+            root_dir=root_dir,
+            base_url="https://webdav.data.ru.nl",
+            repo_path="/dccn/DSC_3011085.05_995_v1/",
+        )
+        print("Downloaded Armeini2022, verifying MANIFEST...")
+        verify_manifest(
+            manifest_path=os.path.join(root_dir, "MANIFEST.txt"),
+            root_dir=root_dir,
+        )
+        print("MANIFEST verification complete.")
+        return
 
 
 class Armeini2022Recording(Recording):

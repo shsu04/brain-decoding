@@ -10,11 +10,14 @@ import pandas as pd
 from warnings import filterwarnings
 from .study import Study, Recording
 from .stimuli import Stimuli
+from download import download_osf
 
 filterwarnings("ignore")
 
 
 class Gwilliams2023(Study):
+
+    paper_link = "https://doi.org/10.1038/s41597-023-02752-5"
 
     def __init__(
         self,
@@ -25,6 +28,15 @@ class Gwilliams2023(Study):
         cache_name: str = "cache",
     ):
         root_dir = os.path.join(os.getcwd(), path)
+
+        # Download
+        if not os.path.exists(root_dir):
+            download_bool = input(
+                f"{root_dir} not found. Do you want to download it? [y/n]: "
+            )
+            if download_bool == "y":
+                self.download(root_dir)
+
         assert os.path.exists(root_dir), f"{root_dir} does not exist"
 
         self.root_dir = root_dir
@@ -255,7 +267,6 @@ class Gwilliams2023(Study):
             "MEG 208",
         ]
 
-        self.source_link = "https://doi.org/10.1038/s41597-023-02752-5"
         self.batch_type = batch_type
         print(f"Loading {self.__class__.__name__} with batch type {self.batch_type}")
 
@@ -313,6 +324,14 @@ class Gwilliams2023(Study):
                     type=self.batch_type,
                 )
             )
+
+    def download(self, root_dir: str):
+        """Downloads the data from the repository."""
+        # Download the data
+        print(f"Downloading Gwilliams2023 data to {root_dir}...")
+        download_osf(root_dir, project_ids=["ag3kj", "hqvm3", "u5327", "dr4wy"])
+        print("Downloaded Gwilliams2023.")
+        return
 
 
 class Gwilliams2023Recording(Recording):
