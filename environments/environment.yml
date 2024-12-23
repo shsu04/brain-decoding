@@ -38,4 +38,5 @@ dependencies:
     - ipywidgets
     - accelerate
     - seaborn
+    - osfclient
 
