@@ -9,7 +9,6 @@ downloaded_data/*
 compressed_data/*
 decompressed_data/*
 cache/*
-cache_1/*
 saves/*
 temp
 Miniconda3-latest-Linux-x86_64.sh
