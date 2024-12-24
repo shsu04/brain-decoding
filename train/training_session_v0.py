@@ -302,7 +302,9 @@ class TrainingSessionV0(TrainingSession):
                     # Compute loss
                     mse_loss = self.mse_loss(pred=output, target=audio_batch)
 
-                    clip_results = self.clip_loss(x_1=output, x_2=audio_batch)
+                    clip_results = self.clip_loss(
+                        x_1=output, x_2=audio_batch, top_k_percentage=True
+                    )
                     clip_loss, clip_metrics = (
                         clip_results["loss"],
                         clip_results["metrics"],

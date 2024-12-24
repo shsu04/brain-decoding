@@ -10,7 +10,7 @@ import pandas as pd
 from warnings import filterwarnings
 from .study import Study, Recording
 from .stimuli import Stimuli
-from download import download_osf
+from .download import download_osf
 
 filterwarnings("ignore")
 

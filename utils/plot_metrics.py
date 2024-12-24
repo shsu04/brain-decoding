@@ -4,6 +4,8 @@ import matplotlib as mpl
 import numpy as np
 import os
 import typing as tp
+from matplotlib.ticker import AutoMinorLocator
+import seaborn as sns
 
 
 def moving_average(values: tp.List[float], window_size: int) -> tp.List[float]:
@@ -56,6 +58,8 @@ def display_metrics(
             "Warning: 'seaborn-whitegrid' style is not available. Using default style."
         )
         plt.style.use("default")
+
+    sns.set_palette("tab20", len(studies))
 
     # Configure fonts and style for a compact, paper-friendly figure
     mpl.rcParams.update(
@@ -199,6 +203,10 @@ def display_metrics(
     # Set labels and titles for training metrics
     for i, tm in enumerate(train_metrics):
         ax = train_axes[i]
+
+        enable_fine_grid(ax)
+        ax.set_axisbelow(True)
+
         ax.set_ylabel(tm.replace("_", " ").title())
         ax.set_xlabel("Epoch (Train Recordings)")
         ax.set_title("Training " + tm.replace("_", " ").title())
@@ -206,12 +214,14 @@ def display_metrics(
     # Set labels and titles for testing metrics
     for j, tm in enumerate(test_metrics):
         ax = test_axes[j]
+
+        enable_fine_grid(ax)
+        ax.set_axisbelow(True)
+
         ax.set_ylabel(tm.replace("_", " ").title())
         ax.set_xlabel(f"Epoch {chosen_test_subset}")
         # Include the chosen subset in the title if available
         title_str = "Testing " + tm.replace("_", " ").title()
-        # if chosen_test_subset is not None:
-        #     title_str += f" - {chosen_test_subset}"
         ax.set_title(title_str)
 
     # Create a single combined legend to the right of all plots
@@ -222,15 +232,26 @@ def display_metrics(
     plt.tight_layout(rect=[0, 0, 0.85, 1])
     # Place the legend outside the plotting area
     plt.tight_layout(pad=2.0)
-    fig.legend(handles, labels, loc="upper left", bbox_to_anchor=(1.0, 0.5))
+    fig.legend(handles, labels, loc="center left", bbox_to_anchor=(1.0, 0.5))
 
     plt.show()
+
+
+def enable_fine_grid(ax):
+    """Enable major and minor axis grid"""
+    ax.grid(True, which="major", linestyle="-", linewidth=0.5, alpha=0.75)
+    ax.grid(True, which="minor", linestyle="--", linewidth=0.5, alpha=0.5)
+
+    # Turn on minor ticks for both axes
+    ax.xaxis.set_minor_locator(AutoMinorLocator())
+    ax.yaxis.set_minor_locator(AutoMinorLocator())
 
 
 def display_best_performance_barchart(
     studies: tp.Dict[str, str],
     test_metrics: tp.List[str],
     test_subsets: tp.List[str],
+    top_percent: bool = False,
 ):
     """
     Displays a bar chart of the best (maximum) test performance across different test subsets
@@ -265,6 +286,8 @@ def display_best_performance_barchart(
             "Warning: 'seaborn-whitegrid' style is not available. Using default style."
         )
         plt.style.use("default")
+
+    sns.set_palette("tab20", len(studies))
 
     # Configure fonts and style
     mpl.rcParams.update(
@@ -373,7 +396,7 @@ def display_best_performance_barchart(
     for i, tm in enumerate(test_metrics):
         ax = axes[i]
 
-        ax.grid(True, zorder=0)
+        enable_fine_grid(ax)
         ax.set_axisbelow(True)
 
         for j, study_title in enumerate(study_titles):
@@ -388,11 +411,18 @@ def display_best_performance_barchart(
         ax.set_xticks(x_positions)
         formatted_subsets = [s.replace("_", " ").title() for s in test_subsets]
         ax.set_xticklabels(formatted_subsets, rotation=0)
-        ax.set_title(tm.replace("_", " ").title())
-        ax.set_ylabel(tm.replace("_", " ").title())
+
+        title = tm.replace("_", " ").title()
+
+        # Fix the top % vs absolute values
+        if top_percent and title != "Accuracy":
+            title += " %"
+
+        ax.set_title(title)
+        ax.set_ylabel(title)
 
         if i == n_metrics - 1:
-            ax.legend(study_titles, loc="upper left", bbox_to_anchor=(1.0, 1.0))
+            ax.legend(study_titles, loc="best", bbox_to_anchor=(1.0, 1.0))
 
     plt.tight_layout()
     plt.show()
