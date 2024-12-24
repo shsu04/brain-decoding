@@ -328,12 +328,11 @@ def display_best_performance_barchart(
             continue
 
         data = torch.load(metrics_path)
-        metrics = data.get("metrics", {})
-        highest_metrics = metrics.get("highest_metrics", {})
+        highest_metrics = data.get("highest_metrics", {})
 
         for subset_i, subset in enumerate(test_subsets):
             for tm in test_metrics:
-                val = highest_metrics.get(tm, np.nan)
+                val = highest_metrics[subset].get(tm, np.nan)
                 best_perf[tm][subset][title] = val
 
     # Now plot the bar charts using best_perf
