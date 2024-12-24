@@ -445,8 +445,6 @@ class TrainingSessionV0(TrainingSession):
 
             all_metrics, total_batches = [], 0
 
-            self.log_print(f"Testing {test} with {test_sizes[test]} recordings.")
-
             while True:
 
                 batch = test_dataloader[test].get_recording()
