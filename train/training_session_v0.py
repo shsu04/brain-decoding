@@ -391,7 +391,7 @@ class TrainingSessionV0(TrainingSession):
             "top_10_correct": recording_top_10,
         }
 
-        return metrics
+        return metrics, batches
 
     def test(self, buffer_size: int, num_workers: int, max_cache_size: int):
         """Max cache size in GB"""
