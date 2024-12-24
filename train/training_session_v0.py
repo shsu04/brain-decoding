@@ -400,10 +400,10 @@ class TrainingSessionV0(TrainingSession):
         batches = len(batch_indices) - missed_batches
 
         metrics = {
-            "loss": recording_loss,
-            "clip_loss": recording_clip_loss,
-            "mse_loss": recording_mse_loss,
-            "commitment_loss": (recording_commitment_loss),
+            "loss": recording_loss / batches,
+            "clip_loss": recording_clip_loss / batches,
+            "mse_loss": recording_mse_loss / batches,
+            "commitment_loss": (recording_commitment_loss) / batches,
             "perplexity": recording_perplexity,
             "correct": recording_correct,
             "top_5_correct": recording_top_5,
@@ -442,8 +442,6 @@ class TrainingSessionV0(TrainingSession):
         # Run tests
         for test in test_datasets.keys():
             i = 0
-
-            acc, top_5, top_10, perplexity = 0, 0, 0, 0
 
             all_metrics, total_batches = [], 0
 
