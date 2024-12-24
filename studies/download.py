@@ -134,23 +134,16 @@ def download_osf(root_dir="data/gwilliams2023", project_ids: list[str] = []):
 
     print(f"Found {total_files} files. Downloading...")
 
-    with tqdm.tqdm(total=total_files, unit="files") as pbar:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(download_osf_file, file_, path) 
+                for (file_, path) in download_tasks]
 
-        def on_complete(_):
-            """Called after each file finishes downloading."""
-            pbar.update(1)
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-
-            futures = []
-
-            for file_, path in download_tasks:
-                future = executor.submit(download_osf_file, file_, path)
-                future.add_done_callback(on_complete)
-                futures.append(future)
-
-            # Optionally wait for all tasks to finish
-            concurrent.futures.wait(futures)
+        with tqdm.tqdm(total=len(futures), unit="files") as pbar:
+            for future in concurrent.futures.as_completed(futures):
+                # If you want to check for exceptions, do so here
+                _ = future.result()
+                pbar.update(1)
+                
     return
 
 
