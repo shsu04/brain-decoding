@@ -147,10 +147,32 @@ class TrainingSessionV0(TrainingSession):
 
             # it is not "accuracy" but 'correct' until averaged
             final_metrics = {
-                metric: sum([batch[metric] for batch in all_metrics]) / total_batches
-                for metric in all_metrics[0].keys()
+                "loss": sum([batch["loss"] for batch in all_metrics]) / training_size,
+                "clip_loss": sum([batch["clip_loss"] for batch in all_metrics])
+                / training_size,
+                "mse_loss": sum([batch["mse_loss"] for batch in all_metrics])
+                / training_size,
+                "commitment_loss": sum(
+                    [batch["commitment_loss"] for batch in all_metrics]
+                )
+                / training_size,
+                "accuracy": sum([batch["correct"] for batch in all_metrics])
+                / total_batches,
+                "top_5_accuracy": sum([batch["top_5_correct"] for batch in all_metrics])
+                / total_batches,
+                "top_10_accuracy": sum(
+                    [batch["top_10_correct"] for batch in all_metrics]
+                )
+                / total_batches,
             }
             self.metrics["train"].append(final_metrics)
+
+            self.log_print(
+                f'Epoch {epoch} completed. Loss: {final_metrics["loss"]:.4f}, Clip Loss: {final_metrics["clip_loss"]:.4f}, MSE Loss: {final_metrics["mse_loss"]:.4f}'
+            )
+            self.log_print(
+                f'Accuracy: {final_metrics["accuracy"]:.4f}, Top 5: {final_metrics["top_5_accuracy"]:.4f}, Top 10: {final_metrics["top_10_accuracy"]:.4f}'
+            )
 
             # Testing
             try:
@@ -179,7 +201,7 @@ class TrainingSessionV0(TrainingSession):
             average_test_accuracy = (
                 sum(
                     [
-                        self.metrics["test"][test][-1]["correct"]
+                        self.metrics["test"][test][-1]["accuracy"]
                         for test in self.metrics["test"].keys()
                     ]
                 )
@@ -244,7 +266,6 @@ class TrainingSessionV0(TrainingSession):
             recording_perplexity,
             recording_temp,
         ) = (
-            0,
             0,
             0,
             0,
@@ -379,7 +400,6 @@ class TrainingSessionV0(TrainingSession):
         total -= missed_recordings
         batches = len(batch_indices) - missed_batches
 
-        # Loss divided by batches, metrics by total
         metrics = {
             "loss": recording_loss,
             "clip_loss": recording_clip_loss,
@@ -442,11 +462,6 @@ class TrainingSessionV0(TrainingSession):
                     all_metrics.append(results)
                     total_batches += num_batches
 
-                    acc += results["correct"]
-                    top_5 += results["top_5_correct"]
-                    top_10 += results["top_10_correct"]
-                    perplexity += results["perplexity"]
-
                     i += 1
 
                 except Exception as e:
@@ -458,13 +473,29 @@ class TrainingSessionV0(TrainingSession):
 
             # Correct -> Accuracy
             final_metrics = {
-                metric: sum([batch[metric] for batch in all_metrics]) / total_batches
-                for metric in all_metrics[0].keys()
+                "loss": sum([batch["loss"] for batch in all_metrics])
+                / test_sizes[test],
+                "clip_loss": sum([batch["clip_loss"] for batch in all_metrics])
+                / test_sizes[test],
+                "mse_loss": sum([batch["mse_loss"] for batch in all_metrics])
+                / test_sizes[test],
+                "commitment_loss": sum(
+                    [batch["commitment_loss"] for batch in all_metrics]
+                )
+                / test_sizes[test],
+                "accuracy": sum([batch["correct"] for batch in all_metrics])
+                / total_batches,
+                "top_5_accuracy": sum([batch["top_5_correct"] for batch in all_metrics])
+                / total_batches,
+                "top_10_accuracy": sum(
+                    [batch["top_10_correct"] for batch in all_metrics]
+                )
+                / total_batches,
             }
             self.metrics["test"][test].append(final_metrics)
 
             self.log_print(
-                f"Test {test} completed. Accuracy: {acc/test_sizes[test]:.4f}, Top 5: {top_5/test_sizes[test]:.4f}, Top 10: {top_10/test_sizes[test]:.4f}, Perplexity: {perplexity/test_sizes[test]:.4f}"
+                f"Test {test} completed. Accuracy: {final_metrics['accuracy']:.4f}, Top 5: {final_metrics['top_5_accuracy']:.4f}, Top 10: {final_metrics['top_10_accuracy']:.4f}"
             )
 
             test_dataloader[test].stop()
