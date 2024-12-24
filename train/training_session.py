@@ -45,6 +45,7 @@ class TrainingSession(ABC):
             level=logging.INFO,
             format="%(asctime)s %(message)s",
             filemode="w",
+            force=True,
         )
         self.logger = logging.getLogger()
 

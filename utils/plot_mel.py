@@ -4,7 +4,7 @@ import numpy as np
 import os
 
 
-def mel_spectrogram(
+def plot_mel_spectrogram(
     x: torch.Tensor,
     max_plots: int = 4,
     x_pred: torch.Tensor = None,
@@ -27,6 +27,9 @@ def mel_spectrogram(
         specs = x.detach().cpu().numpy()
     if x_pred is not None and torch.is_tensor(x_pred):
         specs_pred = x_pred.detach().cpu().numpy()
+
+    else:
+        specs, specs_pred = x, x_pred
 
     # Find global min and max values across both spectrograms
     vmin = specs.min()
