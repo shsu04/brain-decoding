@@ -9,7 +9,9 @@ class CLIPLoss(nn.Module):
         self.temperature = nn.Parameter(torch.tensor(1.0))
 
     def forward(
-        self, x_1: torch.Tensor, x_2: torch.Tensor, top_k_percentage: bool = False
+        self,
+        x_1: torch.Tensor,
+        x_2: torch.Tensor,
     ) -> dict[str, float]:
         """
         Computes CLIP loss on two mels, x_1 and x_2. Both of shape [B, C, T]
@@ -32,11 +34,13 @@ class CLIPLoss(nn.Module):
 
         return {
             "loss": clip_loss,  # Still on device
-            "metrics": self.eval_metrics(probs, targets, top_k_percentage),  # on CPU
+            "metrics": self.eval_metrics(probs, targets),  # on CPU
         }
 
     def eval_metrics(
-        self, probs: torch.Tensor, targets: torch.Tensor, top_k_percentage: bool = False
+        self,
+        probs: torch.Tensor,
+        targets: torch.Tensor,
     ) -> dict[str, float]:
         """
         Gives evaluation metrics using CLIP loss logits. Top % correct.
@@ -58,28 +62,18 @@ class CLIPLoss(nn.Module):
         batch_size = probs.shape[0]
 
         # Top 10% correct
-        top_10 = max(1, batch_size // 10) if top_k_percentage else 10
-        topk_values, topk_indices = torch.topk(probs, top_10, dim=-1)
+        topk_values, topk_indices = torch.topk(probs, 10, dim=-1)
         correct_tensor = topk_indices.eq(
             targets.unsqueeze(1).expand_as(topk_indices)
         )  # tensor of boolean values
         top10_correct = correct_tensor.cpu().sum().item()
 
         # Top 5% correct
-        top_5 = max(1, batch_size // 20) if top_k_percentage else 5
-        topk_values, topk_indices = torch.topk(probs, top_5, dim=-1)
+        topk_values, topk_indices = torch.topk(probs, 5, dim=-1)
         correct_tensor = topk_indices.eq(
             targets.unsqueeze(1).expand_as(topk_indices)
         )  # tensor of boolean values
         top5_correct = correct_tensor.cpu().sum().item()
-
-        # Top 1% correct
-        top_1 = max(1, batch_size // 100) if top_k_percentage else 1
-        topk_values, topk_indices = torch.topk(probs, top_1, dim=-1)
-        correct_tensor = topk_indices.eq(
-            targets.unsqueeze(1).expand_as(topk_indices)
-        )  # tensor of boolean values
-        top1_correct = correct_tensor.cpu().sum().item()
 
         # correct
         predicted_labels = torch.argmax(probs, dim=-1)
@@ -90,9 +84,6 @@ class CLIPLoss(nn.Module):
             "correct": correct,
             "top_10_correct": top10_correct,
             "top_5_correct": top5_correct,
-            "top_1_correct": top1_correct,
         }
-        for k, v in metrics.items():
-            metrics[k] = v / batch_size if batch_size > 0 else 0
 
         return metrics

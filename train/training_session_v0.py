@@ -69,7 +69,11 @@ class TrainingSessionV0(TrainingSession):
         self.scaler = torch.amp.GradScaler(device=device)
         self.clip_loss, self.mse_loss = self.model.clip_loss, mse_loss_per_batch
 
-        self.highest_epoch, self.highest_metrics, self.highest_top_10 = 0, None, 0
+        self.highest_epoch, self.highest_metrics, self.highest_average_test_accuracy = (
+            0,
+            None,
+            0,
+        )
 
     def train(
         self,
@@ -116,7 +120,7 @@ class TrainingSessionV0(TrainingSession):
                 total=len(epoch_training_dataset), desc="Training Epoch " + str(epoch)
             )
 
-            all_metrics = []
+            all_metrics, total_batches = [], 0
 
             # Run each batch
             while True:
@@ -126,21 +130,10 @@ class TrainingSessionV0(TrainingSession):
                     break
 
                 try:
-                    start_time = time.time()
-                    results = self.run_batch(batch, train=True)
+                    results, num_batches = self.run_batch(batch, train=True)
                     all_metrics.append(results)
+                    total_batches += num_batches
 
-                    # Don't print, just log
-                    self.logger.info(
-                        f"Epoch {epoch}, Remaining {remaining}/{training_size}. Runtime {time.time() - start_time:.2f}s. Cache path {batch.recording.cache_path}"
-                    )
-                    self.logger.info(
-                        f'Loss: {results["loss"]:.4f}, Clip Loss: {results["clip_loss"]:.4f}, MSE Loss: {results["mse_loss"]:.4f}, Commitment Loss: {results["commitment_loss"]:.4f}'
-                    )
-                    self.logger.info(
-                        f'Accuracy: {results["accuracy"]:.4f}, Top 1: {results["top_1_accuracy"]:.4f}, Top 5: {results["top_5_accuracy"]:.4f}, Top 10: {results["top_10_accuracy"]:.4f}, Perplexity: {results["perplexity"]:.4f}'
-                    )
-                    remaining -= 1
                 except Exception as e:
                     # Do log errors
                     self.log_print(
@@ -152,8 +145,9 @@ class TrainingSessionV0(TrainingSession):
                 pbar.update(1)
             pbar.close()
 
+            # it is not "accuracy" but 'correct' until averaged
             final_metrics = {
-                metric: sum([batch[metric] for batch in all_metrics]) / len(all_metrics)
+                metric: sum([batch[metric] for batch in all_metrics]) / total_batches
                 for metric in all_metrics[0].keys()
             }
             self.metrics["train"].append(final_metrics)
@@ -182,16 +176,19 @@ class TrainingSessionV0(TrainingSession):
             self.save(f"epoch_{epoch}")
 
             # Early stopping
-            sum_top_10 = sum(
-                [
-                    self.metrics["test"][test][-1]["top_10_accuracy"]
-                    for test in self.metrics["test"].keys()
-                ]
+            average_test_accuracy = (
+                sum(
+                    [
+                        self.metrics["test"][test][-1]["correct"]
+                        for test in self.metrics["test"].keys()
+                    ]
+                )
+                / 3
             )
 
-            if sum_top_10 > self.highest_top_10:
+            if average_test_accuracy > self.highest_average_test_accuracy:
 
-                self.highest_top_10 = sum_top_10
+                self.highest_average_test_accuracy = average_test_accuracy
                 self.highest_epoch = epoch
 
                 self.highest_metrics = {
@@ -208,7 +205,7 @@ class TrainingSessionV0(TrainingSession):
         self.log_print("Training completed.")
         for test, metrics in self.highest_metrics.items():
             self.log_print(
-                f"{test}: Acc: {metrics['accuracy']:.4f}, Top 1: {metrics['top_1_accuracy']:.4f}, Top 5: {metrics['top_5_accuracy']:.4f}, Top 10: {metrics['top_10_accuracy']:.4f}"
+                f"{test}: Acc: {metrics['accuracy']:.4f}, Top 5: {metrics['top_5_accuracy']:.4f}, Top 10: {metrics['top_10_accuracy']:.4f}"
             )
 
     def run_batch(self, batch: AudioBatch, train: bool) -> tp.Dict[str, float]:
@@ -242,7 +239,6 @@ class TrainingSessionV0(TrainingSession):
         )
         (
             recording_correct,
-            recording_top_1,
             recording_top_5,
             recording_top_10,
             recording_perplexity,
@@ -302,9 +298,7 @@ class TrainingSessionV0(TrainingSession):
                     # Compute loss
                     mse_loss = self.mse_loss(pred=output, target=audio_batch)
 
-                    clip_results = self.clip_loss(
-                        x_1=output, x_2=audio_batch, top_k_percentage=True
-                    )
+                    clip_results = self.clip_loss(x_1=output, x_2=audio_batch)
                     clip_loss, clip_metrics = (
                         clip_results["loss"],
                         clip_results["metrics"],
@@ -339,7 +333,6 @@ class TrainingSessionV0(TrainingSession):
 
                         # Store metrics, already on CPU
                         recording_correct += clip_metrics["correct"]
-                        recording_top_1 += clip_metrics["top_1_correct"]
                         recording_top_5 += clip_metrics["top_5_correct"]
                         recording_top_10 += clip_metrics["top_10_correct"]
 
@@ -393,14 +386,10 @@ class TrainingSessionV0(TrainingSession):
             "mse_loss": recording_mse_loss,
             "commitment_loss": (recording_commitment_loss),
             "perplexity": recording_perplexity,
-            "accuracy": recording_correct,
-            "top_1_accuracy": recording_top_1,
-            "top_5_accuracy": recording_top_5,
-            "top_10_accuracy": recording_top_10,
+            "correct": recording_correct,
+            "top_5_correct": recording_top_5,
+            "top_10_correct": recording_top_10,
         }
-
-        for k, v in metrics.items():
-            metrics[k] = v / batches if batches > 0 else 0
 
         return metrics
 
@@ -435,9 +424,11 @@ class TrainingSessionV0(TrainingSession):
         for test in test_datasets.keys():
             i = 0
 
-            acc, top_1, top_5, top_10, perplexity = 0, 0, 0, 0, 0
+            acc, top_5, top_10, perplexity = 0, 0, 0, 0
 
-            all_metrics = []
+            all_metrics, total_batches = [], 0
+
+            self.log_print(f"Testing {test} with {test_sizes[test]} recordings.")
 
             while True:
 
@@ -447,26 +438,13 @@ class TrainingSessionV0(TrainingSession):
 
                 try:
 
-                    start_time = time.time()
-
-                    results = self.run_batch(batch, train=False)
+                    results, num_batches = self.run_batch(batch, train=False)
                     all_metrics.append(results)
+                    total_batches += num_batches
 
-                    # Log results
-                    self.logger.info(
-                        f"Testing {test} {i}/{test_sizes[test]}. Runtime {time.time() - start_time:.2f}s. Cache path {batch.recording.cache_path}."
-                    )
-                    self.logger.info(
-                        f'Loss: {results["loss"]:.4f}, Clip Loss: {results["clip_loss"]:.4f}, MSE Loss: {results["mse_loss"]:.4f}, Commitment Loss: {results["commitment_loss"]:.4f}'
-                    )
-                    self.logger.info(
-                        f'Accuracy: {results["accuracy"]:.4f}, Top 1: {results["top_1_accuracy"]:.4f}, Top 5: {results["top_5_accuracy"]:.4f}, Top 10: {results["top_10_accuracy"]:.4f}, Perplexity: {results["perplexity"]:.4f}'
-                    )
-
-                    acc += results["accuracy"]
-                    top_1 += results["top_1_accuracy"]
-                    top_5 += results["top_5_accuracy"]
-                    top_10 += results["top_10_accuracy"]
+                    acc += results["correct"]
+                    top_5 += results["top_5_correct"]
+                    top_10 += results["top_10_correct"]
                     perplexity += results["perplexity"]
 
                     i += 1
@@ -478,14 +456,15 @@ class TrainingSessionV0(TrainingSession):
                     test_sizes[test] -= 1
                     continue
 
+            # Correct -> Accuracy
             final_metrics = {
-                metric: sum([batch[metric] for batch in all_metrics]) / len(all_metrics)
+                metric: sum([batch[metric] for batch in all_metrics]) / total_batches
                 for metric in all_metrics[0].keys()
             }
             self.metrics["test"][test].append(final_metrics)
 
             self.log_print(
-                f"Test {test} completed. Accuracy: {acc/test_sizes[test]:.4f}, Top 1: {top_1/test_sizes[test]:.4f}, Top 5: {top_5/test_sizes[test]:.4f}, Top 10: {top_10/test_sizes[test]:.4f}, Perplexity: {perplexity/test_sizes[test]:.4f}"
+                f"Test {test} completed. Accuracy: {acc/test_sizes[test]:.4f}, Top 5: {top_5/test_sizes[test]:.4f}, Top 10: {top_10/test_sizes[test]:.4f}, Perplexity: {perplexity/test_sizes[test]:.4f}"
             )
 
             test_dataloader[test].stop()

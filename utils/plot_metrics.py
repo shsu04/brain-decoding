@@ -276,7 +276,7 @@ def display_best_performance_barchart(
 
     # This is the metric we use to determine the best epoch, similar to the training loop.
     # You can change it if you use a different metric to select the best epoch.
-    summation_metric = "top_10_accuracy"
+    summation_metric = "accuracy"
 
     # Try to use seaborn-whitegrid style; if not available, revert to default
     try:
@@ -317,6 +317,7 @@ def display_best_performance_barchart(
 
     for title, save_path in studies.items():
         metrics_path = os.path.join(save_path, "metrics.pt")
+
         if not os.path.exists(metrics_path):
             print(
                 f"Warning: No metrics found at {metrics_path} for '{title}'. Skipping."
@@ -328,65 +329,11 @@ def display_best_performance_barchart(
 
         data = torch.load(metrics_path)
         metrics = data.get("metrics", {})
-        test_dict = metrics.get("test", {})
+        highest_metrics = metrics.get("highest_metrics", {})
 
-        # Check if we have data for all subsets
-        # We'll only consider epochs that appear consistently across subsets
-        # If a subset doesn't exist, mark as NaN
-        subset_data_lists = []
-        for subset in test_subsets:
-            if subset in test_dict and len(test_dict[subset]) > 0:
-                subset_data_lists.append(test_dict[subset])
-            else:
-                # Missing or empty subset data
-                subset_data_lists.append([])
-
-        # If any subset is empty, we can't find a proper best epoch; just NaN them out
-        if any(len(lst) == 0 for lst in subset_data_lists):
-            for tm in test_metrics:
-                for subset in test_subsets:
-                    best_perf[tm][subset][title] = np.nan
-            continue
-
-        # All subsets have data; assume they're aligned by epoch index
-        # Find the best epoch by summing summation_metric across subsets
-        # Number of epochs:
-        n_epochs = len(subset_data_lists[0])
-
-        # Verify all subsets have the same number of epochs
-        if not all(len(lst) == n_epochs for lst in subset_data_lists):
-            print(
-                f"Warning: Inconsistent number of epochs across subsets for '{title}'. "
-                "This might indicate mismatched runs. Setting values to NaN."
-            )
-            for tm in test_metrics:
-                for subset in test_subsets:
-                    best_perf[tm][subset][title] = np.nan
-            continue
-
-        # Compute sum over subsets for each epoch
-        best_sum = -np.inf
-        best_epoch = 0
-        for e in range(n_epochs):
-            # Sum the summation_metric across all subsets at epoch e
-            current_sum = 0
-            valid = True
-            for lst in subset_data_lists:
-                val = lst[e].get(summation_metric, None)
-                if val is None:
-                    valid = False
-                    break
-                current_sum += val
-            if valid and current_sum > best_sum:
-                best_sum = current_sum
-                best_epoch = e
-
-        # Now best_epoch is the epoch with the highest sum of summation_metric
-        # Extract values for requested test_metrics from that epoch
         for subset_i, subset in enumerate(test_subsets):
-            epoch_data = test_dict[subset][best_epoch]
             for tm in test_metrics:
-                val = epoch_data.get(tm, np.nan)
+                val = highest_metrics.get(tm, np.nan)
                 best_perf[tm][subset][title] = val
 
     # Now plot the bar charts using best_perf
