@@ -77,8 +77,7 @@ class CLIPLoss(nn.Module):
 
         # correct
         predicted_labels = torch.argmax(probs, dim=-1)
-        correct_predictions = (predicted_labels == targets).cpu().sum().item()
-        correct = correct_predictions
+        correct = (predicted_labels == targets).cpu().sum().item()
 
         metrics = {
             "correct": correct,

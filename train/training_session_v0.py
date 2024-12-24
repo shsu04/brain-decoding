@@ -176,7 +176,6 @@ class TrainingSessionV0(TrainingSession):
 
             # Testing
             try:
-                self.log_print(f"Testing at epoch {epoch}")
                 with torch.no_grad():
                     self.test(
                         buffer_size=buffer_size,
@@ -379,14 +378,14 @@ class TrainingSessionV0(TrainingSession):
                                     .item()
                                 )
                     else:
-                        self.logger.info(
+                        self.log_print(
                             f"Loss is NaN for {recording.study_name} {recording.subject_id} {recording.session_id} {recording.task_id}."
                         )
                         missed_recordings += end - start
                         missed_batches += 1
 
                 except Exception as e:
-                    self.logger.info(
+                    self.log_print(
                         f"Error in processing {recording.study_name} {recording.subject_id} {recording.session_id} {recording.task_id}."
                     )
                     missed_recordings += end - start
@@ -411,7 +410,7 @@ class TrainingSessionV0(TrainingSession):
             "top_10_correct": recording_top_10,
         }
 
-        return metrics, batches
+        return metrics, total
 
     def test(self, buffer_size: int, num_workers: int, max_cache_size: int):
         """Max cache size in GB"""
@@ -502,7 +501,7 @@ class TrainingSessionV0(TrainingSession):
 
         # Log info
         elapsed_minutes = (time.time() - test_start_time) / 60
-        self.logger.info(f"Testing completed in {elapsed_minutes:.2f}m.")
+        self.log_print(f"Testing completed in {elapsed_minutes:.2f}m.")
         return
 
     def get_dataloader(self, buffer_size, num_workers, max_cache_size):
