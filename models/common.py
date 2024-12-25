@@ -326,14 +326,17 @@ class ConvSequence(nn.Module):
             if dilation_period and (k % dilation_period) == 0:
                 dilation = 1
 
-            pad = kernel // 2 * dilation
+            kernel_k = (
+                (kernel * 2 - 1) if (half and (k < len(channels) - 4)) else kernel
+            )
+            pad_k = kernel_k // 2 * dilation
 
             conv_layer = Conv(
                 chin,
                 chout,
-                kernel * 2 - 1 if (half and (k <= len(channels) - 4)) else kernel,
-                stride * 2 if (half and (k == len(channels) - 4)) else stride,
-                pad,
+                (kernel * 2 - 1) if (half and (k < len(channels) - 4)) else kernel,
+                (stride * 2) if (half and (k == len(channels) - 4)) else stride,
+                pad_k,
                 dilation=dilation,
                 groups=1,
             )
