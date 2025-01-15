@@ -307,13 +307,16 @@ class TrainingSessionV0(TrainingSession):
                     )
 
                     # Forward pass
-                    (output, quantizer_metrics) = self.model(
-                        x=[brain_batch],
-                        recording=[recording],
-                        conditions=[conditions],
-                        mel=[audio_batch],
-                        train=train,
+                    (output, quantizer_metrics, channel_weights, hidden_outputs) = (
+                        self.model(
+                            x=[brain_batch],
+                            recording=[recording],
+                            conditions=[conditions],
+                            mel=[audio_batch],
+                            train=train,
+                        )
                     )  # [B, C, T]
+                    del channel_weights, hidden_outputs
 
                     # Compute loss
                     mse_loss = self.mse_loss(pred=output, target=audio_batch)

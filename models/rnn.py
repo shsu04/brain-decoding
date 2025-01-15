@@ -1,7 +1,8 @@
 from torch import nn
 import torch
 import math
-from torchaudio.models import Conformer
+from .conformer import Conformer
+from .transformer import CustomTransformerEncoder, CustomTransformerDecoder
 
 
 class SinusoidalPositionalEncoding(nn.Module):
@@ -123,7 +124,7 @@ class RNNEncoder(nn.Module):
         self.rnn_type = rnn_type
 
         if rnn_type == "transformer":
-            self.encoders = nn.TransformerEncoder(
+            self.encoders = CustomTransformerEncoder(
                 nn.TransformerEncoderLayer(
                     d_model=d_model,
                     nhead=nhead,
@@ -150,17 +151,24 @@ class RNNEncoder(nn.Module):
         )
         print(f"\tEmbedding: {embedding}, params: {total_params}")
 
-    def forward(self, x: torch.Tensor, attn_mask=None):
-        """x: [B, C, T], attn_mask: [B, T]"""
+    def forward(self, x: torch.Tensor, attn_mask=None, return_hidden_outputs=False):
+        """
+        x: [B, C, T], attn_mask: [B, T]
+
+        returns: [B, C, T], hidden_outputs: [B, C, T] of length layers
+        """
         x = self.embedding(x.transpose(1, 2))  # [B, C, T] -> [B, T, C]
 
         if self.rnn_type == "transformer":
-            x = self.encoders(
+            x, hidden_outputs = self.encoders(
                 x,
                 mask=None,
                 src_key_padding_mask=attn_mask,
                 is_causal=False,
+                return_hidden_outputs=return_hidden_outputs,
             )  # [B, T, C]
+
+        # Conformer
         else:
             if attn_mask is None:
                 lengths = torch.full((x.shape[0],), x.shape[1], dtype=torch.long).to(
@@ -170,11 +178,17 @@ class RNNEncoder(nn.Module):
                 # Transform mask [B, T] -> [B,]
                 lengths = (attn_mask == False).sum(dim=1).to(torch.int32).to(x.device)
 
-            x = self.encoders(x, lengths=lengths)  # [B, T, C]
+            x, hidden_outputs = self.encoders(
+                x, lengths=lengths, return_hidden_outputs=return_hidden_outputs
+            )  # [B, T, C]
 
         x = x.transpose(1, 2)  # [B, C, T]
 
-        return x
+        # hidden outputs: [B, T, C] -> [B, C, T]
+        if len(hidden_outputs) > 0:
+            hidden_outputs = [ho.transpose(1, 2) for ho in hidden_outputs]
+
+        return x, hidden_outputs
 
 
 class TransformerDecoder(nn.Module):
@@ -222,7 +236,7 @@ class TransformerDecoder(nn.Module):
         if self.mel_bins != d_model:
             self.decoder_proj = nn.Linear(self.mel_bins, d_model)
 
-        self.decoders = nn.TransformerDecoder(
+        self.decoders = CustomTransformerDecoder(
             nn.TransformerDecoderLayer(
                 d_model=d_model,
                 nhead=nhead,
@@ -238,13 +252,23 @@ class TransformerDecoder(nn.Module):
         )
         print(f"\tEmbedding: {embedding}, params: {total_params}")
 
-    def forward(self, mel: torch.Tensor, encoder_output: torch.Tensor, src_mask=None):
+    def forward(
+        self,
+        mel: torch.Tensor,
+        encoder_output: torch.Tensor,
+        src_mask=None,
+        return_hidden_outputs=False,
+    ):
         """Uses the encoder output to predict the mel spectrogram
 
         Arguments:
             mel -- mel spectrogram of the perceived audio [B, mel, T]
             encoder_output -- output from the encoder [B, C, T]
             src_mask -- mask for the encoder output [B, T]
+
+        Returns:
+            [B, d_model, T] -- predicted mel spectrogram
+            [B, d_model, T] of len layers -- hidden outputs from the decoder
         """
         # [B, mel, T] -> [B, T, mel]
         mel = self.embedding(mel.transpose(1, 2))
@@ -260,7 +284,7 @@ class TransformerDecoder(nn.Module):
             sz=t
         )  # of shape [T, T]
 
-        output = self.decoders(
+        output, hidden_outputs = self.decoders(
             tgt=mel,
             memory=encoder_output,
             tgt_mask=causal_mask,  # Causal mask for decoder self-attention
@@ -269,8 +293,13 @@ class TransformerDecoder(nn.Module):
             memory_key_padding_mask=src_mask,  # If meg padded
             tgt_is_causal=True,
             memory_is_causal=False,
+            return_hidden_outputs=return_hidden_outputs,
         )  # [B, T, d_model]
 
         output = output.transpose(1, 2)  # [B, d_model, T]
 
-        return output
+        # hidden outputs: [B, T, d_model] -> [B, d_model, T]
+        if len(hidden_outputs) > 0:
+            hidden_outputs = [ho.transpose(1, 2) for ho in hidden_outputs]
+
+        return output, hidden_outputs

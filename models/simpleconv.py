@@ -257,6 +257,7 @@ class SimpleConv(nn.Module):
         conditions: tp.List[tp.Dict[str, str]] = None,
         mel: tp.List[torch.Tensor] = None,
         train: bool = False,
+        return_hidden_outputs: bool = False,
     ):
         """
         Amended version to work with lists of these parameters to ensure batches from
@@ -268,12 +269,14 @@ class SimpleConv(nn.Module):
             recording -- Recording object with the layout and subject index
             conditions -- dictionary of conditions_type : condition_name
             torch.Tensor -- mel spectrogram of shape [B, mel_bins, T], UNSHIFTED.
+            train -- boolean flag to indicate training or inference
+            return_hidden_outputs -- flag to return hidden outputs from CNN and RNNs, [B, C, T] of length L
         """
 
         x_aggregated = []
         condition_indices_map = {cond_type: [] for cond_type in self.condition_to_idx}
-
         attention_mask = None
+        channel_weights = []
 
         # Merge and gather condition indices per batch
         for i in range(len(x)):
@@ -291,7 +294,10 @@ class SimpleConv(nn.Module):
                     )
                 else:
                     cond_name = None
-                x_i = self.merger(x=x_i, recording=recording_i, condition=cond_name)
+                x_i, channel_weight = self.merger(
+                    x=x_i, recording=recording_i, condition=cond_name
+                )
+                channel_weights.append(channel_weight)
 
             # Gather condition indices, one per condition type
             for cond_type in self.condition_to_idx:
@@ -308,6 +314,11 @@ class SimpleConv(nn.Module):
 
         # CONCATENATE BATCHES
         x = torch.cat(x_aggregated, dim=0)  # [B_i * i, C, T]
+        channel_weights = (
+            torch.cat(channel_weights, dim=0)
+            if len(channel_weights) > 0
+            else channel_weights
+        )  # [B, C, C']
 
         condition_indices_map = {
             cond_type: torch.cat(indices, dim=0)
@@ -328,7 +339,7 @@ class SimpleConv(nn.Module):
                 x = cond_layer(x, condition_indices_map[cond_type])
 
         # CNN
-        x = self.encoders(x)  # [B, C, T]
+        x, hidden_outputs = self.encoders(x)  # [B, C, T]
 
         # Transformers
         decoder_inference, quantizer_metrics = False, None
@@ -348,7 +359,14 @@ class SimpleConv(nn.Module):
 
             # Leave this for now until recordings come with attn mask
             attention_mask = None
-            x = self.rnn_encoders(x, attn_mask=attention_mask)  # [B, C, T]
+            x, rnn_hidden_outputs = self.rnn_encoders(
+                x, attn_mask=attention_mask, return_hidden_outputs=return_hidden_outputs
+            )  # [B, C, T]
+
+            # Save intermediate hidden outputs, del for memory
+            if return_hidden_outputs:
+                hidden_outputs.extend(rnn_hidden_outputs)
+            del rnn_hidden_outputs
 
             if self.transformer_decoders:
                 if train:
@@ -366,9 +384,17 @@ class SimpleConv(nn.Module):
                     mel = F.pad(mel, (1, 0), "constant", 0)[
                         ..., :t_2
                     ]  # [B, mel_bins, T]
-                    x = self.transformer_decoders(
-                        mel=mel, encoder_output=x, src_mask=attention_mask
+                    x, decoder_hidden_outputs = self.transformer_decoders(
+                        mel=mel,
+                        encoder_output=x,
+                        src_mask=attention_mask,
+                        return_hidden_outputs=return_hidden_outputs,
                     )  # [B, C, T]
+
+                    # Save intermediate hidden outputs, del for memory
+                    if return_hidden_outputs:
+                        hidden_outputs.extend(decoder_hidden_outputs)
+                    del decoder_hidden_outputs
 
                 else:
                     # Inference with auto-regressive decoding
@@ -381,9 +407,17 @@ class SimpleConv(nn.Module):
                         mel = torch.zeros(B, mel_bins, 1).to(x.device)  # [B, mel, 1]
 
                         for t in range(T):
-                            output = self.transformer_decoders(
-                                mel=mel, encoder_output=x, src_mask=attention_mask
+                            output, decoder_hidden_outputs = self.transformer_decoders(
+                                mel=mel,
+                                encoder_output=x,
+                                src_mask=attention_mask,
+                                return_hidden_outputs=return_hidden_outputs,
                             )  # [B, d_model, t + 1]
+
+                            # Save intermediate hidden outputs, del for memory
+                            if t == T - 1 and return_hidden_outputs:
+                                hidden_outputs.extend(decoder_hidden_outputs)
+                            del decoder_hidden_outputs
 
                             output = self.final(output)  # [B, C, t + 1]
 
@@ -406,7 +440,7 @@ class SimpleConv(nn.Module):
             if self.config.mel_normalization:
                 x = self.whisper_normalization(x)
 
-        return x, quantizer_metrics
+        return x, quantizer_metrics, channel_weights, hidden_outputs
 
     def whisper_normalization(self, x: torch.Tensor):
         """Follow Whisper's mel spectrogram normalization"""

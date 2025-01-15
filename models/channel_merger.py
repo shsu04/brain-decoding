@@ -156,7 +156,7 @@ class ChannelMerger(nn.Module):
         weights = torch.softmax(scores, dim=2)
         out = torch.einsum("bct,boc->bot", x, weights)  # [B, ch_out, T]
 
-        return out
+        return out, weights
 
 
 class FourierEmbedding(nn.Module):

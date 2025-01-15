@@ -377,7 +377,10 @@ class ConvSequence(nn.Module):
             else:
                 self.glus.append(None)
 
-    def forward(self, x: tp.Any) -> tp.Any:
+    def forward(self, x: tp.Any, return_hidden_outputs: False) -> tp.Any:
+
+        hidden_outputs = []
+
         for module_idx, module in enumerate(self.sequence):
 
             old_x = x
@@ -392,4 +395,7 @@ class ConvSequence(nn.Module):
             if glu is not None:
                 x = glu(x)
 
-        return x
+                if return_hidden_outputs:
+                    hidden_outputs.append(x)
+
+        return x, hidden_outputs
