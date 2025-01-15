@@ -4,6 +4,8 @@ from transformers import WhisperModel
 from typing import List, Optional
 from config import SimpleConvConfig
 from models.simpleconv import SimpleConv
+import typing as tp
+from studies.study import Recording
 
 
 class WhisperAlignment(nn.Module):
@@ -64,18 +66,32 @@ class WhisperAlignment(nn.Module):
         for param in self.parameters():
             param.requires_grad = False
 
-    def forward(self, x: torch.Tensor) -> tuple[List[torch.Tensor], torch.Tensor]:
+    def forward(
+        self,
+        x: tp.List[torch.Tensor],
+        recording: tp.List[Recording],
+        conditions: tp.List[tp.Dict[str, str]] = None,
+        mel: tp.List[torch.Tensor] = None,
+        train: bool = False,
+        return_hidden_outputs: bool = False,
+    ) -> tuple[List[torch.Tensor], torch.Tensor]:
         """
         x: [B, C, T]
 
         Returns:
-            List of hidden states for each layer in layers_to_align [B, 1500, 1280]
-            Last hidden state [B, 1500, 1280]
+            x - predicted mel [B, 128, 3000]
+            Quantizer metrics [B, 80, 3000]
+            Channel weights [B, C, C']
+            Hidden outputs [B, 80, 3000] of length brain encoder layers
 
+            List of hidden states for each encoder layer in layers_to_align [B, T, D]
+            Last hidden state [B, T, D]
             Where 1500 = T, 1280 = D
         """
 
-        # x = self.simple_conv(x) # [B, 80, T]
+        x, quantizer_metrics, channel_weights, hidden_outputs = self.simple_conv(
+            x, recording, conditions, mel, train, return_hidden_outputs
+        )  # [B, 80, T]
         B, C, T = x.size()
 
         assert C == 128, f"Expected {128} channels, got {C}"
@@ -92,6 +108,10 @@ class WhisperAlignment(nn.Module):
         encoder_outputs = self.encoder(x, output_hidden_states=True)
 
         return (
+            x,
+            quantizer_metrics,
+            channel_weights,
+            hidden_outputs,
             [encoder_outputs.hidden_states[i] for i in self.layers_to_align],
             encoder_outputs.last_hidden_state,
         )

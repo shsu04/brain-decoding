@@ -433,7 +433,7 @@ class SimpleConv(nn.Module):
 
                     decoder_inference = True
 
-        # 7) Final projection (unless the decoder already produced x)
+        # Final projection (unless the decoder already produced x)
         if not decoder_inference:
             x = self.final(x)  # [B, C, T]
 
