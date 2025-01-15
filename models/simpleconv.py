@@ -4,7 +4,6 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from tempfile import tempdir
 import typing as tp
 import torch
 from config import SimpleConvConfig
@@ -268,7 +267,7 @@ class SimpleConv(nn.Module):
             x -- meg scans of shape [B, C, T]
             recording -- Recording object with the layout and subject index
             conditions -- dictionary of conditions_type : condition_name
-            torch.Tensor -- mel spectrogram of shape [B, mel_bins, T], UNSHIFTED.
+            mel -- mel spectrogram of shape [B, mel_bins, T], UNSHIFTED.
             train -- boolean flag to indicate training or inference
             return_hidden_outputs -- flag to return hidden outputs from CNN and RNNs, [B, C, T] of length L
         """
@@ -314,6 +313,7 @@ class SimpleConv(nn.Module):
 
         # CONCATENATE BATCHES
         x = torch.cat(x_aggregated, dim=0)  # [B_i * i, C, T]
+        del x_aggregated
         channel_weights = (
             torch.cat(channel_weights, dim=0)
             if len(channel_weights) > 0
