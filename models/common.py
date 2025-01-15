@@ -377,7 +377,7 @@ class ConvSequence(nn.Module):
             else:
                 self.glus.append(None)
 
-    def forward(self, x: tp.Any, return_hidden_outputs: False) -> tp.Any:
+    def forward(self, x: tp.Any, return_hidden_outputs: bool = False) -> tp.Any:
 
         hidden_outputs = []
 

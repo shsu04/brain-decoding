@@ -151,7 +151,9 @@ class RNNEncoder(nn.Module):
         )
         print(f"\tEmbedding: {embedding}, params: {total_params}")
 
-    def forward(self, x: torch.Tensor, attn_mask=None, return_hidden_outputs=False):
+    def forward(
+        self, x: torch.Tensor, attn_mask=None, return_hidden_outputs: bool = False
+    ):
         """
         x: [B, C, T], attn_mask: [B, T]
 
@@ -257,7 +259,7 @@ class TransformerDecoder(nn.Module):
         mel: torch.Tensor,
         encoder_output: torch.Tensor,
         src_mask=None,
-        return_hidden_outputs=False,
+        return_hidden_outputs: bool = False,
     ):
         """Uses the encoder output to predict the mel spectrogram
 

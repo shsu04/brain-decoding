@@ -300,7 +300,7 @@ class CustomTransformerDecoder(torch.nn.Module):
         memory_key_padding_mask: Optional[Tensor] = None,
         tgt_is_causal: Optional[bool] = None,
         memory_is_causal: bool = False,
-        return_hidden_outputs=False,
+        return_hidden_outputs: bool = False,
     ) -> Tensor:
         r"""Pass the inputs (and mask) through the decoder layer in turn.
 
