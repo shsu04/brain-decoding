@@ -309,7 +309,7 @@ class Conformer(torch.nn.Module):
 
         x = input.transpose(0, 1)
 
-        for layer_idx, layer in enumerate(self.conformer_layers):
+        for layer in self.conformer_layers:
 
             x = layer(x, encoder_padding_mask)
 

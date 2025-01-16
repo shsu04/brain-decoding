@@ -10,13 +10,17 @@ class SinusoidalPositionalEncoding(nn.Module):
         super().__init__()
 
         pe = torch.zeros(max_len, d_model)  # [L, D]
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)  # [L, 1]
-        div_term = torch.exp(
-            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
-        )  # [D/2]
+        positions = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)  # [L, 1]
 
-        pe[:, 0::2] = torch.sin(position * div_term)  # [L, D/2]
-        pe[:, 1::2] = torch.cos(position * div_term)  # [L, D/2]
+        i_vals = torch.arange(0, d_model // 2, dtype=torch.float)  # [D/2]
+        freqs = 10000.0 ** (-2 * i_vals / d_model)  # [D/2]
+
+        pe_sin = torch.sin(positions * freqs)  # [L, D/2]
+        pe_cos = torch.cos(positions * freqs)  # [L, D/2]
+
+        # Interleave sin and cos
+        pe[:, 0::2] = pe_sin  # even
+        pe[:, 1::2] = pe_cos  # odd
 
         self.register_buffer("pe", pe.unsqueeze(0))  # [1, L, D]
 

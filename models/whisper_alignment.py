@@ -102,7 +102,7 @@ class WhisperAlignment(nn.Module):
             pad_len = 3000 - T
             x = nn.functional.pad(x, (0, pad_len), mode="constant", value=0.0)
         elif T > 3000:
-            # If longer, consider trimming or handling long-form audio differently.
+            # If longer, trim
             x = x[:, :, :3000]
 
         encoder_outputs = self.encoder(x, output_hidden_states=True)

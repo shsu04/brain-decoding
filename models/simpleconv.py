@@ -87,7 +87,7 @@ class SimpleConv(nn.Module):
 
         # Batch norm if needed, each channel independently
         self.initial_batch_norm = None
-        if self.config.batch_norm:
+        if self.config.initial_batch_norm:
             self.initial_batch_norm = nn.BatchNorm1d(channels)
 
         # Project MEG channels with a linear layer
@@ -270,6 +270,12 @@ class SimpleConv(nn.Module):
             mel -- mel spectrogram of shape [B, mel_bins, T], UNSHIFTED.
             train -- boolean flag to indicate training or inference
             return_hidden_outputs -- flag to return hidden outputs from CNN and RNNs, [B, C, T] of length L
+
+        Returns:
+            x -- output of the model, [B, C, T]
+            quantizer_metrics -- metrics from the quantizer, if used.
+            channel_weights -- list of batch size * [B, C, C']
+            hidden_outputs -- list of hidden outputs from CNN and RNNs, [B, C, T] of length L
         """
 
         x_aggregated = []
@@ -314,18 +320,13 @@ class SimpleConv(nn.Module):
         # CONCATENATE BATCHES
         x = torch.cat(x_aggregated, dim=0)  # [B_i * i, C, T]
         del x_aggregated
-        channel_weights = (
-            torch.cat(channel_weights, dim=0)
-            if len(channel_weights) > 0
-            else channel_weights
-        )  # [B, C, C']
 
         condition_indices_map = {
             cond_type: torch.cat(indices, dim=0)
             for cond_type, indices in condition_indices_map.items()
         }  # Each cond type has a tensor of indices [B_i * i] = [B]
 
-        if mel is not None:
+        if mel is not None and len(mel) > 0:
             mel = torch.cat(mel, dim=0)  # [B_i * i, mel_bins, T]
 
         if self.initial_batch_norm is not None:
