@@ -12,10 +12,10 @@ from torch.nn import functional as F
 
 from studies.study import Recording
 from .common import (
-    ConvSequence,
     ConditionalLayers,
     ChannelDropout,
 )
+from .conv_sequence import ConvSequence
 from .channel_merger import ChannelMerger
 from .quantizer import VQQuantizer, GumbelQuantizer
 from .rnn import RNNEncoder, TransformerDecoder
