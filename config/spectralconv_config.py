@@ -32,7 +32,7 @@ class SpectralConvConfig(Config):
         conditional_layers: bool = True,
         conditional_layers_dim: str = "input",  # or hidden_dim
         # Conv layer overall structure
-        cnn_channels: list[int] = [384, 384, 256, 128, 64, 32, 16, 8, 1],
+        cnn_channels: list[int] = [384, 384, 256, 128, 64, 32, 16, 8, 3],
         kernel_size: int = 3,
         dilation_growth: int = 2,
         dilation_period: int = 5,

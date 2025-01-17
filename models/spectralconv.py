@@ -145,7 +145,7 @@ class SpectralConv(torch.nn.Module):
             pos_encoding=self.config.cnn_pos_encoding,
             mels=self.config.mels,
         )
-        final_channels = self.config.mels
+        final_channels = self.config.mels * self.config.cnn_channels[-1]
 
         # Final transformer encoder
         self.rnn_encoders, self.quantizer, self.layer_norm = False, False, False
@@ -347,7 +347,8 @@ class SpectralConv(torch.nn.Module):
         x = x.reshape(B, x.size(1), M, T)
 
         # CNN
-        x, hidden_outputs = self.encoders(x)  # [B, mel (C), T]
+        x, hidden_outputs = self.encoders(x)  # [B, C, mel, T]
+        x = x.reshape(B, x.size(1) * M, T)  # [B, C, mel, T] -> [B, C * mel, T]
 
         # Transformers
         decoder_inference, quantizer_metrics = False, None

@@ -45,6 +45,8 @@ class SpectralConvSequence(nn.Module):
                 This downsamples the input by 2x.
             pos_encoding -- If True, uses positional encoding over freq and channels (default: {False})
             mels -- Number of mel bins for positional encoding (default: {0})
+
+        Outputs [B, C, mel, T] with smaller C for flattening to [B, C * mel, T]
         """
         super().__init__()
         dilation = 1
@@ -192,8 +194,4 @@ class SpectralConvSequence(nn.Module):
             if return_hidden_outputs:
                 hidden_outputs.append(x)
 
-        assert x.shape[1] == 1, f"Output must have 1 channel, got {x.shape[1]}"
-
-        # [B, 1, mel, T] -> [B, mel, T]
-        x = x.squeeze(1)
         return x, hidden_outputs
