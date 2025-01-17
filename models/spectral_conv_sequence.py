@@ -19,8 +19,6 @@ class SpectralConvSequence(nn.Module):
         glu: int = 0,
         activation: tp.Any = None,
         half: bool = False,
-        pos_encoding: bool = False,
-        mels: int = 0,
     ):
         """
         Spectrogram conv variant using positional encoding over the freq and channels
@@ -43,7 +41,6 @@ class SpectralConvSequence(nn.Module):
             activation -- Activation function (default: {None})
             half -- If True, uses stride 2 for third to last layer (default: {False})
                 This downsamples the input by 2x.
-            pos_encoding -- If True, uses positional encoding over freq and channels (default: {False})
             mels -- Number of mel bins for positional encoding (default: {0})
 
         Outputs [B, C, mel, T] with smaller C for flattening to [B, C * mel, T]
@@ -56,34 +53,6 @@ class SpectralConvSequence(nn.Module):
         self.glus = nn.ModuleList()
 
         Conv = nn.Conv2d if not decode else nn.ConvTranspose2d
-
-        # Different to SimpleConv, we have positional encoding over the freq and channels
-        if pos_encoding is not None:
-            assert mels > 0, "Pos encoding mels must be greater than 0"
-
-            in_channels = channels[0]
-
-            pe = torch.zeros(mels, in_channels)  # [mel, C]
-            positions = torch.arange(0, mels, dtype=torch.float).unsqueeze(
-                1
-            )  # [mel, 1]
-
-            i_vals = torch.arange(0, in_channels // 2, dtype=torch.float)  # [C/2]
-            freqs = 10000.0 ** (-2 * i_vals / in_channels)  # [C/2]
-
-            pe_sin = torch.sin(positions * freqs)  # [mel, C/2]
-            pe_cos = torch.cos(positions * freqs)  # [mel, C/2]
-
-            # Interleave sin and cos across channels
-            pe[:, 0::2] = pe_sin  # even
-            pe[:, 1::2] = pe_cos  # odd
-
-            # [mel, C] -> [1, C, mel, 1]
-            pe = pe.transpose(0, 1).unsqueeze(0).unsqueeze(-1)
-
-            self.register_buffer("pos_encoding", pe)
-        else:
-            self.pos_encoding = None
 
         # Build layers
         for k, (chin, chout) in enumerate(zip(channels[:-1], channels[1:])):
@@ -171,9 +140,6 @@ class SpectralConvSequence(nn.Module):
         self, x: torch.Tensor, return_hidden_outputs: bool = False  # [B, C, mel, T]
     ):
         hidden_outputs = []
-
-        if self.pos_encoding is not None:
-            x = x + self.pos_encoding  # [B, C, mel, T]
 
         for module_idx, module in enumerate(self.sequence):
 

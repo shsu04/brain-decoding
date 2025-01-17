@@ -103,7 +103,6 @@ class SpectralConvConfig(Config):
         self.dropout_input = dropout_input
         self.group_norm = group_norm
         self.half = half
-        self.cnn_pos_encoding = cnn_pos_encoding
         self.mels = mels
         # Quantizer
         self.quantizer = quantizer
