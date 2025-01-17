@@ -1,8 +1,8 @@
-import typing as tp
 from .config import Config
 
 
-class SimpleConvConfig(Config):
+class SpectralConvConfig(Config):
+
     def __init__(
         self,
         mel_normalization=False,
@@ -13,7 +13,7 @@ class SimpleConvConfig(Config):
         out_channels: int = 128,
         hidden_dim: int = 512,
         dropout: float = 0.3,
-        initial_batch_norm: bool = False,
+        initial_group_norm: bool = False,
         # Sensor layout settings
         layout_dim: int = 2,
         layout_proj: bool = False,
@@ -32,16 +32,17 @@ class SimpleConvConfig(Config):
         conditional_layers: bool = True,
         conditional_layers_dim: str = "input",  # or hidden_dim
         # Conv layer overall structure
-        depth: int = 5,
+        cnn_channels: list[int] = [384, 384, 256, 128, 64, 32, 16, 8, 1],
         kernel_size: int = 3,
-        growth: float = 1.0,
         dilation_growth: int = 2,
-        dilation_period: tp.Optional[int] = 5,
+        dilation_period: int = 5,
         glu: int = 1,
         conv_dropout: float = 0.2,
         dropout_input: float = 0.2,
-        batch_norm: bool = True,
+        group_norm: bool = True,
         half: bool = False,
+        cnn_pos_encoding: bool = True,
+        mels: int = 128,
         # Quantizer
         quantizer: str = "vq",  # vq or gumbel or none
         num_codebooks: int = 1,
@@ -66,8 +67,8 @@ class SimpleConvConfig(Config):
         transformer_decoder_heads: int = 0,
         transformer_decoder_dim: int = 0,
     ):
-        super(SimpleConvConfig, self).__init__()
-        self.initial_batch_norm = initial_batch_norm
+        super(SpectralConvConfig, self).__init__()
+        self.initial_group_norm = initial_group_norm
         self.conditions = conditions
         self.mel_normalization = mel_normalization
         # Channels
@@ -93,16 +94,17 @@ class SimpleConvConfig(Config):
         self.conditional_layers = conditional_layers
         self.conditional_layers_dim = conditional_layers_dim
         # Conv layer overall structure
-        self.depth = depth
+        self.cnn_channels = cnn_channels
         self.kernel_size = kernel_size
-        self.growth = growth
         self.dilation_growth = dilation_growth
         self.dilation_period = dilation_period
         self.glu = glu
-        self.dropout_input = dropout_input
         self.conv_dropout = conv_dropout
-        self.batch_norm = batch_norm
+        self.dropout_input = dropout_input
+        self.group_norm = group_norm
         self.half = half
+        self.cnn_pos_encoding = cnn_pos_encoding
+        self.mels = mels
         # Quantizer
         self.quantizer = quantizer
         self.num_codebooks = num_codebooks

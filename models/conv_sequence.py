@@ -3,7 +3,10 @@ from torch import nn
 
 
 class ConvSequence(nn.Module):
-    """Convolutional sequence with optional skip connections and GLU activations. Raw signal variant"""
+    """
+    Convolutional sequence with optional skip connections and GLU activations.
+    Raw signal variant, where the input is [B, C, T]
+    """
 
     def __init__(
         self,
@@ -72,7 +75,7 @@ class ConvSequence(nn.Module):
             conv_layer = Conv(
                 chin,
                 chout,
-                (kernel * 2 - 1) if (half and (k < len(channels) - 4)) else kernel,
+                kernel_k,
                 (stride * 2) if (half and (k == len(channels) - 4)) else stride,
                 pad_k,
                 dilation=dilation,
@@ -104,14 +107,13 @@ class ConvSequence(nn.Module):
                     nn.Conv1d(
                         in_channels=chout,
                         out_channels=chout * 2,
-                        kernel_size=1 + 2,
+                        kernel_size=3,
                         padding=1,
                     ),
                     nn.GLU(dim=1),
                 )
                 nn.init.kaiming_uniform_(glu_layer[0].weight, a=0)
                 self.glus.append(glu_layer)
-
             else:
                 self.glus.append(None)
 
@@ -133,7 +135,7 @@ class ConvSequence(nn.Module):
             if glu is not None:
                 x = glu(x)
 
-                if return_hidden_outputs:
-                    hidden_outputs.append(x)
+            if return_hidden_outputs:
+                hidden_outputs.append(x)
 
         return x, hidden_outputs
