@@ -1,3 +1,4 @@
+from turtle import pos
 import torch
 import torch.nn as nn
 import typing as tp
@@ -19,6 +20,8 @@ class SpectralConvSequence(nn.Module):
         glu: int = 0,
         activation: tp.Any = None,
         half: bool = False,
+        pos_encoding: bool = False,
+        mels: int = 0,
     ):
         """
         Spectrogram conv variant using positional encoding over the freq and channels
@@ -41,6 +44,7 @@ class SpectralConvSequence(nn.Module):
             activation -- Activation function (default: {None})
             half -- If True, uses stride 2 for third to last layer (default: {False})
                 This downsamples the input by 2x.
+            pos_encoding -- If True, uses positional encoding over freq and channels (default: {False})
             mels -- Number of mel bins for positional encoding (default: {0})
 
         Outputs [B, C, mel, T] with smaller C for flattening to [B, C * mel, T]
@@ -53,6 +57,23 @@ class SpectralConvSequence(nn.Module):
         self.glus = nn.ModuleList()
 
         Conv = nn.Conv2d if not decode else nn.ConvTranspose2d
+
+        # Different to SimpleConv, we have positional encoding over the freq and channels
+        self.pos_encoding = False
+        if pos_encoding:
+            assert mels > 0, "Pos encoding mels must be greater than 0"
+
+            self.pos_encoding = True
+
+            self.chan_embedding = nn.Parameter(
+                torch.zeros(1, channels[0], 1, 1), requires_grad=True
+            )
+            self.freq_embedding = nn.Parameter(
+                torch.zeros(1, 1, mels, 1), requires_grad=True
+            )
+
+            nn.init.kaiming_uniform_(self.chan_embedding, a=0)
+            nn.init.kaiming_uniform_(self.freq_embedding, a=0)
 
         # Build layers
         for k, (chin, chout) in enumerate(zip(channels[:-1], channels[1:])):
@@ -140,6 +161,9 @@ class SpectralConvSequence(nn.Module):
         self, x: torch.Tensor, return_hidden_outputs: bool = False  # [B, C, mel, T]
     ):
         hidden_outputs = []
+
+        if self.pos_encoding:
+            x = x + self.chan_embedding + self.freq_embedding  # [B, C, mel, T]
 
         for module_idx, module in enumerate(self.sequence):
 

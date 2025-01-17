@@ -143,6 +143,7 @@ class SimpleConv(nn.Module):
             glu=self.config.glu,
             activation=nn.GELU,
             half=self.config.half,
+            pos_encoding=self.config.cnn_pos_encoding,
         )
         self.encoders = ConvSequence(conv_channel_sizes, **params)
         final_channels = conv_channel_sizes[-1]

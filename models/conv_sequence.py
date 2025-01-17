@@ -1,5 +1,6 @@
 import typing as tp
 from torch import nn
+import torch
 
 
 class ConvSequence(nn.Module):
@@ -21,6 +22,7 @@ class ConvSequence(nn.Module):
         dropout_input: float = 0,
         glu: int = 0,
         activation: tp.Any = None,
+        pos_encoding: bool = False,
         half: bool = False,
     ) -> None:
         """
@@ -38,6 +40,7 @@ class ConvSequence(nn.Module):
             dropout_input -- Dropout rate for input (default: {0})
             glu -- If > 0, uses GLU activation every `glu` layers (default: {0})
             activation -- Activation function (default: {None})
+            pos_encoding -- If True, uses positional encoding over freq and channels (default: {False})
             half -- If True, uses stride 2 for third to last layer (default: {False})
                 This downsamples the input by 2x.
         """
@@ -50,6 +53,15 @@ class ConvSequence(nn.Module):
         self.glus = nn.ModuleList()
 
         Conv = nn.Conv1d if not decode else nn.ConvTranspose1d
+
+        self.pos_encoding = False
+        if pos_encoding:
+            self.pos_encoding = True
+
+            self.chan_embedding = nn.Parameter(
+                torch.randn(1, channels[0], 1), requires_grad=True
+            )
+            nn.kaiming_uniform_(self.chan_embedding, a=0)
 
         # Build layers
         for k, (chin, chout) in enumerate(zip(channels[:-1], channels[1:])):
@@ -120,6 +132,9 @@ class ConvSequence(nn.Module):
     def forward(self, x: tp.Any, return_hidden_outputs: bool = False) -> tp.Any:
 
         hidden_outputs = []
+
+        if self.pos_encoding:
+            x = x + self.chan_embedding
 
         for module_idx, module in enumerate(self.sequence):
 

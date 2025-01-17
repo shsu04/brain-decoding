@@ -42,6 +42,7 @@ class SimpleConvConfig(Config):
         dropout_input: float = 0.2,
         batch_norm: bool = True,
         half: bool = False,
+        cnn_pos_encoding: bool = False,
         # Quantizer
         quantizer: str = "vq",  # vq or gumbel or none
         num_codebooks: int = 1,
@@ -103,6 +104,7 @@ class SimpleConvConfig(Config):
         self.conv_dropout = conv_dropout
         self.batch_norm = batch_norm
         self.half = half
+        self.cnn_pos_encoding = cnn_pos_encoding
         # Quantizer
         self.quantizer = quantizer
         self.num_codebooks = num_codebooks

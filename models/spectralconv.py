@@ -142,6 +142,8 @@ class SpectralConv(torch.nn.Module):
             group_norm=self.config.group_norm,
             activation=nn.GELU,
             half=self.config.half,
+            pos_encoding=self.config.cnn_pos_encoding,
+            mels=self.config.mels,
         )
         final_channels = self.config.mels * self.config.cnn_channels[-1]
 
