@@ -3,6 +3,7 @@ import typing as tp
 from studies.study import Recording
 from torch import nn
 from torch.nn import functional as F
+import torchaudio.transforms as T
 
 from studies.study import Recording
 from .common import (
@@ -143,9 +144,9 @@ class SpectralConv(torch.nn.Module):
             activation=nn.GELU,
             half=self.config.half,
             pos_encoding=self.config.cnn_pos_encoding,
-            mels=self.config.mels,
+            bins=self.config.bins,
         )
-        final_channels = self.config.mels * self.config.cnn_channels[-1]
+        final_channels = self.config.bins * self.config.cnn_channels[-1]
 
         # Final transformer encoder
         self.rnn_encoders, self.quantizer, self.layer_norm = False, False, False
@@ -246,6 +247,13 @@ class SpectralConv(torch.nn.Module):
             f"ConvBlocks: {self.config.cnn_channels}, hidden_dim: {self.config.hidden_dim}, params {cnn_params}"
         )
 
+        self.spectrogram_transform = T.Spectrogram(
+            n_fft=self.config.bins * 2,
+            hop_length=self.config.hop_length,
+            normalized=True,
+            power=2,
+        )
+
         # Leave the temp param
         self.clip_loss = CLIPLoss()
 
@@ -260,7 +268,7 @@ class SpectralConv(torch.nn.Module):
     ):
         """
         Arguments:
-            x -- list of meg scans of shape [B, C, mel, T]
+            x -- list of meg scans of shape [B, C, T]
             recording -- list of Recording object with the layout and subject index
             conditions -- list of dictionary of conditions_type : condition_name
             mel -- list of mel spectrogram of shape [B, mel_bins, T], UNSHIFTED.
@@ -282,10 +290,16 @@ class SpectralConv(torch.nn.Module):
         for i in range(len(x)):
 
             x_i, recording_i, conditions_i = x[i], recording[i], conditions[i]
-            B, C, M, T = x_i.size()
+
+            # Convert to spectrogram [B, C, T] -> [B, C, mel, T]
+            B, C, T = x_i.size()
+            x_i = torch.log1p(self.spectrogram_transform(x_i))
+            x_i = x_i[
+                ..., : self.config.bins, :T
+            ]  #  ensure correct size [B, C, mel, T]
 
             # [B, C, mel, T] -> [B, C, mel * T]
-            x_i = x_i.reshape(B, x_i.size(1), M * T)
+            x_i = x_i.reshape(B, C, self.config.bins * T)
 
             if self.dropout is not None:
                 x_i = self.dropout(x=x_i, recording=recording_i)
@@ -320,7 +334,9 @@ class SpectralConv(torch.nn.Module):
         # CONCATENATE BATCHES
         x = torch.cat(x_aggregated, dim=0)  # [B_i * i, C, mel * T]
         del x_aggregated
-        x = x.reshape(B, x.size(1), M, T)  # [B, C, mel * T] -> [B, C, mel, T]
+        x = x.reshape(
+            B, x.size(1), self.config.bins, T
+        )  # [B, C, mel * T] -> [B, C, mel, T]
 
         condition_indices_map = {
             cond_type: torch.cat(indices, dim=0)
@@ -334,7 +350,7 @@ class SpectralConv(torch.nn.Module):
             x = self.initial_group_norm(x)
 
         # [B, C, mel, T] -> [B, C, mel * T] to re-use old code since only acts on channels
-        x = x.reshape(B, x.size(1), M * T)
+        x = x.reshape(B, x.size(1), self.config.bins * T)
 
         if self.initial_linear is not None:
             x = self.initial_linear(x)
@@ -344,11 +360,13 @@ class SpectralConv(torch.nn.Module):
                 x = cond_layer(x, condition_indices_map[cond_type])
 
         # [B, C, mel * T] -> [B, C, mel, T] for spectrogram CNN encoder
-        x = x.reshape(B, x.size(1), M, T)
+        x = x.reshape(B, x.size(1), self.config.bins, T)
 
         # CNN
         x, hidden_outputs = self.encoders(x)  # [B, C, mel, T]
-        x = x.reshape(B, x.size(1) * M, T)  # [B, C, mel, T] -> [B, C * mel, T]
+        x = x.reshape(
+            B, x.size(1) * self.config.bins, T
+        )  # [B, C, mel, T] -> [B, C * mel, T]
 
         # Transformers
         decoder_inference, quantizer_metrics = False, None

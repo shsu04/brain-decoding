@@ -31,17 +31,16 @@ class WhisperAlignment(nn.Module):
         super().__init__()
 
         if isinstance(brain_module_config, SimpleConvConfig):
+            self.brain_module_config = brain_module_config
             self.brain_module = SimpleConv(brain_module_config)
         elif isinstance(brain_module_config, SpectralConvConfig):
+            self.brain_module_config = brain_module_config
             self.brain_module = SpectralConv(brain_module_config)
 
         self.model_id = "openai/whisper-large-v3"
 
-        torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-
         whisper_model = WhisperModel.from_pretrained(
             self.model_id,
-            torch_dtype=torch_dtype,
             low_cpu_mem_usage=True,
             use_safetensors=True,
         ).to(device)
@@ -57,18 +56,17 @@ class WhisperAlignment(nn.Module):
         self.layers_to_align = layers_to_align
         assert all([i < 32 for i in layers_to_align]), "Invalid layer index"
 
-        if use_compile:
-            self.compile()
-
-        self.device = device
-        self.to(device)
-        self.half() if torch.cuda.is_available() else self.float()
-
         # AdaLora
         self.adalora_config = adalora_config
         self.encoder = AdaLoraModel(
             self.encoder, adalora_config, adapter_name="default"
         )
+
+        if use_compile:
+            self.compile()
+
+        self.device = device
+        self.to(device)
 
     def compile(self):
         """Only used when inference is done"""
@@ -90,7 +88,13 @@ class WhisperAlignment(nn.Module):
         return_hidden_outputs: bool = False,
     ) -> tuple[List[torch.Tensor], torch.Tensor]:
         """
-        x: [B, C, T]
+        Arguments:
+            x -- meg scans of shape [B, C, T]
+            recording -- Recording object with the layout and subject index
+            conditions -- dictionary of conditions_type : condition_name
+            mel -- mel spectrogram of shape [B, mel_bins, T], UNSHIFTED.
+            train -- boolean flag to indicate training or inference
+            return_hidden_outputs -- flag to return hidden outputs from CNN and RNNs, [B, C, T] of length L
 
         Returns:
             x - predicted mel [B, 128, 3000]

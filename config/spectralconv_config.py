@@ -42,7 +42,8 @@ class SpectralConvConfig(Config):
         group_norm: bool = True,
         half: bool = False,
         cnn_pos_encoding: bool = True,
-        mels: int = 128,
+        bins: int = 128,
+        hop_length: int = 2,
         # Quantizer
         quantizer: str = "vq",  # vq or gumbel or none
         num_codebooks: int = 1,
@@ -104,7 +105,8 @@ class SpectralConvConfig(Config):
         self.group_norm = group_norm
         self.half = half
         self.cnn_pos_encoding = cnn_pos_encoding
-        self.mels = mels
+        self.bins = bins
+        self.hop_length = hop_length
         # Quantizer
         self.quantizer = quantizer
         self.num_codebooks = num_codebooks

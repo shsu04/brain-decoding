@@ -21,7 +21,7 @@ class SpectralConvSequence(nn.Module):
         activation: tp.Any = None,
         half: bool = False,
         pos_encoding: bool = False,
-        mels: int = 0,
+        bins: int = 0,
     ):
         """
         Spectrogram conv variant using positional encoding over the freq and channels
@@ -45,7 +45,7 @@ class SpectralConvSequence(nn.Module):
             half -- If True, uses stride 2 for third to last layer (default: {False})
                 This downsamples the input by 2x.
             pos_encoding -- If True, uses positional encoding over freq and channels (default: {False})
-            mels -- Number of mel bins for positional encoding (default: {0})
+            bins -- Number of mel bins for positional encoding (default: {0})
 
         Outputs [B, C, mel, T] with smaller C for flattening to [B, C * mel, T]
         """
@@ -61,7 +61,7 @@ class SpectralConvSequence(nn.Module):
         # Different to SimpleConv, we have positional encoding over the freq and channels
         self.pos_encoding = False
         if pos_encoding:
-            assert mels > 0, "Pos encoding mels must be greater than 0"
+            assert bins > 0, "Pos encoding bins must be greater than 0"
 
             self.pos_encoding = True
 
@@ -69,7 +69,7 @@ class SpectralConvSequence(nn.Module):
                 torch.zeros(1, channels[0], 1, 1), requires_grad=True
             )
             self.freq_embedding = nn.Parameter(
-                torch.zeros(1, 1, mels, 1), requires_grad=True
+                torch.zeros(1, 1, bins, 1), requires_grad=True
             )
 
             nn.init.kaiming_uniform_(self.chan_embedding, a=0)
