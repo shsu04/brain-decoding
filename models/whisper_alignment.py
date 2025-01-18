@@ -2,16 +2,19 @@ import torch
 import torch.nn as nn
 from transformers import WhisperModel
 from typing import List, Optional
-from config import SimpleConvConfig
+from config import SimpleConvConfig, SpectralConvConfig
 from models.simpleconv import SimpleConv
+from models.spectralconv import SpectralConv
 import typing as tp
 from studies.study import Recording
+from peft import AdaLoraConfig, AdaLoraModel
 
 
 class WhisperAlignment(nn.Module):
     def __init__(
         self,
-        simpleconv_config: SimpleConvConfig,
+        brain_module_config: tp.Union[SimpleConvConfig, SpectralConvConfig],
+        adalora_config: AdaLoraConfig,
         layers_to_align: Optional[List[int]] = [-1],
         use_compile: bool = False,
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
@@ -26,7 +29,12 @@ class WhisperAlignment(nn.Module):
             use_compile -- compile can have 4.5x speedup
         """
         super().__init__()
-        self.simple_conv = SimpleConv(simpleconv_config)
+
+        if isinstance(brain_module_config, SimpleConvConfig):
+            self.brain_module = SimpleConv(brain_module_config)
+        elif isinstance(brain_module_config, SpectralConvConfig):
+            self.brain_module = SpectralConv(brain_module_config)
+
         self.model_id = "openai/whisper-large-v3"
 
         torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
@@ -55,6 +63,12 @@ class WhisperAlignment(nn.Module):
         self.device = device
         self.to(device)
         self.half() if torch.cuda.is_available() else self.float()
+
+        # AdaLora
+        self.adalora_config = adalora_config
+        self.encoder = AdaLoraModel(
+            self.encoder, adalora_config, adapter_name="default"
+        )
 
     def compile(self):
         """Only used when inference is done"""
@@ -89,7 +103,7 @@ class WhisperAlignment(nn.Module):
             Where 1500 = T, 1280 = D
         """
 
-        x, quantizer_metrics, channel_weights, hidden_outputs = self.simple_conv(
+        x, quantizer_metrics, channel_weights, hidden_outputs = self.brain_module(
             x, recording, conditions, mel, train, return_hidden_outputs
         )  # [B, 80, T]
         B, C, T = x.size()
