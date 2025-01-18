@@ -16,6 +16,8 @@ from losses.mse import mse_loss_per_batch
 from config import TrainingConfigV0
 from train.training_session import TrainingSession
 from models.simpleconv import SimpleConv
+from models.spectralconv import SpectralConv
+from config import SimpleConvConfig, SpectralConvConfig
 
 device = "cuda"
 
@@ -59,7 +61,10 @@ class TrainingSessionV0(TrainingSession):
             cache_name=cache_name,
         )
 
-        self.model = SimpleConv(self.config.brain_encoder_config)
+        if isinstance(self.config.brain_encoder_config, SimpleConvConfig):
+            self.model = SimpleConv(self.config.brain_encoder_config)
+        elif isinstance(self.config.brain_encoder_config, SpectralConvConfig):
+            self.model = SpectralConv(self.config.brain_encoder_config)
 
         self.optimizer = AdamW(
             self.model.parameters(),
@@ -314,6 +319,7 @@ class TrainingSessionV0(TrainingSession):
                             conditions=[conditions],
                             mel=[audio_batch],
                             train=train,
+                            return_hidden_outputs=False,
                         )
                     )  # [B, C, T]
                     del channel_weights, hidden_outputs

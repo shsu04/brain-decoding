@@ -1,13 +1,16 @@
 import typing as tp
 from .simpleconv_config import SimpleConvConfig
+from .spectralconv_config import SpectralConvConfig
 from .config import Config
 from .training_config import TrainingConfig
 
+
 class TrainingConfigV0(TrainingConfig):
     """Config class for pre-processing exploration with CLIP MSE loss."""
+
     def __init__(
         self,
-        brain_encoder_config: SimpleConvConfig,
+        brain_encoder_config: tp.Union[SimpleConvConfig, SpectralConvConfig],
         data_partition: tp.Dict[str, tp.Dict[str, tp.List[str]]],
         # Pre-processing parameters
         # Brain
@@ -82,9 +85,14 @@ class TrainingConfigV0(TrainingConfig):
         return config
 
     def from_dict(self, config: tp.Dict[str, tp.Any]):
-        self.brain_encoder_config = SimpleConvConfig.from_dict(
-            config["brain_encoder_config"]
-        )
+        if "bins" in config["brain_encoder_config"]:
+            self.brain_encoder_config = SpectralConvConfig.from_dict(
+                config["brain_encoder_config"]
+            )
+        else:
+            self.brain_encoder_config = SimpleConvConfig.from_dict(
+                config["brain_encoder_config"]
+            )
         self.data_partition = config["data_partition"]
         self.new_freq = config["new_freq"]
         self.frequency_bands = config["frequency_bands"]

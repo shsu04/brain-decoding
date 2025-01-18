@@ -218,7 +218,6 @@ class SimpleConv(nn.Module):
             final_channels = self.config.transformer_decoder_dim
 
         # Final encoder linear projection
-        self.final = None
         pad, kernel, stride = 0, 1, 1
         self.final = nn.Sequential(
             nn.Conv1d(final_channels, 2 * final_channels, 1),
