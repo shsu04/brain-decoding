@@ -124,9 +124,6 @@ class SpectralConv(torch.nn.Module):
 
         # Channels for conv has to be specified directly unlike in SimpleConv
         assert (
-            self.config.cnn_channels[-1] == 1
-        ), f"Last channel must be 1, got {self.config.cnn_channels[-1]}"
-        assert (
             self.config.cnn_channels[0] == channels
         ), f"First channel must be {channels}, got {self.config.cnn_channels[0]}"
 
