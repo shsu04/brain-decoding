@@ -134,7 +134,7 @@ def download_osf(root_dir="data/gwilliams2023", project_ids: list[str] = []):
 
     print(f"Found {total_files} files. Downloading...")
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
         futures = [
             executor.submit(download_osf_file, file_, path)
             for (file_, path) in download_tasks

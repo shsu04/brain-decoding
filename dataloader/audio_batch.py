@@ -362,23 +362,27 @@ class AudioBatchFetcher(BatchFetcher):
         Returns:
             inputs -- pre-processed audio data, size [B, mel_bins, T]
         """
-        audio_segments = []
-
-        time_stamps = torch.tensor(time_stamps)  # Shape: [N, 2]
-        start_samples = (time_stamps[:, 0] * self.audio_sample_rate).to(torch.int64)
-        end_samples = (time_stamps[:, 1] * self.audio_sample_rate).to(torch.int64)
-        audio_segments = [
-            audio[start:end] for start, end in zip(start_samples, end_samples)
-        ]
-
-        # Batch process the audio segments
-        inputs = self.audio_processor(
-            audio_segments,
+        output = self.audio_processor(
+            audio,
             sampling_rate=self.audio_sample_rate,
             return_tensors="pt",
             do_normalize=True,
             hop_length=self.hop_length,
             max_length=self.audio_sample_rate * self.window_size,
         )
+        spectrogram, audio_segments = output["input_features"][0], []
 
-        return inputs["input_features"]
+        for (start_sec, end_sec) in time_stamps:
+            
+            start_sample = int(start_sec * self.audio_sample_rate)
+            end_sample   = int(end_sec * self.audio_sample_rate)
+            
+            # Convert sample indices to spectrogram frame indices
+            start_frame = start_sample // self.hop_length
+            end_frame = end_sample // self.hop_length
+            
+            # Slice the spectrogram along the time dimension
+            spectro_segment = spectrogram[..., start_frame:end_frame]  # shape: [freq, (end_frame - start_frame)]
+            audio_segments.append(spectro_segment)
+            
+        return torch.cat(audio_segments, dim=0)
