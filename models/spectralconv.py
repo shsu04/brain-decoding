@@ -277,10 +277,10 @@ class SpectralConv(torch.nn.Module):
             channel_weights -- list of batch size * [B, C, C']
             hidden_outputs -- list of hidden outputs from CNN and RNNs, [B, C, T] of length L
         """
-        x_aggregated = []
+        x_aggregated, channel_weights = [], []
         condition_indices_map = {cond_type: [] for cond_type in self.condition_to_idx}
         attention_mask = None
-        channel_weights = []
+        self.spectrogram_transform = self.spectrogram_transform.to(x[0].device)
 
         # Merge and gather condition indices per batch
         for i in range(len(x)):
@@ -288,14 +288,20 @@ class SpectralConv(torch.nn.Module):
             x_i, recording_i, conditions_i = x[i], recording[i], conditions[i]
 
             # Convert to spectrogram [B, C, T] -> [B, C, mel, T]
-            B, C, T = x_i.size()
+            B, C, M, T = (
+                x_i.size(0), 
+                x_i.size(1), 
+                self.config.bins, 
+                x_i.size(2) // self.config.hop_length
+            )
             x_i = torch.log1p(self.spectrogram_transform(x_i))
+            
             x_i = x_i[
-                ..., : self.config.bins, :T
+                ..., :M, :T
             ]  #  ensure correct size [B, C, mel, T]
 
             # [B, C, mel, T] -> [B, C, mel * T]
-            x_i = x_i.reshape(B, C, self.config.bins * T)
+            x_i = x_i.reshape(B, C, M * T)
 
             if self.dropout is not None:
                 x_i = self.dropout(x=x_i, recording=recording_i)
@@ -312,7 +318,6 @@ class SpectralConv(torch.nn.Module):
                     x=x_i, recording=recording_i, condition=cond_name
                 )
                 channel_weights.append(channel_weight)
-                del channel_weight
 
             # Gather condition indices, one per condition type
             for cond_type in self.condition_to_idx:
@@ -330,10 +335,12 @@ class SpectralConv(torch.nn.Module):
         # CONCATENATE BATCHES
         x = torch.cat(x_aggregated, dim=0)  # [B_i * i, C, mel * T]
         del x_aggregated
+        B = x.size(0)
+        
         x = x.reshape(
-            B, x.size(1), self.config.bins, T
+            B, x.size(1), M, T
         )  # [B, C, mel * T] -> [B, C, mel, T]
-
+        
         condition_indices_map = {
             cond_type: torch.cat(indices, dim=0)
             for cond_type, indices in condition_indices_map.items()
@@ -344,26 +351,26 @@ class SpectralConv(torch.nn.Module):
 
         if self.initial_group_norm is not None:
             x = self.initial_group_norm(x)
-
+            
         # [B, C, mel, T] -> [B, C, mel * T] to re-use old code since only acts on channels
-        x = x.reshape(B, x.size(1), self.config.bins * T)
+        x = x.reshape(B, x.size(1), M * T)
 
         if self.initial_linear is not None:
             x = self.initial_linear(x)
-
+            
         if self.conditional_layers is not None:
             for cond_type, cond_layer in self.conditional_layers.items():
                 x = cond_layer(x, condition_indices_map[cond_type])
 
         # [B, C, mel * T] -> [B, C, mel, T] for spectrogram CNN encoder
-        x = x.reshape(B, x.size(1), self.config.bins, T)
+        x = x.reshape(B, x.size(1), M, T)
 
         # CNN
         x, hidden_outputs = self.encoders(x)  # [B, C, mel, T]
         x = x.reshape(
-            B, x.size(1) * self.config.bins, T
+            B, x.size(1) * M, T
         )  # [B, C, mel, T] -> [B, C * mel, T]
-
+        
         # Transformers
         decoder_inference, quantizer_metrics = False, None
         if self.rnn_encoders:
