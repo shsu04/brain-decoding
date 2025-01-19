@@ -62,16 +62,14 @@ class CLIPLoss(nn.Module):
         batch_size = probs.shape[0]
 
         # Top 10% correct
-        k = min(10, batch_size)
-        topk_values, topk_indices = torch.topk(probs, k, dim=-1)
+        topk_values, topk_indices = torch.topk(probs, 10, dim=-1)
         correct_tensor = topk_indices.eq(
             targets.unsqueeze(1).expand_as(topk_indices)
         )  # tensor of boolean values
         top10_correct = correct_tensor.cpu().sum().item()
 
         # Top 5% correct
-        k = min(5, batch_size)
-        topk_values, topk_indices = torch.topk(probs, k, dim=-1)
+        topk_values, topk_indices = torch.topk(probs, 5, dim=-1)
         correct_tensor = topk_indices.eq(
             targets.unsqueeze(1).expand_as(topk_indices)
         )  # tensor of boolean values
