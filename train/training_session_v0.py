@@ -320,7 +320,7 @@ class TrainingSessionV0(TrainingSession):
                             return_hidden_outputs=False,
                         )
                     )  # [B, C, T]
-                    del channel_weights, hidden_outputs
+                    del channel_weights, hidden_outputs, brain_batch
 
                     # Compute loss
                     mse_loss = self.mse_loss(pred=output, target=audio_batch)
