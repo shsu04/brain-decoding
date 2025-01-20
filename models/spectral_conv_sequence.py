@@ -15,7 +15,7 @@ class SpectralConvSequence(nn.Module):
         stride: int = 1,
         dropout: float = 0.0,
         decode: bool = False,
-        group_norm: bool = True,
+        batch_norm: bool = True,
         dropout_input: float = 0,
         glu: int = 0,
         activation: tp.Any = None,
@@ -38,7 +38,7 @@ class SpectralConvSequence(nn.Module):
             stride -- Convolutional stride (default: {2})
             dropout -- Dropout rate (default: {0.0})
             decode -- If True, uses ConvTranspose1d (default: {False})
-            group_norm -- If True, uses group normalization (default: {False})
+            batch_norm -- If True, uses group normalization (default: {False})
             dropout_input -- Dropout rate for input (default: {0})
             glu -- If > 0, uses GLU activation every `glu` layers (default: {0})
             activation -- Activation function (default: {None})
@@ -53,8 +53,9 @@ class SpectralConvSequence(nn.Module):
         dilation = 1
         channels = tuple(channels)
         self.sequence = nn.ModuleList()
-        self.skip_conv = nn.ModuleList()
         self.glus = nn.ModuleList()
+        self.convs = nn.ModuleList()
+        self.skip_conv = nn.ModuleList()
 
         Conv = nn.Conv2d if not decode else nn.ConvTranspose2d
 
@@ -80,10 +81,21 @@ class SpectralConvSequence(nn.Module):
             layers: tp.List[nn.Module] = []
             is_last = k == len(channels) - 2
 
-            # Add input dropout if specified for first layer
-            if k == 0 and dropout_input:
-                assert 0 < dropout_input < 1
-                layers.append(nn.Dropout(dropout_input))
+            # batch norm, activation, and dropout
+            if not is_last:
+                if batch_norm:
+                    layers.append(nn.BatchNorm2d(num_features=chin))
+                layers.append(activation())
+
+                if dropout:
+                    layers.append(nn.Dropout(dropout))
+
+            # # Add input dropout if specified for first layer
+            # if k == 0 and dropout_input:
+            #     assert 0 < dropout_input < 1
+            #     layers.append(nn.Dropout(dropout_input))
+
+            self.sequence.append(nn.Sequential(*layers))
 
             # Add dialation (across time) if specified
             if dilation_growth > 1:
@@ -119,27 +131,8 @@ class SpectralConvSequence(nn.Module):
                 groups=1,
             )
             nn.init.kaiming_uniform_(conv_layer.weight, a=0)
-            layers.append(conv_layer)
             dilation *= dilation_growth
-
-            # group norm, activation, and dropout
-            if not is_last:
-                if group_norm:
-                    layers.append(nn.BatchNorm2d(num_features=chout))
-                layers.append(activation())
-
-                if dropout:
-                    layers.append(nn.Dropout(dropout))
-
-            self.sequence.append(nn.Sequential(*layers))
-
-            # Skip connection adaptor if in/out channel or count stride across time different
-            if chin != chout or time_stride != 1:
-                conv = Conv(chin, chout, 1, (freq_stride, time_stride), 0, groups=1)
-                nn.init.kaiming_uniform_(conv.weight, a=0)
-                self.skip_conv.append(conv)
-            else:
-                self.skip_conv.append(None)
+            self.convs.append(conv_layer)
 
             # Add GLU layer if specified (conv2d variant)
             if glu and (k + 1) % glu == 0:
@@ -157,6 +150,14 @@ class SpectralConvSequence(nn.Module):
             else:
                 self.glus.append(None)
 
+            # Skip connection adaptor if in/out channel or count stride across time different
+            if chin != chout or time_stride != 1:
+                conv = Conv(chin, chout, 1, (freq_stride, time_stride), 0, groups=1)
+                nn.init.kaiming_uniform_(conv.weight, a=0)
+                self.skip_conv.append(conv)
+            else:
+                self.skip_conv.append(None)
+
     def forward(
         self, x: torch.Tensor, return_hidden_outputs: bool = False  # [B, C, mel, T]
     ):
@@ -170,16 +171,18 @@ class SpectralConvSequence(nn.Module):
             old_x = x
             x = module(x)  # [B, C_i, mel, T]
 
-            # Residual
-            if self.skip_conv[module_idx] is not None:
-                x = x + self.skip_conv[module_idx](old_x)
-            else:
-                x = x + old_x
+            x = self.convs[module_idx](x)
 
             # GLU
             glu = self.glus[module_idx]
             if glu is not None:
                 x = glu(x)
+
+            # Residual
+            if self.skip_conv[module_idx] is not None:
+                x = x + self.skip_conv[module_idx](old_x)
+            else:
+                x = x + old_x
 
             if return_hidden_outputs:
                 hidden_outputs.append(x)

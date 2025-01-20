@@ -81,9 +81,9 @@ class SpectralConv(torch.nn.Module):
             channels = self.config.merger_channels
 
         # Batch norm if needed, each channel independently
-        self.initial_group_norm = None
-        if self.config.initial_group_norm:
-            self.initial_group_norm = nn.BatchNorm2d(num_features=channels)
+        self.initial_batch_norm = None
+        if self.config.initial_batch_norm:
+            self.initial_batch_norm = nn.BatchNorm2d(num_features=channels)
 
         # SAME AS SIMPLE CONV, FLATTENED SPECTROGRAM
         # Project MEG channels with a linear layer
@@ -137,7 +137,7 @@ class SpectralConv(torch.nn.Module):
             glu=self.config.glu,
             dropout=self.config.conv_dropout,
             dropout_input=self.config.dropout_input,
-            group_norm=self.config.group_norm,
+            batch_norm=self.config.batch_norm,
             activation=nn.GELU,
             half=self.config.half,
             pos_encoding=self.config.cnn_pos_encoding,
@@ -345,8 +345,8 @@ class SpectralConv(torch.nn.Module):
         if mel is not None and len(mel) > 0:
             mel = torch.cat(mel, dim=0)  # [B_i * i, mel_bins, T]
 
-        if self.initial_group_norm is not None:
-            x = self.initial_group_norm(x)
+        if self.initial_batch_norm is not None:
+            x = self.initial_batch_norm(x)
 
         # [B, C, mel, T] -> [B, C, mel * T] to re-use old code since only acts on channels
         x = x.reshape(B, x.size(1), M * T)

@@ -13,7 +13,7 @@ class SpectralConvConfig(Config):
         out_channels: int = 128,
         hidden_dim: int = 512,
         dropout: float = 0.3,
-        initial_group_norm: bool = False,
+        initial_batch_norm: bool = False,
         # Sensor layout settings
         layout_dim: int = 2,
         layout_proj: bool = False,
@@ -39,7 +39,7 @@ class SpectralConvConfig(Config):
         glu: int = 1,
         conv_dropout: float = 0.2,
         dropout_input: float = 0.2,
-        group_norm: bool = True,
+        batch_norm: bool = True,
         half: bool = False,
         cnn_pos_encoding: bool = True,
         bins: int = 128,
@@ -69,7 +69,7 @@ class SpectralConvConfig(Config):
         transformer_decoder_dim: int = 0,
     ):
         super(SpectralConvConfig, self).__init__()
-        self.initial_group_norm = initial_group_norm
+        self.initial_batch_norm = initial_batch_norm
         self.conditions = conditions
         self.mel_normalization = mel_normalization
         # Channels
@@ -102,7 +102,7 @@ class SpectralConvConfig(Config):
         self.glu = glu
         self.conv_dropout = conv_dropout
         self.dropout_input = dropout_input
-        self.group_norm = group_norm
+        self.batch_norm = batch_norm
         self.half = half
         self.cnn_pos_encoding = cnn_pos_encoding
         self.bins = bins
