@@ -170,16 +170,16 @@ class SpectralConvSequence(nn.Module):
             old_x = x
             x = module(x)  # [B, C_i, mel, T]
 
-            # GLU
-            glu = self.glus[module_idx]
-            if glu is not None:
-                x = glu(x)
-
             # Residual
             if self.skip_conv[module_idx] is not None:
                 x = x + self.skip_conv[module_idx](old_x)
             else:
                 x = x + old_x
+
+            # GLU
+            glu = self.glus[module_idx]
+            if glu is not None:
+                x = glu(x)
 
             if return_hidden_outputs:
                 hidden_outputs.append(x)
