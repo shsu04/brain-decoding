@@ -83,7 +83,7 @@ class SpectralConv(torch.nn.Module):
         # Batch norm if needed, each channel independently
         self.initial_group_norm = None
         if self.config.initial_group_norm:
-            self.initial_group_norm = nn.GroupNorm(num_groups=8, num_channels=channels)
+            self.initial_group_norm = nn.BatchNorm2d(num_features=channels)
 
         # SAME AS SIMPLE CONV, FLATTENED SPECTROGRAM
         # Project MEG channels with a linear layer
@@ -289,16 +289,14 @@ class SpectralConv(torch.nn.Module):
 
             # Convert to spectrogram [B, C, T] -> [B, C, mel, T]
             B, C, M, T = (
-                x_i.size(0), 
-                x_i.size(1), 
-                self.config.bins, 
-                x_i.size(2) // self.config.hop_length
+                x_i.size(0),
+                x_i.size(1),
+                self.config.bins,
+                x_i.size(2) // self.config.hop_length,
             )
             x_i = torch.log1p(self.spectrogram_transform(x_i))
-            
-            x_i = x_i[
-                ..., :M, :T
-            ]  #  ensure correct size [B, C, mel, T]
+
+            x_i = x_i[..., :M, :T]  #  ensure correct size [B, C, mel, T]
 
             # [B, C, mel, T] -> [B, C, mel * T]
             x_i = x_i.reshape(B, C, M * T)
@@ -336,11 +334,9 @@ class SpectralConv(torch.nn.Module):
         x = torch.cat(x_aggregated, dim=0)  # [B_i * i, C, mel * T]
         del x_aggregated
         B = x.size(0)
-        
-        x = x.reshape(
-            B, x.size(1), M, T
-        )  # [B, C, mel * T] -> [B, C, mel, T]
-        
+
+        x = x.reshape(B, x.size(1), M, T)  # [B, C, mel * T] -> [B, C, mel, T]
+
         condition_indices_map = {
             cond_type: torch.cat(indices, dim=0)
             for cond_type, indices in condition_indices_map.items()
@@ -351,13 +347,13 @@ class SpectralConv(torch.nn.Module):
 
         if self.initial_group_norm is not None:
             x = self.initial_group_norm(x)
-            
+
         # [B, C, mel, T] -> [B, C, mel * T] to re-use old code since only acts on channels
         x = x.reshape(B, x.size(1), M * T)
 
         if self.initial_linear is not None:
             x = self.initial_linear(x)
-            
+
         if self.conditional_layers is not None:
             for cond_type, cond_layer in self.conditional_layers.items():
                 x = cond_layer(x, condition_indices_map[cond_type])
@@ -367,10 +363,8 @@ class SpectralConv(torch.nn.Module):
 
         # CNN
         x, hidden_outputs = self.encoders(x)  # [B, C, mel, T]
-        x = x.reshape(
-            B, x.size(1) * M, T
-        )  # [B, C, mel, T] -> [B, C * mel, T]
-        
+        x = x.reshape(B, x.size(1) * M, T)  # [B, C, mel, T] -> [B, C * mel, T]
+
         # Transformers
         decoder_inference, quantizer_metrics = False, None
         if self.rnn_encoders:

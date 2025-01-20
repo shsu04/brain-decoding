@@ -125,7 +125,7 @@ class SpectralConvSequence(nn.Module):
             # group norm, activation, and dropout
             if not is_last:
                 if group_norm:
-                    layers.append(nn.GroupNorm(num_groups=4, num_channels=chout))
+                    layers.append(nn.BatchNorm2d(num_features=chout))
                 layers.append(activation())
 
                 if dropout:
@@ -135,9 +135,9 @@ class SpectralConvSequence(nn.Module):
 
             # Skip connection adaptor if in/out channel or count stride across time different
             if chin != chout or time_stride != 1:
-                self.skip_conv.append(
-                    Conv(chin, chout, 1, (freq_stride, time_stride), 0, groups=1)
-                )
+                conv = Conv(chin, chout, 1, (freq_stride, time_stride), 0, groups=1)
+                nn.init.kaiming_uniform_(conv.weight, a=0)
+                self.skip_conv.append(conv)
             else:
                 self.skip_conv.append(None)
 
