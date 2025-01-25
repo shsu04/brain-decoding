@@ -1,7 +1,9 @@
 import typing as tp
 from .simpleconv_config import SimpleConvConfig
-from .config import Config
+from .spectralconv_config import SpectralConvConfig
 from .training_config import TrainingConfig
+
+from peft import AdaLoraConfig
 
 
 class TrainingConfigV1(TrainingConfig):
@@ -12,8 +14,16 @@ class TrainingConfigV1(TrainingConfig):
 
     def __init__(
         self,
-        brain_encoder_config: SimpleConvConfig,
+        brain_encoder_config: tp.Union[SimpleConvConfig, SpectralConvConfig],
         data_partition: tp.Dict[str, tp.Dict[str, tp.List[str]]],
+        adalora_init_r: int = 8,
+        adalora_target_r: int = 4,
+        adalora_tinit=500,
+        adalora_tfinal=0,
+        adalora_deltaT=100,
+        adalora_lora_alpha=32,
+        adalora_lora_dropout=0.1,
+        adalora_total_step=None,
         # Pre-processing parameters
         # Brain
         new_freq: int = 100,
@@ -56,6 +66,20 @@ class TrainingConfigV1(TrainingConfig):
         # used for training.
         self.data_partition = data_partition
 
+        self.adalora_config = AdaLoraConfig(
+            peft_type="ADALORA",
+            task_type="SPEECH_RECOGNITION",
+            target_modules=["q_proj", "v_proj"],
+            init_r=adalora_init_r,
+            target_r=adalora_target_r,
+            tinit=adalora_tinit,
+            tfinal=adalora_tfinal,
+            deltaT=adalora_deltaT,
+            lora_alpha=adalora_lora_alpha,
+            lora_dropout=adalora_lora_dropout,
+            total_step=adalora_total_step,
+        )
+
         # Pre-processing parameters
         # Brain
         self.new_freq = new_freq
@@ -77,6 +101,7 @@ class TrainingConfigV1(TrainingConfig):
         # Hyperparameters
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.batch_size = batch_size
         self.epochs = epochs
         self.alpha = alpha
         self.random_test_size = random_test_size

@@ -1,7 +1,6 @@
 import typing as tp
 from .simpleconv_config import SimpleConvConfig
 from .spectralconv_config import SpectralConvConfig
-from .config import Config
 from .training_config import TrainingConfig
 
 
