@@ -124,6 +124,13 @@ class TrainingSession(ABC):
             )
             self.autocast_dtype = torch.float32
 
+        # Metric for early stopping
+        self.highest_epoch, self.highest_metrics, self.highest_average_test_accuracy = (
+            0,
+            None,
+            0,
+        )
+        
     @abstractmethod
     def train(self):
         pass

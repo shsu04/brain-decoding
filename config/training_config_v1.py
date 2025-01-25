@@ -46,6 +46,7 @@ class TrainingConfigV1(TrainingConfig):
         latent_alignment_objectives: dict[str, float] = {
             "cosine_similarity": 0.0,
             "mse_loss": 0.0,
+            "clip_loss": 0.0,
         },
         latent_alignment_layers: tp.List[int] = [-1],
     ):
@@ -96,7 +97,7 @@ class TrainingConfigV1(TrainingConfig):
         ), "Weighting must be non-negative"
         assert all(
             [
-                k in ["cosine_similarity", "mse_loss"]
+                k in ["cosine_similarity", "mse_loss", "clip_loss"]
                 for k in latent_alignment_objectives.keys()
             ]
         ), "Invalid objective"

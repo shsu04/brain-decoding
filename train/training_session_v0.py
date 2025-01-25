@@ -72,12 +72,6 @@ class TrainingSessionV0(TrainingSession):
         self.scaler = torch.amp.GradScaler(device=device)
         self.clip_loss, self.mse_loss = self.model.clip_loss, mse_loss_per_batch
 
-        self.highest_epoch, self.highest_metrics, self.highest_average_test_accuracy = (
-            0,
-            None,
-            0,
-        )
-
     def train(
         self,
         device: str,
