@@ -4,19 +4,8 @@ import torch.nn.functional as F
 
 def mse_loss_per_batch(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     """
-    Compute the mean squared error loss per batch to avoid averaging causing
-    homogeneous predictions.
+    Compute the mean squared error loss per batch.
     """
-    weights = {
-        "mse": 1.0,
-    }
+    loss = F.mse_loss(target, pred)
 
-    losses = {}
-
-    # Basic MSE loss
-    losses["mse"] = F.mse_loss(target, pred)
-
-    # Compute weighted sum
-    total_loss = sum(weights[k] * v for k, v in losses.items())
-
-    return total_loss
+    return loss

@@ -41,6 +41,34 @@ class CLIPLoss(nn.Module):
             "metrics": self.eval_metrics(probs, targets),  # on CPU
         }
 
+    # def forward(
+    #     self,
+    #     x_1: torch.Tensor,
+    #     x_2: torch.Tensor,
+    # ) -> dict[str, float]:
+    #     """
+    #     Computes CLIP loss on two embeddings, x_1 and x_2. Both of shape [B, C, T]
+    #     Returns:
+    #         clip_loss: torch.Tensor, shape [B]
+    #         metrics: dict[str, float]
+    #     """
+    #     assert x_1.size() == x_2.size()
+
+    #     inv_norms = 1 / (1e-8 + x_1.norm(dim=(1, 2), p=2))  # [B]
+
+    #     # Compute similarity, [B, C, T] x [B, C, T] -> [B, B]
+    #     logits = torch.einsum("bct,dct,d->bd", x_1, x_2, inv_norms) / self.temperature
+
+    #     # Diagonal targets
+    #     targets = torch.arange(x_1.size(0), device=x_1.device)
+    #     probs = F.log_softmax(logits, dim=-1)  # [B]
+    #     clip_loss = F.cross_entropy(probs, targets, reduction="mean")
+
+    #     return {
+    #         "loss": clip_loss,  # Still on device
+    #         "metrics": self.eval_metrics(probs, targets),  # on CPU
+    #     }
+
     def eval_metrics(
         self,
         probs: torch.Tensor,
