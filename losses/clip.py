@@ -114,9 +114,9 @@ class CLIPLoss(nn.Module):
         correct = (predicted_labels == targets).cpu().sum().item()
 
         metrics = {
-            "correct": correct / 400,
-            "top_10_correct": top10_correct / 400,
-            "top_5_correct": top5_correct / 400,
+            "correct": correct,
+            "top_10_correct": top10_correct,
+            "top_5_correct": top5_correct,
         }
 
         return metrics
