@@ -61,7 +61,7 @@ class ConvSequence(nn.Module):
             self.chan_embedding = nn.Parameter(
                 torch.randn(1, channels[0], 1), requires_grad=True
             )
-            nn.kaiming_uniform_(self.chan_embedding, a=0)
+            nn.init.kaiming_uniform_(self.chan_embedding, a=0)
 
         # Build layers
         for k, (chin, chout) in enumerate(zip(channels[:-1], channels[1:])):

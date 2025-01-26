@@ -56,7 +56,6 @@ class ChannelMerger(nn.Module):
             raise ValueError(f"Unknown embedding type: {embedding_type}")
 
         self.layer_norm = nn.LayerNorm(embedding_dim)
-        self.temperature = nn.Parameter(torch.tensor(1.0))
 
         # Learnable heads for each condition
         self.conditions = conditions
@@ -137,25 +136,21 @@ class ChannelMerger(nn.Module):
 
         # Dropout around random center's radius
         if self.training and self.dropout:
-
             center_to_ban = torch.rand(self.position_getter.dim, device=x.device)
             radius_to_ban = self.dropout
-
             banned = (positions - center_to_ban).norm(dim=-1) <= radius_to_ban
             score_offset[banned] = float("-inf")  # [B, C]
-            
+
         heads = self.get_heads(B=B, condition=condition, device=x.device)
-        
+
         # How well pos emb aligns with learnable heads
-        scores = (
-            torch.einsum("bcd,bod->boc", embedding, heads) / self.temperature
-        )  # [B, C, ch_out]
+        scores = torch.einsum("bcd,bod->boc", embedding, heads)  # [B, C, ch_out]
         scores += score_offset[:, None]  # mask
-        
+
         # Create each output channel as a weighted sum of input channels
-        weights = torch.softmax(scores, dim=2)
+        weights = torch.softmax(scores, dim=2)  # [B, C, ch_out]
         out = torch.einsum("bct,boc->bot", x, weights)  # [B, ch_out, T]
-        
+
         return out, weights
 
 

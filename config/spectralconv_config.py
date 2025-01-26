@@ -69,6 +69,12 @@ class SpectralConvConfig(Config):
         transformer_decoder_dim: int = 0,
     ):
         super(SpectralConvConfig, self).__init__()
+
+        assert dropout < 1.0, "Dropout should be a probability"
+        assert merger_dropout < 1.0, "Merger dropout should be a probability"
+        assert dropout_input < 1.0, "Dropout input should be a probability"
+        assert conv_dropout < 1.0, "Conv dropout should be a probability"
+
         self.initial_batch_norm = initial_batch_norm
         self.conditions = conditions
         self.mel_normalization = mel_normalization
