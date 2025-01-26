@@ -62,8 +62,8 @@ def plot_mel_spectrogram(
             origin="lower",
             interpolation="nearest",
             cmap="viridis",
-            vmin=vmin,
-            vmax=vmax,
+            # vmin=vmin,
+            # vmax=vmax,
         )
 
         # Set correct time axis
@@ -84,8 +84,8 @@ def plot_mel_spectrogram(
                 origin="lower",
                 interpolation="nearest",
                 cmap="viridis",
-                vmin=vmin,
-                vmax=vmax,
+                # vmin=vmin,
+                # vmax=vmax,
             )
 
             # Set correct time axis
