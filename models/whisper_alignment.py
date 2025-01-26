@@ -46,11 +46,9 @@ class WhisperAlignment(nn.Module):
         ).to(device)
 
         # Only encoder is used for alignment, free mem
-        self.encoder = whisper_model.get_encoder()
+        self.encoder = whisper_model.get_encoder()._freeze_parameters()
         del whisper_model.decoder
         del whisper_model
-
-        self.freeze()
 
         # Which hidden layers to align, last by default
         self.layers_to_align = layers_to_align
@@ -73,10 +71,6 @@ class WhisperAlignment(nn.Module):
         self.encoder.forward = torch.compile(
             self.encoder.forward, mode="reduce-overhead", fullgraph=True
         )
-
-    def freeze(self):
-        for param in self.parameters():
-            param.requires_grad = False
 
     def forward(
         self,
@@ -103,7 +97,6 @@ class WhisperAlignment(nn.Module):
             Hidden outputs [B, 80, 3000] of length brain encoder layers
 
             List of hidden states for each encoder layer in layers_to_align [B, T, D]
-            Last hidden state [B, T, D]
             Where 1500 = T, 1280 = D
         """
 
@@ -131,5 +124,4 @@ class WhisperAlignment(nn.Module):
             channel_weights,
             hidden_outputs,
             [encoder_outputs.hidden_states[i] for i in self.layers_to_align],
-            encoder_outputs.last_hidden_state,
         )

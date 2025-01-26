@@ -52,6 +52,7 @@ class TrainingConfigV1(TrainingConfig):
         mel_alignment_objectives: dict[str, float] = {
             "clip_loss": 0.0,
             "mse_loss": 0.0,
+            "commitment_loss": 0.0,
         },
         latent_alignment_objectives: dict[str, float] = {
             "cosine_similarity": 0.0,
