@@ -395,16 +395,16 @@ class AudioBatchFetcher(BatchFetcher):
         # total_length = int(self.window_size * self.audio_sample_rate // self.hop_length)
 
         # for (start_sec, end_sec) in time_stamps:
-            
+
         #     start_frame = int(start_sec * self.audio_sample_rate // self.hop_length)
         #     end_frame = int(end_sec * self.audio_sample_rate // self.hop_length)
-            
+
         #     # Slice the spectrogram along the time dimension, then pad to window size
         #     spectro_segment = spectrogram[..., start_frame:end_frame]  # [F, t]
         #     spectro_segment = torch.nn.functional.pad(
         #         spectro_segment, (0, total_length - spectro_segment.shape[-1])
         #     ).unsqueeze(0) # [1, F, T]
-            
+
         #     spectro_segments.append(spectro_segment)
-            
+
         # return torch.cat(spectro_segments, dim=0)

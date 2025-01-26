@@ -139,6 +139,9 @@ class TrainingSessionV0(TrainingSession):
                     self.save(f"error_epoch_{epoch}")
                     raise e
 
+                del batch
+                gc.collect()
+
                 pbar.update(1)
             pbar.close()
 
