@@ -354,17 +354,7 @@ class TrainingSessionV0(TrainingSession):
                         recording_loss += loss.detach().to("cpu").item()
                         recording_clip_loss += clip_loss.detach().to("cpu").item()
                         recording_mse_loss += mse_loss.detach().to("cpu").item()
-
-                        if (
-                            quantizer_metrics is not None
-                            and "commitment_loss" in quantizer_metrics
-                        ):
-                            recording_commitment_loss += (
-                                quantizer_metrics["commitment_loss"]
-                                .detach()
-                                .to("cpu")
-                                .item()
-                            )
+                        
                         # Store metrics, already on CPU
                         recording_correct += clip_metrics["correct"]
                         recording_top_5 += clip_metrics["top_5_correct"]

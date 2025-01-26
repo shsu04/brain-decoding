@@ -39,7 +39,7 @@ class GroupedConvolution(nn.Module):
     - After conv, it's added to the input features.
     """
 
-    def __init__(self, d_model: int, kernel_size: int = 4):
+    def __init__(self, d_model: int, kernel_size: int = 15):
         super().__init__()
         # group the conv by d_model channels (depthwise convolution)
         self.conv = nn.Conv1d(
