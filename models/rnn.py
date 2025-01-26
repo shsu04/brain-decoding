@@ -184,7 +184,7 @@ class RNNEncoder(nn.Module):
                 # Transform mask [B, T] -> [B,]
                 lengths = (attn_mask == False).sum(dim=1).to(torch.int32).to(x.device)
 
-            x, hidden_outputs = self.encoders(
+            x, _, hidden_outputs = self.encoders(
                 x, lengths=lengths, return_hidden_outputs=return_hidden_outputs
             )  # [B, T, C]
 
