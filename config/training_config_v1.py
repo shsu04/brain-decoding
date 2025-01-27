@@ -131,3 +131,58 @@ class TrainingConfigV1(TrainingConfig):
         self.latent_alignment_objectives = latent_alignment_objectives
         assert all([i < 32 for i in latent_alignment_layers]), "Invalid layer index"
         self.latent_alignment_layers = latent_alignment_layers
+
+    # does not overide parent method
+    def to_dict(self):
+        brain_encoder_config = self.brain_encoder_config.to_dict()
+        config = super().to_dict()
+        config["brain_encoder_config"] = brain_encoder_config
+        return config
+
+    def from_dict(self, config: tp.Dict[str, tp.Any]):
+        if "bins" in config["brain_encoder_config"]:
+            self.brain_encoder_config = SpectralConvConfig.from_dict(
+                config["brain_encoder_config"]
+            )
+        else:
+            self.brain_encoder_config = SimpleConvConfig.from_dict(
+                config["brain_encoder_config"]
+            )
+        self.data_partition = config["data_partition"]
+        self.new_freq = config["new_freq"]
+        self.frequency_bands = config["frequency_bands"]
+        self.max_random_shift = config["max_random_shift"]
+        self.window_size = config["window_size"]
+        self.window_stride = config["window_stride"]
+        self.baseline_window = config["baseline_window"]
+        self.notch_filter = config["notch_filter"]
+        self.brain_clipping = config["brain_clipping"]
+        self.scaling = config["scaling"]
+        self.delay = config["delay"]
+        self.audio_model = config["audio_model"]
+        self.audio_sample_rate = config["audio_sample_rate"]
+        self.hop_length = config["hop_length"]
+        self.learning_rate = config["learning_rate"]
+        self.weight_decay = config["weight_decay"]
+        self.epochs = config["epochs"]
+        self.batch_size = config["batch_size"]
+        self.alpha = config["alpha"]
+        self.random_test_size = config["random_test_size"]
+        self.seed = config["seed"]
+        self.mel_alignment_objectives = config["mel_alignment_objectives"]
+        self.latent_alignment_objectives = config["latent_alignment_objectives"]
+        self.latent_alignment_layers = config["latent_alignment_layers"]
+        self.adalora_config = AdaLoraConfig(
+            peft_type="ADALORA",
+            task_type="SPEECH_RECOGNITION",
+            target_modules=["q_proj", "v_proj"],
+            init_r=config["adalora_init_r"],
+            target_r=config["adalora_target_r"],
+            tinit=config["adalora_tinit"],
+            tfinal=config["adalora_tfinal"],
+            deltaT=config["adalora_deltaT"],
+            lora_alpha=config["adalora_lora_alpha"],
+            lora_dropout=config["adalora_lora_dropout"],
+            total_step=config["adalora_total_step"],
+        )
+        return self

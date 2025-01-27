@@ -40,14 +40,30 @@ class TrainingSession(ABC):
         assert len(studies) > 0, "At least one study root path must be provided"
         os.makedirs(save_path, exist_ok=True)
 
-        logging.basicConfig(
-            filename=os.path.join(save_path, "training_log.log"),
-            level=logging.INFO,
-            format="%(asctime)s %(message)s",
-            filemode="w",
-            force=True,
-        )
-        self.logger = logging.getLogger()
+        # Batch logger
+        general_logger = logging.getLogger("general_logger")
+        general_logger.setLevel(logging.INFO)
+        if not general_logger.handlers:
+            fh = logging.FileHandler(
+                os.path.join(save_path, "training_log.log"), mode="w"
+            )
+            formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+            fh.setFormatter(formatter)
+            general_logger.addHandler(fh)
+            general_logger.propagate = False
+
+        # Epoch Results Logger
+        epoch_logger = logging.getLogger("epoch_logger")
+        epoch_logger.setLevel(logging.INFO)
+        if not epoch_logger.handlers:
+            fh = logging.FileHandler(os.path.join(save_path, "epoch_log.log"), mode="w")
+            formatter = logging.Formatter("Epoch %(message)s")
+            fh.setFormatter(formatter)
+            epoch_logger.addHandler(fh)
+            epoch_logger.propagate = False
+
+        self.logger = general_logger
+        self.epoch_logger = epoch_logger
 
         self.config = config
         self.data_path = data_path
@@ -206,6 +222,7 @@ class TrainingSession(ABC):
         # Consider putting this, generating conditional layer (subject and dataset) in dataloader
         pass
 
-    def log_print(self, message):
+    def log_print(self, message: str):
         print(message)
         self.logger.info(message)
+        self.epoch_logger.info(message)
