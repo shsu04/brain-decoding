@@ -226,3 +226,17 @@ class TrainingSession(ABC):
         print(message)
         self.logger.info(message)
         self.epoch_logger.info(message)
+
+    def delete_subdirectories(save_path):
+        """Recursively deletes all subdirectories in the given save_path."""
+        if not os.path.exists(save_path):
+            return  # Nothing to delete if the path doesn't exist
+
+        for entry in os.listdir(save_path):
+            entry_path = os.path.join(save_path, entry)
+            if os.path.isdir(entry_path):
+                try:
+                    shutil.rmtree(entry_path)
+                    print(f"Deleted directory: {entry_path}")
+                except Exception as e:
+                    print(f"Error deleting {entry_path}: {e}")
