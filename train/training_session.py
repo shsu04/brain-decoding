@@ -130,7 +130,7 @@ class TrainingSession(ABC):
             None,
             0,
         )
-        
+
     @abstractmethod
     def train(self):
         pass

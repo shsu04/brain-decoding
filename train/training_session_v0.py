@@ -354,7 +354,7 @@ class TrainingSessionV0(TrainingSession):
                         recording_loss += loss.detach().to("cpu").item()
                         recording_clip_loss += clip_loss.detach().to("cpu").item()
                         recording_mse_loss += mse_loss.detach().to("cpu").item()
-                        
+
                         # Store metrics, already on CPU
                         recording_correct += clip_metrics["correct"]
                         recording_top_5 += clip_metrics["top_5_correct"]
@@ -643,7 +643,7 @@ def load_training_session(
         raise FileNotFoundError(f"Save path {save_path} does not exist.")
 
     try:
-        load = torch.load(f"{save_path}/model.pt")
+        load = torch.load(f"{save_path}/model.pt", map_location=torch.device("cpu"))
         config = load["config"]
         config = TrainingConfigV0(
             brain_encoder_config=None, data_partition=None
