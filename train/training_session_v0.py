@@ -69,7 +69,7 @@ class TrainingSessionV0(TrainingSession):
             lr=self.config.learning_rate,
             weight_decay=self.config.weight_decay,
         )
-        self.scaler = torch.amp.GradScaler(device=device)
+        self.scaler = torch.GradScaler(device=device)
         self.clip_loss, self.mse_loss = self.model.clip_loss, mse_loss_per_batch
 
     def train(
@@ -291,7 +291,7 @@ class TrainingSessionV0(TrainingSession):
             for i in range(0, total, self.config.batch_size)
         ]
 
-        with torch.amp.autocast(dtype=self.autocast_dtype, device_type=device):
+        with torch.autocast(dtype=self.autocast_dtype, device_type=device):
 
             for start, end in batch_indices:
 

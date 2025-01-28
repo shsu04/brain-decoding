@@ -3,47 +3,10 @@ channels:
   - pytorch
   - nvidia
   - conda-forge
-  - defaults
 dependencies:
-  # Core direct requirements
   - python=3.11.7
-  - transformers=4.37.2
-  - numpy=1.26.3
-  - pandas=2.1.4
-  - scipy=1.12.0
-  - scikit-learn=1.4.1
-  
-  # Data handling and compression
-  - zstandard=0.22.0 
-  - pyarrow=14.0.2   
-  
-  # Audio processing
-  - librosa=0.10.1
-  
-  # Development environment (direct)
-  - jupyterlab=4.2.2
-  - ipywidgets=8.1.5 
-  - matplotlib=3.8.0
-  
-  # Utils (direct)
-  - tqdm=4.66.4
-  - ipykernel
-  
-  # PyTorch and related packages
-  - pytorch=2.1.0
-  - torchvision=0.16.1
-  - pytorch-cuda=12.4  # Ensure this matches the system CUDA
-    
-  # Pip packages (direct)
-  - pip
-  - pip:
-    - torchaudio==2.1.0  # match PyTorch CUDA build
-    - datasets==2.17.0
-    - tokenizers==0.15.2
-    - mne==1.6.1 
-    - mne-bids==0.14 
-    - ray
-    - accelerate
-    - seaborn
-    - osfclient
-    - peft==0.10.0
+  - pytorch=2.1.0=*cuda*
+  - pytorch-cuda=11.8
+  - torchvision
+  - torchaudio
+  - bitsandbytes>=0.41.1

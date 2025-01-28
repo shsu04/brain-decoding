@@ -75,7 +75,7 @@ class TrainingSessionV1(TrainingSession):
                 lr=config.learning_rate,
                 weight_decay=config.weight_decay,
             )
-            self.scaler = torch.amp.GradScaler(device=device)
+            self.scaler = torch.GradScaler(device=device)
         else:
             self.optimizer = None
             self.scaler = None
@@ -393,7 +393,7 @@ class TrainingSessionV1(TrainingSession):
             for i in range(0, total, self.config.batch_size)
         ]
 
-        with torch.amp.autocast(dtype=self.autocast_dtype, device_type=device):
+        with torch.autocast(dtype=self.autocast_dtype, device_type=device):
             for i, (start, end) in enumerate(batch_indices):
                 try:
                     if train:
