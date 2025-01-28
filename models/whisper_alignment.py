@@ -36,7 +36,7 @@ class WhisperAlignment(nn.Module):
             self.brain_module_config = brain_module_config
             self.brain_module = SpectralConv(brain_module_config)
 
-        self.model_id = "openai/whisper-large-v3"
+        self.model_id = "openai/whisper-base"
 
         if torch.cuda.get_device_capability() in [(7, 0), (8, 0), (9, 0)]:
             torch_dtype = torch.bfloat16

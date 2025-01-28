@@ -69,7 +69,7 @@ class TrainingConfigV1(TrainingConfig):
         self.adalora_config = AdaLoraConfig(
             peft_type="ADALORA",
             task_type="SPEECH_RECOGNITION",
-            target_modules=["q_proj", "v_proj"],
+            target_modules=["q_proj", "k_proj", "v_proj", "out_proj", "fc1", "fc2"],
             init_r=adalora_init_r,
             target_r=adalora_target_r,
             tinit=adalora_tinit,
