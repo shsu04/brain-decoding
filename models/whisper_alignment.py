@@ -1,3 +1,4 @@
+import gc
 import torch
 import torch.nn as nn
 from transformers import WhisperModel
@@ -37,10 +38,18 @@ class WhisperAlignment(nn.Module):
 
         self.model_id = "openai/whisper-large-v3"
 
+        if torch.cuda.get_device_capability() in [(7, 0), (8, 0), (9, 0)]:
+            torch_dtype = torch.bfloat16
+        elif torch.cuda.available():
+            torch_dtype = torch.float16
+        else:
+            torch_dtype = torch.float32
+
         whisper_model = WhisperModel.from_pretrained(
             self.model_id,
             low_cpu_mem_usage=True,
             use_safetensors=True,
+            torch_dtype=torch_dtype,
         ).to(device)
 
         # Only encoder is used for alignment, free mem
@@ -48,6 +57,9 @@ class WhisperAlignment(nn.Module):
         self.encoder._freeze_parameters()
         del whisper_model.decoder
         del whisper_model
+
+        torch.cuda.empty_cache()
+        gc.collect()
 
         # Which hidden layers to align, last by default
         self.layers_to_align = layers_to_align
@@ -96,7 +108,6 @@ class WhisperAlignment(nn.Module):
         B, C, T = x.size()
 
         assert C == 128, f"Expected {128} channels, got {C}"
-        assert T == 3000, f"Expected {3000} timesteps, got {T}"
 
         # Pad or truncate
         if T < 3000:
@@ -106,12 +117,34 @@ class WhisperAlignment(nn.Module):
             # If longer, trim
             x = x[:, :, :3000]
 
-        encoder_outputs = self.encoder(x, output_hidden_states=True)
+        # Set up hidden states
+        if len(self.layers_to_align) is None:
+            return x, quantizer_metrics, channel_weights, None, None
+        elif self.layers_to_align == [-1]:
+            output_hidden_states = False
+        else:
+            output_hidden_states = True
+
+        # Whisper
+        encoder_outputs = self.encoder(x, output_hidden_states=output_hidden_states)
+
+        x = x[:, :, :T]  # Trim padding
+
+        # Sort hidden states
+        if len(self.layers_to_align) == [-1]:
+            hidden_states = [encoder_outputs.last_hidden_state]
+        else:
+            hidden_states = [
+                encoder_outputs.hidden_states[i] for i in self.layers_to_align
+            ]
+            del encoder_outputs.hidden_states
+            gc.collect()
+            torch.cuda.empty_cache()
 
         return (
             x,
             quantizer_metrics,
             channel_weights,
             hidden_outputs,
-            [encoder_outputs.hidden_states[i] for i in self.layers_to_align],
+            hidden_states,
         )

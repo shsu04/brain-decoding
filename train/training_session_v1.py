@@ -99,6 +99,9 @@ class TrainingSessionV1(TrainingSession):
         del frozen_whisper_model.decoder
         del frozen_whisper_model
 
+        torch.cuda.empty_cache()
+        gc.collect()
+
         self.adalora_steps = 0
         self.lowest_final_layer_total_loss = float("inf")
 
@@ -424,21 +427,34 @@ class TrainingSessionV1(TrainingSession):
                     del channel_weights, hidden_outputs, brain_batch
 
                     # Frozen module
-                    outputs = self.frozen_encoder(
-                        nn.functional.pad(
-                            audio_batch,
-                            (0, 3000 - self.config.window_size),
-                            mode="constant",
-                            value=0.0,
-                        ),
-                        output_hidden_states=True,
-                    )
-                    frozen_encoder_outputs = [
-                        outputs.hidden_states[l] for l in self.layers_to_align
-                    ]
+                    with torch.no_grad():
 
-                    del outputs
-                    gc.collect()
+                        if self.layers_to_align == [-1]:
+                            output_hidden_states = False
+                        else:
+                            output_hidden_states = True
+
+                        outputs = self.frozen_encoder(
+                            nn.functional.pad(
+                                audio_batch,
+                                (0, 3000 - audio_batch.size(2)),
+                                mode="constant",
+                                value=0.0,
+                            ),
+                            output_hidden_states=output_hidden_states,
+                        )
+
+                        if len(self.layers_to_align) == [-1]:
+                            frozen_encoder_outputs = [outputs.last_hidden_state]
+                        else:
+                            frozen_encoder_outputs = [
+                                outputs.hidden_states[l]
+                                for l in self.model.layers_to_align
+                            ]
+
+                            del outputs
+                            gc.collect()
+                            torch.cuda.empty_cache()
 
                     # Brain module losses
                     mse_loss = self.mse_loss(pred=x, target=audio_batch)
@@ -821,7 +837,7 @@ class TrainingSessionV1(TrainingSession):
                 {
                     "config": self.config.to_dict(),
                     "model": self.model.cpu().state_dict(),
-                    "conditions": self.model.condition_to_idx,
+                    "conditions": self.model.brain_module.condition_to_idx,
                 },
                 f"{checkpoint_path}/model.pt",
             )

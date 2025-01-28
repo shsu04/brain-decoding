@@ -7,6 +7,7 @@ into batch of brain and audio segment pairs, sliced by window size and stride.
 import copy
 import os
 import pickle
+from re import A
 import shutil
 from attr import dataclass
 import mne
@@ -343,7 +344,6 @@ class AudioBatchFetcher(BatchFetcher):
 
         # Concat along batch dim
         audio_segments = torch.cat(audio_segments, dim=0)
-
         return audio_segments
 
     def pre_process_audio(
