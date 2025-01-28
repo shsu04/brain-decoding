@@ -67,7 +67,6 @@ class TrainingSessionV1(TrainingSession):
             brain_module_config=config.brain_encoder_config,
             adalora_config=config.adalora_config,
             layers_to_align=config.latent_alignment_layers,
-            use_compile=False,
         )
 
         if torch.cuda.is_available():
