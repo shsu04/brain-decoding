@@ -46,9 +46,12 @@ class WhisperAlignment(nn.Module):
         ).to(device)
 
         # Only encoder is used for alignment, free mem
-        self.encoder = whisper_model.get_encoder()._freeze_parameters()
+        self.encoder = whisper_model.get_encoder()
+        self.encoder = self.encoder._freeze_parameters()
         del whisper_model.decoder
         del whisper_model
+
+        print(f"self.encoder: {self.encoder}")
 
         # Which hidden layers to align, last by default
         self.layers_to_align = layers_to_align

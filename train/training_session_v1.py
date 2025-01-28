@@ -97,7 +97,8 @@ class TrainingSessionV1(TrainingSession):
             low_cpu_mem_usage=True,
             use_safetensors=True,
         ).to(device)
-        self.frozen_encoder = frozen_whisper_model.get_encoder()._freeze_parameters()
+        self.frozen_encoder = frozen_whisper_model.get_encoder()
+        self.frozen_encoder = self.frozen_encoder._freeze_parameters()
 
         del frozen_whisper_model.decoder
         del frozen_whisper_model
@@ -310,7 +311,7 @@ class TrainingSessionV1(TrainingSession):
                 f"Final Layer Clip Loss: {metrics['final_layer_losses']['clip_loss']:.4f}, Final Layer MSE Loss: {metrics['final_layer_losses']['mse_loss']:.4f}"
             )
             self.log_print(
-                f'Final Layer Cosine Similarity Loss: {metrics['final_layer_losses']['cosine_similarity']:.4f}, Final Layer Total Loss: {metrics['final_layer_losses']['total']:.4f}'
+                f"Final Layer Cosine Similarity Loss: {metrics['final_layer_losses']['cosine_similarity']:.4f}, Final Layer Total Loss: {metrics['final_layer_losses']['total']:.4f}"
             )
 
     def run_batch(self, batch: AudioBatch, train: bool) -> tp.Dict[str, float]:
@@ -645,9 +646,10 @@ class TrainingSessionV1(TrainingSession):
                     continue
                 del batch
                 gc.collect()
-        
+
             final_metrics = {
-                "loss": sum([batch["loss"] for batch in all_metrics]) / test_sizes[test],
+                "loss": sum([batch["loss"] for batch in all_metrics])
+                / test_sizes[test],
                 "mel_loss": sum([batch["mel_loss"] for batch in all_metrics])
                 / test_sizes[test],
                 "clip_loss": sum([batch["clip_loss"] for batch in all_metrics])
@@ -689,7 +691,7 @@ class TrainingSessionV1(TrainingSession):
                 / test_sizes[test],
             }
             self.metrics["test"][test].append(final_metrics)
-            
+
             self.log_print(
                 f"Test {test} completed., Loss: {final_metrics['loss']:.4f}, Mel Loss: {final_metrics['mel_loss']:.4f}"
             )
@@ -791,19 +793,19 @@ class TrainingSessionV1(TrainingSession):
     def save(self, name: str):
         """Saves the model and logs to the save path."""
         with torch.no_grad():
-            
+
             self.delete_subdirectories(self.save_path)
-            
+
             # Training session config
             if not os.path.exists(self.save_path):
                 os.makedirs(self.save_path)
-            
+
             config = self.config.to_dict()
             with open(self.save_path + "/training_config.json", "w") as json_file:
                 json.dump(config, json_file, indent=4)
             checkpoint_path = f"{self.save_path}/{name}"
             os.makedirs(checkpoint_path, exist_ok=True)
-                
+
             # Save model
             torch.save(
                 {
@@ -813,7 +815,7 @@ class TrainingSessionV1(TrainingSession):
                 },
                 f"{checkpoint_path}/model.pt",
             )
-            
+
             # Save metrics
             torch.save(
                 {
@@ -829,13 +831,14 @@ class TrainingSessionV1(TrainingSession):
                 },
                 f"{checkpoint_path}/metrics.pt",
             )
-            
+
         self.model.to(self.device)
         gc.collect()
         torch.cuda.empty_cache()
 
         return
-            
+
+
 def load_training_session(
     save_path: str,
     studies: tp.Dict[str, str] = None,
@@ -866,12 +869,12 @@ def load_training_session(
             max_cache_size=max_cache_size,
         )
         training_session.save_path = save_path
-        
+
         # Load model
         training_session.model.load_state_dict(load["model"])
         # Load metrics
         metrics_path = os.path.join(save_path, "metrics.pt")
-        
+
         if os.path.exists(metrics_path):
             metrics = torch.load(metrics_path)
             training_session.metrics = metrics.get("metrics", {})
@@ -884,7 +887,7 @@ def load_training_session(
                 "highest_average_test_accuracy", 0
             )
             training_session.adalora_steps = metrics.get("adalora_steps", 0)
-            
+
             training_session.optimizer.load_state_dict(metrics["optimizer"])
             training_session.scaler.load_state_dict(metrics["scaler"])
             training_session.error = metrics["error"]
@@ -896,9 +899,9 @@ def load_training_session(
 
         if training_session.model.condition_to_idx != load["conditions"]:
             raise ValueError("Condition to idx mismatch.")
-        
+
         shutil.rmtree("temp")
-        
+
         return training_session
 
     except Exception as e:

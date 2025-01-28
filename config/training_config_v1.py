@@ -111,7 +111,10 @@ class TrainingConfigV1(TrainingConfig):
             [v >= 0 for v in mel_alignment_objectives.values()]
         ), "Weighting must be non-negative"
         assert all(
-            [k in ["clip_loss", "mse_loss"] for k in mel_alignment_objectives.keys()]
+            [
+                k in ["clip_loss", "mse_loss", "commitment_loss"]
+                for k in mel_alignment_objectives.keys()
+            ]
         ), "Invalid objective"
         self.mel_alignment_objectives = mel_alignment_objectives
 
