@@ -69,9 +69,6 @@ class TrainingSessionV1(TrainingSession):
             layers_to_align=config.latent_alignment_layers,
             use_compile=False,
         )
-        self.model = torch.compile(
-            self.model.forward, mode="reduce-overhead", fullgraph=True
-        )
 
         if torch.cuda.is_available():
             self.optimizer = AdamW(
@@ -103,12 +100,26 @@ class TrainingSessionV1(TrainingSession):
         del frozen_whisper_model.decoder
         del frozen_whisper_model
 
-        self.frozen_encoder = torch.compile(
-            self.frozen_encoder.forward, mode="reduce-overhead"
-        )
-
         self.adalora_steps = 0
         self.lowest_final_layer_total_loss = float("inf")
+
+        gpu_ok = False
+        if torch.cuda.is_available():
+            device_cap = torch.cuda.get_device_capability()
+            if device_cap in ((7, 0), (8, 0), (9, 0)):
+                gpu_ok = True
+
+        # Compile if on NVIDIA V100, A100, or H100 for faster training
+        if not gpu_ok:
+            self.log_print(
+                "GPU is not NVIDIA V100, A100, or H100. Speedup numbers may be lower "
+                "than expected."
+            )
+        if gpu_ok:
+            self.model = torch.compile(self.model)
+            self.frozen_encoder = torch.compile(
+                self.frozen_encoder.forward, mode="reduce-overhead"
+            )
 
     def train(
         self,

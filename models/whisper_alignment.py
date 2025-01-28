@@ -16,7 +16,6 @@ class WhisperAlignment(nn.Module):
         brain_module_config: tp.Union[SimpleConvConfig, SpectralConvConfig],
         adalora_config: AdaLoraConfig,
         layers_to_align: Optional[List[int]] = [-1],
-        use_compile: bool = False,
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
     ):
         """Uses the encoder hidden states from a pre-trained model for alignment
@@ -26,7 +25,6 @@ class WhisperAlignment(nn.Module):
 
         Keyword Arguments:
             layers_to_align -- which hidden layers to output for alignment
-            use_compile -- compile can have 4.5x speedup
         """
         super().__init__()
 
@@ -51,8 +49,6 @@ class WhisperAlignment(nn.Module):
         del whisper_model.decoder
         del whisper_model
 
-        print(f"self.encoder: {self.encoder}")
-
         # Which hidden layers to align, last by default
         self.layers_to_align = layers_to_align
         assert all([i < 32 for i in layers_to_align]), "Invalid layer index"
@@ -63,17 +59,8 @@ class WhisperAlignment(nn.Module):
             self.encoder, adalora_config, adapter_name="default"
         )
 
-        if use_compile:
-            self.compile()
-
         self.device = device
         self.to(device)
-
-    def compile(self):
-        """Only used when inference is done"""
-        self.encoder.forward = torch.compile(
-            self.encoder.forward, mode="reduce-overhead", fullgraph=True
-        )
 
     def forward(
         self,
