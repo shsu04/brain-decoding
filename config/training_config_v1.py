@@ -18,12 +18,12 @@ class TrainingConfigV1(TrainingConfig):
         data_partition: tp.Dict[str, tp.Dict[str, tp.List[str]]],
         adalora_init_r: int = 8,
         adalora_target_r: int = 4,
-        adalora_tinit=500,
-        adalora_tfinal=0,
-        adalora_deltaT=100,
-        adalora_lora_alpha=32,
-        adalora_lora_dropout=0.1,
-        adalora_total_step=None,
+        adalora_tinit: int = 500,
+        adalora_tfinal: int = 0,
+        adalora_deltaT: int = 100,
+        adalora_lora_alpha: int = 32,
+        adalora_lora_dropout: float = 0.1,
+        adalora_total_step: int = None,
         # Pre-processing parameters
         # Brain
         new_freq: int = 100,
@@ -34,7 +34,7 @@ class TrainingConfigV1(TrainingConfig):
         brain_clipping: float = 20,
         baseline_window: int = 0.5,
         notch_filter: bool = True,
-        scaling: str = "minmax",
+        scaling: str = "both",
         delay: float = 0,
         # Audio
         audio_model: str = "openai/whisper-large-v3",
@@ -45,7 +45,6 @@ class TrainingConfigV1(TrainingConfig):
         weight_decay: float = 1e-4,
         epochs: int = 50,
         batch_size: int = 128,
-        alpha: float = 0.5,
         random_test_size: int = 3,
         seed: int = 42,
         # Training objective
@@ -104,7 +103,6 @@ class TrainingConfigV1(TrainingConfig):
         self.weight_decay = weight_decay
         self.batch_size = batch_size
         self.epochs = epochs
-        self.alpha = alpha
         self.random_test_size = random_test_size
         self.seed = seed
 
@@ -166,7 +164,6 @@ class TrainingConfigV1(TrainingConfig):
         self.weight_decay = config["weight_decay"]
         self.epochs = config["epochs"]
         self.batch_size = config["batch_size"]
-        self.alpha = config["alpha"]
         self.random_test_size = config["random_test_size"]
         self.seed = config["seed"]
         self.mel_alignment_objectives = config["mel_alignment_objectives"]
