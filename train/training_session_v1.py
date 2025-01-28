@@ -98,7 +98,7 @@ class TrainingSessionV1(TrainingSession):
             use_safetensors=True,
         ).to(device)
         self.frozen_encoder = frozen_whisper_model.get_encoder()
-        self.frozen_encoder = self.frozen_encoder._freeze_parameters()
+        self.frozen_encoder._freeze_parameters()
 
         del frozen_whisper_model.decoder
         del frozen_whisper_model

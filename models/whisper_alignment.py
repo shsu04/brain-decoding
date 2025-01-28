@@ -47,7 +47,7 @@ class WhisperAlignment(nn.Module):
 
         # Only encoder is used for alignment, free mem
         self.encoder = whisper_model.get_encoder()
-        self.encoder = self.encoder._freeze_parameters()
+        self.encoder._freeze_parameters()
         del whisper_model.decoder
         del whisper_model
 
