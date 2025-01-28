@@ -429,7 +429,7 @@ class TrainingSessionV1(TrainingSession):
                     # Frozen module
                     with torch.no_grad():
 
-                        if self.layers_to_align == [-1]:
+                        if self.config.latent_alignment_layers == [-1]:
                             output_hidden_states = False
                         else:
                             output_hidden_states = True
@@ -444,11 +444,16 @@ class TrainingSessionV1(TrainingSession):
                             output_hidden_states=output_hidden_states,
                         )
 
-                        if len(self.layers_to_align) == [-1]:
-                            frozen_encoder_outputs = [outputs.last_hidden_state]
+                        # Trim to time ste
+                        if (self.config.latent_alignment_layers == [-1]) or (
+                            self.config.latent_alignment_layers == [32]
+                        ):
+                            frozen_encoder_outputs = [
+                                outputs.last_hidden_state[:, : audio_batch.size(2), :]
+                            ]
                         else:
                             frozen_encoder_outputs = [
-                                outputs.hidden_states[l]
+                                outputs.hidden_states[l][:, : audio_batch.size(2), :]
                                 for l in self.model.layers_to_align
                             ]
 

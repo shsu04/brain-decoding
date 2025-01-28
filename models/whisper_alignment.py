@@ -130,16 +130,17 @@ class WhisperAlignment(nn.Module):
 
         x = x[:, :, :T]  # Trim padding
 
-        # Sort hidden states
-        if len(self.layers_to_align) == [-1]:
-            hidden_states = [encoder_outputs.last_hidden_state]
+        # Sort hidden states, trim to time step
+        if self.layers_to_align == [-1] or self.config.latent_alignment_layers == [32]:
+            hidden_states = [encoder_outputs.last_hidden_state[:, :T, :]]
         else:
             hidden_states = [
-                encoder_outputs.hidden_states[i] for i in self.layers_to_align
+                encoder_outputs.hidden_states[i][:, :T, :] for i in self.layers_to_align
             ]
             del encoder_outputs.hidden_states
-            gc.collect()
-            torch.cuda.empty_cache()
+
+        gc.collect()
+        torch.cuda.empty_cache()
 
         return (
             x,
