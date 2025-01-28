@@ -10,7 +10,7 @@ class SpectralConvConfig(Config):
         conditions: dict[str, list] = None,
         # Channels
         in_channels: int = 208,
-        out_channels: int = 128,
+        out_channels: int = 80,
         hidden_dim: int = 512,
         dropout: float = 0.3,
         initial_batch_norm: bool = False,
@@ -42,7 +42,7 @@ class SpectralConvConfig(Config):
         batch_norm: bool = True,
         half: bool = False,
         cnn_pos_encoding: bool = True,
-        bins: int = 128,
+        bins: int = 80,
         hop_length: int = 2,
         # Quantizer
         quantizer: str = "vq",  # vq or gumbel or none

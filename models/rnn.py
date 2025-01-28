@@ -202,7 +202,7 @@ class TransformerDecoder(nn.Module):
     Transformer decoder model for Mel prediction
     """
 
-    mel_bins = 128
+    mel_bins = 80
 
     def __init__(
         self,

@@ -10,7 +10,7 @@ class SimpleConvConfig(Config):
         conditions: dict[str, list] = None,
         # Channels
         in_channels: int = 208,
-        out_channels: int = 128,
+        out_channels: int = 80,
         hidden_dim: int = 512,
         dropout: float = 0.3,
         initial_batch_norm: bool = False,

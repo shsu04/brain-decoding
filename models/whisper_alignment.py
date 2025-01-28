@@ -93,7 +93,7 @@ class WhisperAlignment(nn.Module):
             return_hidden_outputs -- flag to return hidden outputs from CNN and RNNs, [B, C, T] of length L
 
         Returns:
-            x - predicted mel [B, 128, 3000]
+            x - predicted mel [B, 80, 3000]
             Quantizer metrics [B, 80, 3000]
             Channel weights [B, C, C']
             Hidden outputs [B, 80, 3000] of length brain encoder layers
@@ -107,7 +107,7 @@ class WhisperAlignment(nn.Module):
         )  # [B, 80, T]
         B, C, T = x.size()
 
-        assert C == 128, f"Expected {128} channels, got {C}"
+        assert C == 80, f"Expected {80} channels, got {C}"
 
         # Pad or truncate
         if T < 3000:

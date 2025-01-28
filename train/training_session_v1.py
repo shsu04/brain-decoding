@@ -89,7 +89,7 @@ class TrainingSessionV1(TrainingSession):
 
         # Frozen whisper model for alignment
         frozen_whisper_model = WhisperModel.from_pretrained(
-            "openai/whisper-large-v3",
+            "openai/whisper-base",
             low_cpu_mem_usage=True,
             use_safetensors=True,
         ).to(device)

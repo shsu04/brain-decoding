@@ -24,7 +24,7 @@ class TrainingConfigV0(TrainingConfig):
         scaling: str = "minmax",
         delay: float = 0,
         # Audio
-        audio_model: str = "openai/whisper-large-v3",
+        audio_model: str = "openai/whisper-base",
         audio_sample_rate: int = 16000,
         hop_length: int = 160,
         # Hyperparameters
