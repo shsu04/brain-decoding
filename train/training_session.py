@@ -130,13 +130,15 @@ class TrainingSession(ABC):
         torch.set_float32_matmul_precision("high")
         gpu_ok = False
         if torch.cuda.is_available():
-            device_cap = torch.cuda.get_device_capability()
-            if device_cap in ((7, 0), (8, 0), (9, 0)):
+            major, minor = torch.cuda.get_device_capability()
+            if major >= 7:
                 gpu_ok = True
-                self.autocast_dtype = torch.bfloat16
+
+        # Compile if on NVIDIA V100, A100, or H100 for faster training
         if not gpu_ok:
             self.log_print(
-                "GPU is not NVIDIA V100, A100, or H100. Speedup numbers may be lower than expected."
+                "GPU is not Volta, Ampere, or Hopper architecture. Speedup numbers may be lower "
+                "than expected without bf16. Training at fp32."
             )
             self.autocast_dtype = torch.float32
 

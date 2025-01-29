@@ -40,7 +40,7 @@ class WhisperAlignment(nn.Module):
 
         if torch.cuda.get_device_capability() in [(7, 0), (8, 0), (9, 0)]:
             torch_dtype = torch.bfloat16
-        elif torch.cuda.available():
+        elif torch.cuda.is_available():
             torch_dtype = torch.float16
         else:
             torch_dtype = torch.float32
