@@ -527,7 +527,11 @@ class TrainingSessionV1(TrainingSession):
                             self.scaler.scale(loss).backward()
                             self.scaler.step(self.optimizer)
                             self.scaler.update()
-                            self.model.encoder.update_and_allocate(self.adalora_steps)
+
+                            # Only do rank re-allocation after tinit steps:
+                            if self.adalora_steps >= self.config.adalora_config.tinit:
+                                self.model.encoder.update_and_allocate(self.adalora_steps)
+
                             self.adalora_steps += 1
                             self.optimizer.zero_grad()
 

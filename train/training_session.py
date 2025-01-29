@@ -141,6 +141,8 @@ class TrainingSession(ABC):
                 "than expected without bf16. Training at fp32."
             )
             self.autocast_dtype = torch.float32
+        else:
+            self.autocast_dtype = torch.bfloat16
 
         # Metric for early stopping
         self.highest_epoch, self.highest_metrics, self.highest_average_test_accuracy = (
