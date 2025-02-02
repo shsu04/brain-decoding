@@ -110,7 +110,9 @@ def download_osf(root_dir="data/gwilliams2023", project_ids: list[str] = []):
     # Even listing storage dir is a bit slow, so parallelize
     download_tasks = []
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=len(project_ids) // 2
+    ) as executor:
         # One job per project
         future_to_project = {
             executor.submit(gather_osf_files, osf, root_dir, pid): pid
@@ -132,7 +134,9 @@ def download_osf(root_dir="data/gwilliams2023", project_ids: list[str] = []):
 
     print(f"Found {total_files} files. Downloading...")
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=len(project_ids)
+    ) as executor:
         futures = [
             executor.submit(download_osf_file, file_, path)
             for (file_, path) in download_tasks
@@ -156,15 +160,17 @@ def gather_osf_files(osf, root_dir, project_id):
     download_tasks = []
     for store in project.storages:
         for file_ in store.files:
-            # Clean up the path
+            # Clean up make target path
             path = file_.path.lstrip("/")
             path = os.path.join(root_dir, path)
 
             # Create directories
             directory, _ = os.path.split(path)
             os.makedirs(directory, exist_ok=True)
-            download_tasks.append((file_, path))
 
+            # Only download if the file does not exist
+            if not os.path.exists(path):
+                download_tasks.append((file_, path))
     return download_tasks
 
 
@@ -175,7 +181,7 @@ def download_osf_file(file_, target_path):
     """
     import osfclient.models.file
 
-    # no-tqdm copy function
+    # no-tqdm copy function for osfclient
     def copyfileobj_no_tqdm(fsrc, fdst, total, length=16 * 1024):
         """Copy data from file-like object fsrc to file-like object fdst
         but WITHOUT a progress bar.

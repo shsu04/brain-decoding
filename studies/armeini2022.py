@@ -27,11 +27,12 @@ class Armeini2022(Study):
         cache_enabled: bool = True,
         max_cache_size: int = 100,
         cache_name: str = "cache",
+        download: bool = False,
     ):
         root_dir = os.path.join(os.getcwd(), path)
 
         # Download
-        if not os.path.exists(root_dir):
+        if not os.path.exists(root_dir) or download:
             download_bool = input(
                 f"{root_dir} not found. Do you want to download it? [y/n]: "
             )
