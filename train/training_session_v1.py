@@ -463,13 +463,24 @@ class TrainingSessionV1(TrainingSession):
                             torch.cuda.empty_cache()
 
                     # Brain module losses
-                    mse_loss = self.mse_loss(pred=x, target=audio_batch)
 
-                    clip_results = self.clip_loss(x_1=x, x_2=audio_batch)
-                    clip_loss, clip_metrics = (
-                        clip_results["loss"],
-                        clip_results["metrics"],
-                    )
+                    if self.config.mel_alignment_objectives["mse_loss"] > 0:
+                        mse_loss = self.mse_loss(pred=x, target=audio_batch)
+                    else:
+                        mse_loss = torch.tensor(0.0).to(self.device)
+
+                    if self.config.mel_alignment_objectives["clip_loss"] > 0:
+                        clip_results = self.clip_loss(x_1=x, x_2=audio_batch)
+                        clip_loss, clip_metrics = (
+                            clip_results["loss"],
+                            clip_results["metrics"],
+                        )
+                    else:
+                        clip_loss, clip_metrics = torch.tensor(0.0).to(self.device), {
+                            "correct": 0,
+                            "top_5_correct": 0,
+                            "top_10_correct": 0,
+                        }
 
                     # Sum loss based on config
                     mel_loss = (
@@ -496,20 +507,42 @@ class TrainingSessionV1(TrainingSession):
                         zip(frozen_encoder_outputs, encoder_hidden_states)
                     ):
                         # Align latent spaces
-                        latent_alignment_losses["cosine_similarity"].append(
-                            self.cosine_similarity_loss(
-                                frozen_encoder_output, hidden_output
+
+                        if (
+                            self.config.latent_alignment_objectives["cosine_similarity"]
+                            > 0
+                        ):
+                            latent_alignment_losses["cosine_similarity"].append(
+                                self.cosine_similarity_loss(
+                                    frozen_encoder_output, hidden_output
+                                )
                             )
-                        )
-                        latent_alignment_losses["mse_loss"].append(
-                            self.mse_loss(hidden_output, frozen_encoder_output)
-                        )
-                        latent_alignment_clip_results = self.clip_loss(
-                            hidden_output, frozen_encoder_output
-                        )
-                        latent_alignment_losses["clip_loss"].append(
-                            latent_alignment_clip_results["loss"]
-                        )
+                        else:
+                            latent_alignment_losses["cosine_similarity"].append(
+                                torch.tensor(0.0).to(self.device)
+                            )
+
+                        if self.config.latent_alignment_objectives["mse_loss"] > 0:
+                            latent_alignment_losses["mse_loss"].append(
+                                self.mse_loss(hidden_output, frozen_encoder_output)
+                            )
+                        else:
+                            latent_alignment_losses["mse_loss"].append(
+                                torch.tensor(0.0).to(self.device)
+                            )
+
+                        if self.config.latent_alignment_objectives["clip_loss"] > 0:
+                            latent_alignment_clip_results = self.clip_loss(
+                                hidden_output, frozen_encoder_output
+                            )
+                            latent_alignment_losses["clip_loss"].append(
+                                latent_alignment_clip_results["loss"]
+                            )
+                        else:
+                            latent_alignment_losses["clip_loss"].append(
+                                torch.tensor(0.0).to(self.device)
+                            )
+
                         # Avoid recalculation
                         latent_alignment_losses["total"].append(
                             self.config.latent_alignment_objectives["cosine_similarity"]
