@@ -67,17 +67,14 @@ class WhisperAlignment(nn.Module):
 
         # AdaLora
         self.adalora_config = adalora_config
-        prefixes = ["model.encoder"]
+        prefixes = ["layers"]
         suffixes = ["k_proj", "q_proj", "v_proj", "out_proj", "fc1", "fc2"]
 
-        print(f"encoder.named_modules(): {list(encoder.named_modules())}")
-
-        # target_modules = self.match_modules_string(
-        #     encoder.named_modules(), prefixes, suffixes
-        # )
-        # print(f"AdaLora target modules: {target_modules}")
-        # self.adalora_config.target_modules = target_modules
-
+        target_modules = self.match_modules_string(
+            encoder.named_modules(), prefixes, suffixes
+        )
+        print(f"Found {len(target_modules)} target modules for AdaLora: {suffixes}")
+        self.adalora_config.target_modules = target_modules
         self.encoder = get_peft_model(encoder, adalora_config)
 
         self.device = device

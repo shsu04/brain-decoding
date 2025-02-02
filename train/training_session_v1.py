@@ -530,7 +530,9 @@ class TrainingSessionV1(TrainingSession):
 
                             # Only do rank re-allocation after tinit steps:
                             if self.adalora_steps >= self.config.adalora_config.tinit:
-                                self.model.encoder.update_and_allocate(self.adalora_steps)
+                                self.model.encoder.base_model.update_and_allocate(
+                                    self.adalora_steps
+                                )
 
                             self.adalora_steps += 1
                             self.optimizer.zero_grad()
