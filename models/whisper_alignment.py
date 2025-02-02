@@ -77,6 +77,10 @@ class WhisperAlignment(nn.Module):
         self.adalora_config.target_modules = target_modules
         self.encoder = get_peft_model(encoder, adalora_config)
 
+        print(
+            f"AdaLora model has {sum(p.numel() for p in self.encoder.parameters() if p.requires_grad)} parameters"
+        )
+
         self.device = device
         self.to(device)
 

@@ -11,6 +11,7 @@ import os
 import torch
 from transformers import WhisperModel
 import torch.nn as nn
+from peft import PeftModel, PeftConfig
 
 
 from dataloader import DataLoader
@@ -831,7 +832,7 @@ class TrainingSessionV1(TrainingSession):
         """Saves the model and logs to the save path."""
         with torch.no_grad():
 
-            self.delete_subdirectories(self.save_path)
+            # self.delete_subdirectories(self.save_path)
 
             # Training session config
             if not os.path.exists(self.save_path):
@@ -847,11 +848,12 @@ class TrainingSessionV1(TrainingSession):
             torch.save(
                 {
                     "config": self.config.to_dict(),
-                    "model": self.model.cpu().state_dict(),
+                    "brain_encoder": self.model.brain_module.cpu().state_dict(),
                     "conditions": self.model.brain_module.condition_to_idx,
                 },
-                f"{checkpoint_path}/model.pt",
+                f"{checkpoint_path}/brain_encoder.pt",
             )
+            self.model.encoder.save_pretrained(f"{checkpoint_path}/adalora_adapter")
 
             # Save metrics
             torch.save(
@@ -890,12 +892,18 @@ def load_training_session(
         raise FileNotFoundError(f"Save path {save_path} does not exist.")
 
     try:
-        load = torch.load(f"{save_path}/model.pt", map_location=torch.device("cpu"))
-        config = load["config"]
+        # Load config
+        brain_checkpoint_path = os.path.join(save_path, "brain_encoder.pt")
+        if not os.path.exists(brain_checkpoint_path):
+            raise ValueError(f"Cannot find {brain_checkpoint_path}.")
+        brain_checkpoint = torch.load(brain_checkpoint_path, map_location="cpu")
+        config_dict = brain_checkpoint["config"]
+
         config = TrainingConfigV1(
             brain_encoder_config=None, data_partition=None
-        ).from_dict(config)
+        ).from_dict(config_dict)
 
+        # Load training session
         training_session = TrainingSessionV1(
             config=config,
             studies=studies,
@@ -907,8 +915,26 @@ def load_training_session(
         )
         training_session.save_path = save_path
 
-        # Load model
-        training_session.model.load_state_dict(load["model"])
+        # Load brain model
+        training_session.model.brain_module.load_state_dict(
+            brain_checkpoint["brain_encoder"]
+        )
+        if training_session.model.condition_to_idx != brain_checkpoint["conditions"]:
+            raise ValueError("Condition to idx mismatch.")
+
+        # Load adalora
+        adalora_adapter_path = os.path.join(save_path, "adalora_adapter")
+        if not os.path.exists(adalora_adapter_path):
+            raise ValueError(f"Cannot find {adalora_adapter_path}.")
+
+        base_whisper = WhisperModel.from_pretrained("openai/whisper-base")
+        peft_encoder = PeftModel.from_pretrained(base_whisper, adalora_adapter_path)
+        adalora_config = PeftConfig.from_pretrained(adalora_adapter_path)
+
+        # Load adalora into whisper alignment model
+        training_session.model.adalora_config = adalora_config
+        training_session.model.encoder = peft_encoder
+
         # Load metrics
         metrics_path = os.path.join(save_path, "metrics.pt")
 
@@ -934,10 +960,9 @@ def load_training_session(
                 f"Metrics file not found at {metrics_path}."
             )
 
-        if training_session.model.condition_to_idx != load["conditions"]:
-            raise ValueError("Condition to idx mismatch.")
-
         shutil.rmtree("temp")
+        gc.collect()
+        torch.cuda.empty_cache()
 
         return training_session
 
