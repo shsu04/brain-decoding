@@ -1,5 +1,8 @@
+import multiprocessing
 import sys
 import os
+import threading
+import time
 import pexpect
 import hashlib
 import concurrent.futures
@@ -90,6 +93,34 @@ def download_radboud(
     return
 
 
+class RateLimiter:
+    def __init__(self, max_calls=100, period=60):
+        """To avoid error 429 (too many requests). Period in seconds"""
+        self.max_calls = max_calls
+        self.period = period
+        self.lock = threading.Lock()
+        self.calls = 0
+        self.start_time = time.time()
+
+    def wait(self):
+        while True:
+            with self.lock:
+                now = time.time()
+                elapsed = now - self.start_time
+                # Reset counter if period has passed
+                if elapsed >= self.period:
+                    self.calls = 0
+                    self.start_time = now
+                    elapsed = 0
+                # No wait if rate not exceeded
+                if self.calls < self.max_calls:
+                    self.calls += 1
+                    return
+                # Calculate time to wait until the period resets
+                wait_time = self.period - elapsed
+            time.sleep(wait_time)
+
+
 def download_osf(root_dir="data/gwilliams2023", project_ids: list[str] = []):
     """Downloads data through the open science framework cli."""
 
@@ -107,12 +138,12 @@ def download_osf(root_dir="data/gwilliams2023", project_ids: list[str] = []):
 
     print(f"Logged in as {username}. Gathering files for {root_dir}.")
 
-    # Even listing storage dir is a bit slow, so parallelize
     download_tasks = []
 
-    with concurrent.futures.ThreadPoolExecutor(
-        max_workers=len(project_ids) // 2
-    ) as executor:
+    rate_limiter = RateLimiter(max_calls=95, period=60)
+
+    # Even listing storage dir is a bit slow, so parallelize
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         # One job per project
         future_to_project = {
             executor.submit(gather_osf_files, osf, root_dir, pid): pid
@@ -132,13 +163,14 @@ def download_osf(root_dir="data/gwilliams2023", project_ids: list[str] = []):
         print("No files found for given project IDs.")
         return
 
-    print(f"Found {total_files} files. Downloading...")
+    print(f"Found {total_files} files. Downloading after rate limit reset (1 min)...")
+    time.sleep(60)
 
     with concurrent.futures.ThreadPoolExecutor(
-        max_workers=len(project_ids)
+        max_workers=multiprocessing.cpu_count() // 2
     ) as executor:
         futures = [
-            executor.submit(download_osf_file, file_, path)
+            executor.submit(download_osf_file, file_, path, rate_limiter)
             for (file_, path) in download_tasks
         ]
 
@@ -147,17 +179,24 @@ def download_osf(root_dir="data/gwilliams2023", project_ids: list[str] = []):
                 _ = future.result()
                 pbar.update(1)
 
+    failed = 0
+    for file, path in download_tasks:
+        if not os.path.exists(path):
+            print(f"Failed to download {file.path} to {path}")
+            failed += 1
+    print(f"Downloaded {total_files - failed}/{total_files} files. Returning...")
+
     return
 
 
-def gather_osf_files(osf, root_dir, project_id):
+def gather_osf_files(osf, root_dir: str, project_id: str):
     """
     Worker function to list all files from a single osf project,
     returning a list of (file_obj, local_path) tuples.
     """
     project = osf.project(project_id)
-
     download_tasks = []
+
     for store in project.storages:
         for file_ in store.files:
             # Clean up make target path
@@ -174,7 +213,7 @@ def gather_osf_files(osf, root_dir, project_id):
     return download_tasks
 
 
-def download_osf_file(file_, target_path):
+def download_osf_file(file_, target_path: str, rate_limiter: RateLimiter):
     """
     Worker function to download a single file from OSF to local path
     without displaying any tqdm progress bar.
@@ -199,6 +238,7 @@ def download_osf_file(file_, target_path):
     try:
         # download
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        rate_limiter.wait()
         with open(target_path, "wb") as f:
             file_.write_to(f)
     finally:

@@ -8,7 +8,7 @@ from models.simpleconv import SimpleConv
 from models.spectralconv import SpectralConv
 import typing as tp
 from studies.study import Recording
-from peft import AdaLoraConfig, AdaLoraModel
+from peft import AdaLoraConfig, get_peft_model
 
 
 class WhisperAlignment(nn.Module):
@@ -53,8 +53,8 @@ class WhisperAlignment(nn.Module):
         ).to(device)
 
         # Only encoder is used for alignment, free mem
-        self.encoder = whisper_model.get_encoder()
-        self.encoder._freeze_parameters()
+        encoder = whisper_model.get_encoder()
+        encoder._freeze_parameters()
         del whisper_model.decoder
         del whisper_model
 
@@ -67,9 +67,18 @@ class WhisperAlignment(nn.Module):
 
         # AdaLora
         self.adalora_config = adalora_config
-        self.encoder = AdaLoraModel(
-            self.encoder, adalora_config, adapter_name="default"
-        )
+        prefixes = ["model.encoder"]
+        suffixes = ["k_proj", "q_proj", "v_proj", "out_proj", "fc1", "fc2"]
+
+        print(f"encoder.named_modules(): {list(encoder.named_modules())}")
+
+        # target_modules = self.match_modules_string(
+        #     encoder.named_modules(), prefixes, suffixes
+        # )
+        # print(f"AdaLora target modules: {target_modules}")
+        # self.adalora_config.target_modules = target_modules
+
+        self.encoder = get_peft_model(encoder, adalora_config)
 
         self.device = device
         self.to(device)
@@ -149,3 +158,45 @@ class WhisperAlignment(nn.Module):
             hidden_outputs,
             hidden_states,
         )
+
+    def match_modules_string(
+        self,
+        named_modules,
+        start_prefixes,
+        end_suffixes,
+        mid_prefixes=[],
+    ):
+        matched_modules = []
+
+        for name, _ in named_modules:
+
+            start_matched = False
+            for start in start_prefixes:
+                if name.startswith(start):
+                    start_matched = True
+                    break
+
+            if not start_matched:
+                continue
+
+            if mid_prefixes:
+                mid_matched = False
+                for mid in mid_prefixes:
+                    if mid in name:
+                        mid_matched = True
+                        break
+
+                if not mid_matched:
+                    continue
+
+            end_matched = False
+            for end in end_suffixes:
+                if name.endswith(end):
+                    matched_modules.append(name)
+                    end_matched = True
+                    break
+
+            if not end_matched:
+                continue
+
+        return matched_modules
