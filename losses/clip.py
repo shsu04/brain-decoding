@@ -8,65 +8,63 @@ class CLIPLoss(nn.Module):
         super().__init__()
         self.temperature = nn.Parameter(torch.tensor(1.0))
 
-    # def forward(
-    #     self,
-    #     x_1: torch.Tensor,
-    #     x_2: torch.Tensor,
-    # ) -> dict[str, float]:
-    #     """
-    #     Computes CLIP loss on two embeddings, x_1 and x_2. Both of shape [B, C, T]
-
-    #     Returns:
-    #         clip_loss: torch.Tensor, shape [B]
-    #         metrics: dict[str, float]
-    #     """
-    #     assert x_1.size() == x_2.size()
-    #     B, C, T = x_1.size()
-    #     # [B, C, T] -> [B * T, C]
-    #     x_1, x_2 = (x_1.reshape(B * T, C), x_2.reshape(B * T, C))
-
-    #     x_1_norm = x_1 / (x_1.norm(dim=1, keepdim=True) + 1e-8)
-    #     x_2_norm = x_2 / (x_2.norm(dim=1, keepdim=True) + 1e-8)
-
-    #     logits = x_1_norm @ x_2_norm.transpose(0, 1)  # [B*T, B*T]
-    #     logits = logits / self.temperature
-
-    #     # Diagonal targets
-    #     targets = torch.arange(B * T, device=x_1.device)  # [B]
-    #     probs = F.log_softmax(logits, dim=-1)  # [B]
-    #     clip_loss = F.cross_entropy(probs, targets, reduction="mean")
-
-    #     return {
-    #         "loss": clip_loss,  # Still on device
-    #         "metrics": self.eval_metrics(probs, targets),  # on CPU
-    #     }
-
     def forward(
         self,
         x_1: torch.Tensor,
         x_2: torch.Tensor,
+        segment_level: bool = True,
     ) -> dict[str, float]:
         """
         Computes CLIP loss on two embeddings, x_1 and x_2. Both of shape [B, C, T]
+        If segment level true, computes similarity between segments. Otherwise at the
+        time step level. Metrics always calculated at segment level.
+
         Returns:
             clip_loss: torch.Tensor, shape [B]
             metrics: dict[str, float]
         """
         assert x_1.size() == x_2.size()
+        B, C, T = x_1.size()
 
         inv_norms = 1 / (1e-8 + x_1.norm(dim=(1, 2), p=2))  # [B]
 
+        # Segment level
         # Compute similarity, [B, C, T] x [B, C, T] -> [B, B]
-        logits = torch.einsum("bct,dct,d->bd", x_1, x_2, inv_norms) / self.temperature
+        segment_level_logits = (
+            torch.einsum("bct,dct,d->bd", x_1, x_2, inv_norms) / self.temperature
+        )
+        segment_level_targets = torch.arange(
+            x_1.size(0), device=x_1.device
+        )  # Diagonal targets
+        segment_level_probs = F.log_softmax(segment_level_logits, dim=-1)
 
-        # Diagonal targets
-        targets = torch.arange(x_1.size(0), device=x_1.device)
-        probs = F.log_softmax(logits, dim=-1)  # [B]
-        clip_loss = F.cross_entropy(probs, targets, reduction="mean")
+        if segment_level:
+            clip_loss = F.cross_entropy(
+                segment_level_probs, segment_level_targets, reduction="mean"
+            )
+        # Time step level, optional
+        else:
+            # [B, C, T] -> [B * T, C]
+            x_1, x_2 = (x_1.reshape(B * T, C), x_2.reshape(B * T, C))
+
+            x_1_norm = x_1 / (x_1.norm(dim=1, keepdim=True) + 1e-8)
+            x_2_norm = x_2 / (x_2.norm(dim=1, keepdim=True) + 1e-8)
+
+            logits = x_1_norm @ x_2_norm.transpose(0, 1)  # [B*T, B*T]
+            logits = logits / self.temperature
+
+            # Diagonal targets
+            time_step_targets = torch.arange(B * T, device=x_1.device)  # [B * T]
+            time_step_probs = F.log_softmax(logits, dim=-1)  # [B * T]
+            clip_loss = F.cross_entropy(
+                time_step_probs, time_step_targets, reduction="mean"
+            )
 
         return {
             "loss": clip_loss,  # Still on device
-            "metrics": self.eval_metrics(probs, targets),  # on CPU
+            "metrics": self.eval_metrics(
+                segment_level_probs, segment_level_targets
+            ),  # on CPU
         }
 
     def eval_metrics(
