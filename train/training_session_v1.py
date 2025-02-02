@@ -119,7 +119,7 @@ class TrainingSessionV1(TrainingSession):
                 "than expected without compilation."
             )
         if gpu_ok:
-            self.model = torch.compile(self.model)
+            self.model.encoder.base_model = torch.compile(self.model.encoder.base_model)
             self.frozen_encoder = torch.compile(
                 self.frozen_encoder.forward, mode="reduce-overhead"
             )
