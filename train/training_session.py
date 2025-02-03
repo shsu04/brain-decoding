@@ -22,6 +22,7 @@ class TrainingSession(ABC):
         cache_enabled: bool = True,
         max_cache_size: int = 100,
         cache_name: str = "cache",
+        download_studies: bool = False,
     ):
         """Initializes a training session with the provided configuration and data.
 
@@ -82,6 +83,7 @@ class TrainingSession(ABC):
                     cache_enabled=cache_enabled,
                     max_cache_size=max_cache_size,
                     cache_name=cache_name,
+                    download=download_studies,
                 )
                 if clear_cache:
                     shutil.rmtree(self.studies[study].cache_dir)

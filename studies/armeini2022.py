@@ -32,7 +32,7 @@ class Armeini2022(Study):
         root_dir = os.path.join(os.getcwd(), path)
 
         # Download
-        if not os.path.exists(root_dir) or download:
+        if not os.path.exists(root_dir) and download:
             download_bool = input(
                 f"{root_dir} not found. Do you want to download it? [y/n]: "
             )

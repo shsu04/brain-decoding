@@ -18,6 +18,7 @@ class StudyFactory:
         cache_enabled: bool,
         max_cache_size: int,
         cache_name: str,
+        download: bool,
     ) -> Study:
         if study_name not in STUDIES:
             raise ValueError(f"Study {study_name} not found")
@@ -27,4 +28,5 @@ class StudyFactory:
             cache_enabled=cache_enabled,
             max_cache_size=max_cache_size,
             cache_name=cache_name,
+            download=download,
         )
