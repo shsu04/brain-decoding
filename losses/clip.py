@@ -8,8 +8,8 @@ class CLIPLoss(nn.Module):
     def __init__(self, dim: int):
         super().__init__()
         self.temperature = nn.Parameter(torch.tensor(1.0))
-        # self.linear_x1 = torch.nn.LazyLinear(dim)
-        # self.linear_x2 = torch.nn.LazyLinear(dim)
+        self.linear_x1 = torch.nn.LazyLinear(dim)
+        self.linear_x2 = torch.nn.LazyLinear(dim)
 
     def forward(
         self,
@@ -29,9 +29,9 @@ class CLIPLoss(nn.Module):
         assert x_1.size() == x_2.size()
         B, C, T = x_1.size()
 
-        # # Normalize embeddings
-        # x_1 = self.linear_x1(x_1)
-        # x_2 = self.linear_x2(x_2)
+        # Normalize embeddings
+        x_1 = self.linear_x1(x_1)
+        x_2 = self.linear_x2(x_2)
 
         inv_norms = 1 / (1e-8 + x_1.norm(dim=(1, 2), p=2))  # [B]
 
