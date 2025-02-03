@@ -30,13 +30,13 @@ class Gwilliams2023(Study):
     ):
         root_dir = os.path.join(os.getcwd(), path)
 
-        # Download
-        if not os.path.exists(root_dir) or download:
-            download_bool = input(
-                f"{root_dir} not found. Do you want to download it? [y/n]: "
-            )
-            if download_bool == "y":
-                self.download(root_dir)
+        # # Download
+        # if not os.path.exists(root_dir) or download:
+        #     download_bool = input(
+        #         f"{root_dir} not found. Do you want to download it? [y/n]: "
+        #     )
+        #     if download_bool == "y":
+        #         self.download(root_dir)
 
         assert os.path.exists(root_dir), f"{root_dir} does not exist"
 

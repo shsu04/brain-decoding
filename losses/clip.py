@@ -44,6 +44,18 @@ class CLIPLoss(nn.Module):
             )
         # Time step level, optional
         else:
+            # Shorten time steps for efficiency since clip scales quadratically
+            keep_T = max(1, T // 4)
+            x1_kept_list, x2_kept_list = [], []
+
+            for b in range(B):
+                indices = torch.randperm(T, device=x_1.device)[:keep_T]
+                x1_kept_list.append(x_1[b, :, indices])
+                x2_kept_list.append(x_2[b, :, indices])
+
+            x_1 = torch.stack(x1_kept_list, dim=0)  # [B, C, T]
+            x_2 = torch.stack(x2_kept_list, dim=0)
+
             # [B, C, T] -> [B * T, C]
             x_1, x_2 = (x_1.reshape(B * T, C), x_2.reshape(B * T, C))
 

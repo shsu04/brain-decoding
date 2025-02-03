@@ -463,11 +463,17 @@ class TrainingSessionV1(TrainingSession):
                             torch.cuda.empty_cache()
 
                     # Brain module losses
-
                     if self.config.mel_alignment_objectives["mse_loss"] > 0:
                         mse_loss = self.mse_loss(pred=x, target=audio_batch)
                     else:
                         mse_loss = torch.tensor(0.0).to(self.device)
+
+                    # print(
+                    #     f"Pred mean: {x.mean().item():.4f}, std: {x.std().item():.4f}, min: {x.min().item():.4f}, max: {x.max().item():.4f}"
+                    # )
+                    # print(
+                    #     f"Target mean: {audio_batch.mean().item():.4f}, std: {audio_batch.std().item():.4f}, min: {audio_batch.min().item():.4f}, max: {audio_batch.max().item():.4f}"
+                    # )
 
                     if self.config.mel_alignment_objectives["clip_loss"] > 0:
                         clip_results = self.clip_loss(x_1=x, x_2=audio_batch)
@@ -524,7 +530,9 @@ class TrainingSessionV1(TrainingSession):
 
                         if self.config.latent_alignment_objectives["mse_loss"] > 0:
                             latent_alignment_losses["mse_loss"].append(
-                                self.mse_loss(hidden_output, frozen_encoder_output)
+                                self.mse_loss(
+                                    pred=hidden_output, target=frozen_encoder_output
+                                )
                             )
                         else:
                             latent_alignment_losses["mse_loss"].append(
