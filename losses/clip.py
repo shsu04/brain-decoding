@@ -57,7 +57,7 @@ class CLIPLoss(nn.Module):
             x_2 = torch.stack(x2_kept_list, dim=0)
 
             # [B, C, T] -> [B * T, C]
-            x_1, x_2 = (x_1.reshape(B * T, C), x_2.reshape(B * T, C))
+            x_1, x_2 = (x_1.reshape(B * keep_T, C), x_2.reshape(B * keep_T, C))
 
             x_1_norm = x_1 / (x_1.norm(dim=1, keepdim=True) + 1e-8)
             x_2_norm = x_2 / (x_2.norm(dim=1, keepdim=True) + 1e-8)
@@ -66,7 +66,7 @@ class CLIPLoss(nn.Module):
             logits = logits / self.temperature
 
             # Diagonal targets
-            time_step_targets = torch.arange(B * T, device=x_1.device)  # [B * T]
+            time_step_targets = torch.arange(B * keep_T, device=x_1.device)  # [B * T]
             time_step_probs = F.log_softmax(logits, dim=-1)  # [B * T]
             clip_loss = F.cross_entropy(
                 time_step_probs, time_step_targets, reduction="mean"
