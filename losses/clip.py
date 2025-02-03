@@ -1,12 +1,15 @@
+import gc
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class CLIPLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, x1_dim: int):
         super().__init__()
         self.temperature = nn.Parameter(torch.tensor(1.0))
+        self.linear_x1 = torch.nn.LazyLinear(x1_dim)
+        self.linear_x2 = torch.nn.LazyLinear(1580)
 
     def forward(
         self,
@@ -25,6 +28,10 @@ class CLIPLoss(nn.Module):
         """
         assert x_1.size() == x_2.size()
         B, C, T = x_1.size()
+
+        # Normalize embeddings
+        x_1 = self.linear_x1(x_1)
+        x_2 = self.linear_x2(x_2)
 
         inv_norms = 1 / (1e-8 + x_1.norm(dim=(1, 2), p=2))  # [B]
 
@@ -45,16 +52,20 @@ class CLIPLoss(nn.Module):
         # Time step level, optional
         else:
             # Shorten time steps for efficiency since clip scales quadratically
-            keep_T = max(1, T // 4)
+            keep_T = max(1, T // 5)
             x1_kept_list, x2_kept_list = [], []
+            indices = torch.randperm(T, device=x_1.device)[:keep_T]
 
             for b in range(B):
-                indices = torch.randperm(T, device=x_1.device)[:keep_T]
                 x1_kept_list.append(x_1[b, :, indices])
                 x2_kept_list.append(x_2[b, :, indices])
 
             x_1 = torch.stack(x1_kept_list, dim=0)  # [B, C, T]
             x_2 = torch.stack(x2_kept_list, dim=0)
+
+            del x1_kept_list, x2_kept_list
+            gc.collect()
+            torch.cuda.empty_cache()
 
             # [B, C, T] -> [B * T, C]
             x_1, x_2 = (x_1.reshape(B * keep_T, C), x_2.reshape(B * keep_T, C))
