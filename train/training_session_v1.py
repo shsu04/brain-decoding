@@ -939,80 +939,74 @@ def load_training_session(
     if not os.path.exists(save_path):
         raise FileNotFoundError(f"Save path {save_path} does not exist.")
 
-    try:
-        # Load config
-        brain_checkpoint_path = os.path.join(save_path, "brain_encoder.pt")
-        if not os.path.exists(brain_checkpoint_path):
-            raise ValueError(f"Cannot find {brain_checkpoint_path}.")
-        brain_checkpoint = torch.load(brain_checkpoint_path, map_location="cpu")
-        config_dict = brain_checkpoint["config"]
+    # Load config
+    brain_checkpoint_path = os.path.join(save_path, "brain_encoder.pt")
+    if not os.path.exists(brain_checkpoint_path):
+        raise ValueError(f"Cannot find {brain_checkpoint_path}.")
+    brain_checkpoint = torch.load(brain_checkpoint_path, map_location="cpu")
+    config_dict = brain_checkpoint["config"]
 
-        config = TrainingConfigV1(
-            brain_encoder_config=None, data_partition=None
-        ).from_dict(config_dict)
+    config = TrainingConfigV1(brain_encoder_config=None, data_partition=None).from_dict(
+        config_dict
+    )
 
-        # Load training session
-        training_session = TrainingSessionV1(
-            config=config,
-            studies=studies,
-            data_path=data_path,
-            save_path="temp",
-            clear_cache=clear_cache,
-            cache_enabled=cache_enabled,
-            max_cache_size=max_cache_size,
+    # Load training session
+    training_session = TrainingSessionV1(
+        config=config,
+        studies=studies,
+        data_path=data_path,
+        save_path="temp",
+        clear_cache=clear_cache,
+        cache_enabled=cache_enabled,
+        max_cache_size=max_cache_size,
+    )
+    training_session.save_path = save_path
+
+    # Load brain model
+    training_session.model.brain_module.load_state_dict(
+        brain_checkpoint["brain_encoder"]
+    )
+    if training_session.model.condition_to_idx != brain_checkpoint["conditions"]:
+        raise ValueError("Condition to idx mismatch.")
+
+    # Load adalora
+    adalora_adapter_path = os.path.join(save_path, "adalora_adapter")
+    if not os.path.exists(adalora_adapter_path):
+        raise ValueError(f"Cannot find {adalora_adapter_path}.")
+
+    base_whisper = WhisperModel.from_pretrained("openai/whisper-base")
+    peft_encoder = PeftModel.from_pretrained(base_whisper, adalora_adapter_path)
+    adalora_config = PeftConfig.from_pretrained(adalora_adapter_path)
+
+    # Load adalora into whisper alignment model
+    training_session.model.adalora_config = adalora_config
+    training_session.model.encoder = peft_encoder
+
+    # Load metrics
+    metrics_path = os.path.join(save_path, "metrics.pt")
+
+    if os.path.exists(metrics_path):
+        metrics = torch.load(metrics_path)
+        training_session.metrics = metrics.get("metrics", {})
+        training_session.highest_epoch = metrics.get("highest_epoch", 0)
+        training_session.highest_metrics = metrics.get("highest_metrics", {})
+        training_session.lowest_final_layer_total_loss = metrics.get(
+            "lowest_final_layer_total_loss", float("inf")
         )
-        training_session.save_path = save_path
-
-        # Load brain model
-        training_session.model.brain_module.load_state_dict(
-            brain_checkpoint["brain_encoder"]
+        training_session.highest_average_test_accuracy = metrics.get(
+            "highest_average_test_accuracy", 0
         )
-        if training_session.model.condition_to_idx != brain_checkpoint["conditions"]:
-            raise ValueError("Condition to idx mismatch.")
+        training_session.adalora_steps = metrics.get("adalora_steps", 0)
 
-        # Load adalora
-        adalora_adapter_path = os.path.join(save_path, "adalora_adapter")
-        if not os.path.exists(adalora_adapter_path):
-            raise ValueError(f"Cannot find {adalora_adapter_path}.")
+        training_session.optimizer.load_state_dict(metrics["optimizer"])
+        training_session.scaler.load_state_dict(metrics["scaler"])
+        training_session.error = metrics["error"]
+    else:
+        training_session.metrics = {}
+        training_session.logger.warning(f"Metrics file not found at {metrics_path}.")
 
-        base_whisper = WhisperModel.from_pretrained("openai/whisper-base")
-        peft_encoder = PeftModel.from_pretrained(base_whisper, adalora_adapter_path)
-        adalora_config = PeftConfig.from_pretrained(adalora_adapter_path)
+    shutil.rmtree("temp")
+    gc.collect()
+    torch.cuda.empty_cache()
 
-        # Load adalora into whisper alignment model
-        training_session.model.adalora_config = adalora_config
-        training_session.model.encoder = peft_encoder
-
-        # Load metrics
-        metrics_path = os.path.join(save_path, "metrics.pt")
-
-        if os.path.exists(metrics_path):
-            metrics = torch.load(metrics_path)
-            training_session.metrics = metrics.get("metrics", {})
-            training_session.highest_epoch = metrics.get("highest_epoch", 0)
-            training_session.highest_metrics = metrics.get("highest_metrics", {})
-            training_session.lowest_final_layer_total_loss = metrics.get(
-                "lowest_final_layer_total_loss", float("inf")
-            )
-            training_session.highest_average_test_accuracy = metrics.get(
-                "highest_average_test_accuracy", 0
-            )
-            training_session.adalora_steps = metrics.get("adalora_steps", 0)
-
-            training_session.optimizer.load_state_dict(metrics["optimizer"])
-            training_session.scaler.load_state_dict(metrics["scaler"])
-            training_session.error = metrics["error"]
-        else:
-            training_session.metrics = {}
-            training_session.logger.warning(
-                f"Metrics file not found at {metrics_path}."
-            )
-
-        shutil.rmtree("temp")
-        gc.collect()
-        torch.cuda.empty_cache()
-
-        return training_session
-
-    except Exception as e:
-        raise ValueError(f"Error loading training session config, {e}")
+    return training_session

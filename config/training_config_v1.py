@@ -80,6 +80,15 @@ class TrainingConfigV1(TrainingConfig):
             total_step=adalora_total_step,
         )
 
+        self.adalora_init_r = adalora_init_r
+        self.adalora_target_r = adalora_target_r
+        self.adalora_tinit = adalora_tinit
+        self.adalora_tfinal = adalora_tfinal
+        self.adalora_deltaT = adalora_deltaT
+        self.adalora_lora_alpha = adalora_lora_alpha
+        self.adalora_lora_dropout = adalora_lora_dropout
+        self.adalora_total_step = adalora_total_step
+
         # Pre-processing parameters
         # Brain
         self.new_freq = new_freq
