@@ -82,8 +82,14 @@ class TrainingSessionV1(TrainingSession):
             self.scaler = None
             print("CUDA is not available. Optimizer and scaler not initialized")
 
-        self.clip_loss, self.mse_loss, self.cosine_similarity_loss = (
+        (
+            self.clip_loss_mel,
+            self.clip_loss_latent,
+            self.mse_loss,
+            self.cosine_similarity_loss,
+        ) = (
             self.model.brain_module.clip_loss,
+            self.model.clip_loss,
             mse_loss_per_batch,
             cosine_similarity_loss,
         )
@@ -137,7 +143,8 @@ class TrainingSessionV1(TrainingSession):
         # Set all training parameters
         self.device = device
         self.model.to(device)
-        self.clip_loss.to(device)
+        self.clip_loss_mel.to(device)
+        self.clip_loss_latent.to(device)
         training_size = len(self.dataset["train"])
 
         for epoch in range(current_epoch + 1, self.config.epochs + 1):
@@ -476,7 +483,7 @@ class TrainingSessionV1(TrainingSession):
                     # )
 
                     if self.config.mel_alignment_objectives["clip_loss"] > 0:
-                        clip_results = self.clip_loss(x_1=x, x_2=audio_batch)
+                        clip_results = self.clip_loss_mel(x_1=x, x_2=audio_batch)
                         clip_loss, clip_metrics = (
                             clip_results["loss"],
                             clip_results["metrics"],
@@ -540,7 +547,7 @@ class TrainingSessionV1(TrainingSession):
                             )
 
                         if self.config.latent_alignment_objectives["clip_loss"] > 0:
-                            latent_alignment_clip_results = self.clip_loss(
+                            latent_alignment_clip_results = self.clip_loss_latent(
                                 hidden_output, frozen_encoder_output
                             )
                             latent_alignment_losses["clip_loss"].append(

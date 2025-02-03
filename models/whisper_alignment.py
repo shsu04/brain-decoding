@@ -9,6 +9,7 @@ from models.spectralconv import SpectralConv
 import typing as tp
 from studies.study import Recording
 from peft import AdaLoraConfig, get_peft_model
+from losses import CLIPLoss
 
 
 class WhisperAlignment(nn.Module):
@@ -80,6 +81,8 @@ class WhisperAlignment(nn.Module):
         print(
             f"AdaLora model has {sum(p.numel() for p in self.encoder.parameters() if p.requires_grad)} parameters"
         )
+
+        self.clip_loss = CLIPLoss(dim=512)
 
         self.device = device
         self.to(device)

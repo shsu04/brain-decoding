@@ -5,17 +5,17 @@ import torch.nn.functional as F
 
 
 class CLIPLoss(nn.Module):
-    def __init__(self, x1_dim: int):
+    def __init__(self, dim: int):
         super().__init__()
         self.temperature = nn.Parameter(torch.tensor(1.0))
-        self.linear_x1 = torch.nn.LazyLinear(x1_dim)
-        self.linear_x2 = torch.nn.LazyLinear(1580)
+        self.linear_x1 = torch.nn.LazyLinear(dim)
+        self.linear_x2 = torch.nn.LazyLinear(dim)
 
     def forward(
         self,
         x_1: torch.Tensor,
         x_2: torch.Tensor,
-        segment_level: bool = False,
+        segment_level: bool = True,
     ) -> dict[str, float]:
         """
         Computes CLIP loss on two embeddings, x_1 and x_2. Both of shape [B, C, T]
