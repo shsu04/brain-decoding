@@ -140,7 +140,7 @@ def download_osf(root_dir="data/gwilliams2023", project_ids: list[str] = []):
 
     download_tasks = []
 
-    rate_limiter = RateLimiter(max_calls=95, period=60)
+    rate_limiter = RateLimiter(max_calls=90, period=60)
 
     # Even listing storage dir is a bit slow, so parallelize
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
@@ -166,9 +166,7 @@ def download_osf(root_dir="data/gwilliams2023", project_ids: list[str] = []):
     print(f"Found {total_files} files. Downloading after rate limit reset (1 min)...")
     time.sleep(60)
 
-    with concurrent.futures.ThreadPoolExecutor(
-        max_workers=multiprocessing.cpu_count() // 2
-    ) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
         futures = [
             executor.submit(download_osf_file, file_, path, rate_limiter)
             for (file_, path) in download_tasks
