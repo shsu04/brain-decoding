@@ -488,8 +488,9 @@ class TrainingSessionV1(TrainingSession):
                         mse_loss = torch.tensor(0.0).to(self.device)
 
                     if self.config.mel_alignment_objectives["cosine_similarity"] > 0:
+                        # [B, C, T] -> [B, T, C]
                         cosine_similarity_loss = self.cosine_similarity_loss(
-                            x, audio_batch
+                            x.transpose(1, 2), audio_batch.transpose(1, 2)
                         )
                     else:
                         cosine_similarity_loss = torch.tensor(0.0).to(self.device)
