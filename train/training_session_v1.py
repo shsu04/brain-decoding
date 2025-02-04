@@ -143,7 +143,7 @@ class TrainingSessionV1(TrainingSession):
     ):
         """Max cache size for the cache dir in GB"""
 
-        # Set all training parameters
+        # Set all training parameters (including temp in clip)
         self.device = device
         self.model.to(device)
         self.clip_loss_mel.to(device)
@@ -213,6 +213,10 @@ class TrainingSessionV1(TrainingSession):
                 / training_size,
                 "clip_loss": sum([batch["clip_loss"] for batch in all_metrics])
                 / training_size,
+                "cosine_similarity_loss": sum(
+                    [batch["cosine_similarity_loss"] for batch in all_metrics]
+                )
+                / training_size,
                 "mse_loss": sum([batch["mse_loss"] for batch in all_metrics])
                 / training_size,
                 "commitment_loss": sum(
@@ -255,13 +259,13 @@ class TrainingSessionV1(TrainingSession):
                 f"Epoch {epoch}, Loss: {final_metrics['loss']:.4f}, Mel Loss: {final_metrics['mel_loss']:.4f}"
             )
             self.log_no_print(
-                f"Clip Loss: {final_metrics['clip_loss']:.4f}, MSE Loss: {final_metrics['mse_loss']:.4f}, Commitment Loss: {final_metrics['commitment_loss']:.4f}"
+                f"Clip Loss: {final_metrics['clip_loss']:.4f}, MSE Loss: {final_metrics['mse_loss']:.4f}, CosSim Loss: {final_metrics['cosine_similarity_loss']}, Commit Loss: {final_metrics['commitment_loss']:.4f}"
             )
             self.log_no_print(
                 f"Perplexity: {final_metrics['perplexity']:.4f}, Accuracy: {final_metrics['accuracy']:.4f}, Top 5 Accuracy: {final_metrics['top_5_accuracy']:.4f}, Top 10 Accuracy: {final_metrics['top_10_accuracy']:.4f}"
             )
             self.log_no_print(
-                f"Final Layer Clip Loss: {final_metrics['final_layer_losses']['clip_loss']:.4f}, Final Layer MSE Loss: {final_metrics['final_layer_losses']['mse_loss']:.4f}, Final Layer CosSim Loss: {final_metrics['final_layer_losses']['cosine_similarity']:.4f}, Final Layer Total Loss: {final_metrics['final_layer_losses']['total']:.4f}"
+                f"FinLayer Clip Loss: {final_metrics['final_layer_losses']['clip_loss']:.4f}, FinLayer MSE Loss: {final_metrics['final_layer_losses']['mse_loss']:.4f}, FinLayer CosSim Loss: {final_metrics['final_layer_losses']['cosine_similarity']:.4f}, FinLayer Total Loss: {final_metrics['final_layer_losses']['total']:.4f}"
             )
 
             # Testing
@@ -317,7 +321,7 @@ class TrainingSessionV1(TrainingSession):
                     for test in self.metrics["test"].keys()
                 }
                 self.log_print(
-                    f"New highest average test accuracy: {self.highest_average_test_accuracy:.4f}, lowest final layer total loss: {self.lowest_final_layer_total_loss:.4f} at epoch {self.highest_epoch}."
+                    f"New highest average test accuracy: {self.highest_average_test_accuracy:.4f}, lowest FinLayer total loss: {self.lowest_final_layer_total_loss:.4f} at epoch {self.highest_epoch}."
                 )
                 # Save model
 
@@ -331,6 +335,9 @@ class TrainingSessionV1(TrainingSession):
         for test, metrics in self.highest_metrics.items():
             self.log_print(
                 f"{test}: Acc: {metrics['accuracy']:.4f}, Top 5: {metrics['top_5_accuracy']:.4f}, Top 10: {metrics['top_10_accuracy']:.4f}"
+            )
+            self.log_print(
+                f"Loss: {metrics['loss']:.4f}, Mel Loss: {metrics['mel_loss']:.4f}, Clip Loss: {metrics['clip_loss']:.4f}, MSE Loss: {metrics['mse_loss']:.4f}, CosSim Loss: {metrics['cosine_similarity_loss']:.4f}, Commit Loss: {metrics['commitment_loss']:.4f}"
             )
             self.log_print(
                 f"FinLayer Clip Loss: {metrics['final_layer_losses']['clip_loss']:.4f}, FinLayer MSE Loss: {metrics['final_layer_losses']['mse_loss']:.4f}"
@@ -359,9 +366,10 @@ class TrainingSessionV1(TrainingSession):
             recording_loss,
             recording_mel_loss,
             recording_clip_loss,
+            recording_cosine_similarity_loss,
             recording_mse_loss,
             recording_commitment_loss,
-        ) = (0, 0, 0, 0, 0)
+        ) = (0, 0, 0, 0, 0, 0)
 
         recording_latent_alignment_losses = {
             "cosine_similarity": [0.0 for _ in self.config.latent_alignment_layers],
@@ -479,12 +487,12 @@ class TrainingSessionV1(TrainingSession):
                     else:
                         mse_loss = torch.tensor(0.0).to(self.device)
 
-                    # print(
-                    #     f"Pred mean: {x.mean().item():.4f}, std: {x.std().item():.4f}, min: {x.min().item():.4f}, max: {x.max().item():.4f}"
-                    # )
-                    # print(
-                    #     f"Target mean: {audio_batch.mean().item():.4f}, std: {audio_batch.std().item():.4f}, min: {audio_batch.min().item():.4f}, max: {audio_batch.max().item():.4f}"
-                    # )
+                    if self.config.mel_alignment_objectives["cosine_similarity"] > 0:
+                        cosine_similarity_loss = self.cosine_similarity_loss(
+                            x, audio_batch
+                        )
+                    else:
+                        cosine_similarity_loss = torch.tensor(0.0).to(self.device)
 
                     if self.config.mel_alignment_objectives["clip_loss"] > 0:
                         clip_results = self.clip_loss_mel(x_1=x, x_2=audio_batch)
@@ -503,6 +511,8 @@ class TrainingSessionV1(TrainingSession):
                     mel_loss = (
                         self.config.mel_alignment_objectives["clip_loss"] * clip_loss
                         + self.config.mel_alignment_objectives["mse_loss"] * mse_loss
+                        + self.config.mel_alignment_objectives["cosine_similarity"]
+                        * cosine_similarity_loss
                     )
 
                     if quantizer_metrics is not None:
@@ -593,6 +603,9 @@ class TrainingSessionV1(TrainingSession):
                         # Store brain losses, move to CPU
                         recording_loss += loss.detach().to("cpu").item()
                         recording_clip_loss += clip_loss.detach().to("cpu").item()
+                        recording_cosine_similarity_loss += (
+                            cosine_similarity_loss.detach().to("cpu").item()
+                        )
                         recording_mse_loss += mse_loss.detach().to("cpu").item()
                         recording_mel_loss += mel_loss.detach().to("cpu").item()
 
@@ -665,6 +678,7 @@ class TrainingSessionV1(TrainingSession):
             "loss": recording_loss / batches,
             "mel_loss": recording_mel_loss / batches,
             "clip_loss": recording_clip_loss / batches,
+            "cosine_similarity_loss": recording_cosine_similarity_loss / batches,
             "mse_loss": recording_mse_loss / batches,
             "commitment_loss": (recording_commitment_loss) / batches,
             "perplexity": recording_perplexity / batches,
@@ -679,13 +693,13 @@ class TrainingSessionV1(TrainingSession):
             f"{recording.study_name} {recording.subject_id} {recording.session_id} {recording.task_id}, Loss: {metrics['loss']:.4f}"
         )
         self.logger.info(
-            f"Mel Loss: {metrics['mel_loss']:.4f}, Clip Loss: {metrics['clip_loss']:.4f}, MSE Loss: {metrics['mse_loss']:.4f}, Commitment Loss: {metrics['commitment_loss']:.4f}"
+            f"Mel Loss: {metrics['mel_loss']:.4f}, Clip Loss: {metrics['clip_loss']:.4f}, MSE Loss: {metrics['mse_loss']:.4f}, Commit Loss: {metrics['commitment_loss']:.4f}, CosSim Loss: {metrics['cosine_similarity_loss']:.4f}"
         )
         self.logger.info(
             f"Perplexity: {metrics['perplexity']:.4f}, Accuracy: {metrics['accuracy']:.4f}, Top 5 Accuracy: {metrics['top_5_accuracy']:.4f}, Top 10 Accuracy: {metrics['top_10_accuracy']:.4f}"
         )
         self.logger.info(
-            f"Final Layer Clip Loss: {final_layer_losses['clip_loss']:.4f}, Final Layer MSE Loss: {final_layer_losses['mse_loss']:.4f}, Final Layer CosSim Loss: {final_layer_losses['cosine_similarity']:.4f}, Final Layer Total Loss: {final_layer_losses['total']:.4f}"
+            f"FinLayer Clip Loss: {final_layer_losses['clip_loss']:.4f}, FinLayer MSE Loss: {final_layer_losses['mse_loss']:.4f}, FinLayer CosSim Loss: {final_layer_losses['cosine_similarity']:.4f}, FinLayer Total Loss: {final_layer_losses['total']:.4f}"
         )
 
         return metrics, total
@@ -746,6 +760,10 @@ class TrainingSessionV1(TrainingSession):
                 / test_sizes[test],
                 "mse_loss": sum([batch["mse_loss"] for batch in all_metrics])
                 / test_sizes[test],
+                "cosine_similarity_loss": sum(
+                    [batch["cosine_similarity_loss"] for batch in all_metrics]
+                )
+                / test_sizes[test],
                 "commitment_loss": sum(
                     [batch["commitment_loss"] for batch in all_metrics]
                 )
@@ -786,7 +804,7 @@ class TrainingSessionV1(TrainingSession):
                 f"Test {test} completed., Loss: {final_metrics['loss']:.4f}, Mel Loss: {final_metrics['mel_loss']:.4f}"
             )
             self.log_no_print(
-                f"Clip Loss: {final_metrics['clip_loss']:.4f}, MSE Loss: {final_metrics['mse_loss']:.4f}, Commitment Loss: {final_metrics['commitment_loss']:.4f}"
+                f"Clip Loss: {final_metrics['clip_loss']:.4f}, MSE Loss: {final_metrics['mse_loss']:.4f}, Commit Loss: {final_metrics['commitment_loss']:.4f}, CosSim Loss: {final_metrics['cosine_similarity_loss']:.4f}"
             )
             self.log_no_print(
                 f"Perplexity: {final_metrics['perplexity']:.4f}, Accuracy: {final_metrics['accuracy']:.4f}, Top 5 Accuracy: {final_metrics['top_5_accuracy']:.4f}, Top 10 Accuracy: {final_metrics['top_10_accuracy']:.4f}"

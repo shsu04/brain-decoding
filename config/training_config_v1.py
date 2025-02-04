@@ -52,6 +52,7 @@ class TrainingConfigV1(TrainingConfig):
             "clip_loss": 0.0,
             "mse_loss": 0.0,
             "commitment_loss": 0.0,
+            "cosine_similarity": 0.0,
         },
         latent_alignment_objectives: dict[str, float] = {
             "cosine_similarity": 0.0,
@@ -121,7 +122,7 @@ class TrainingConfigV1(TrainingConfig):
         ), "Weighting must be non-negative"
         assert all(
             [
-                k in ["clip_loss", "mse_loss", "commitment_loss"]
+                k in ["clip_loss", "mse_loss", "commitment_loss", "cosine_similarity"]
                 for k in mel_alignment_objectives.keys()
             ]
         ), "Invalid objective"
