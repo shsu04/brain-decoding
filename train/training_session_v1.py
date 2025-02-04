@@ -70,6 +70,7 @@ class TrainingSessionV1(TrainingSession):
             brain_module_config=config.brain_encoder_config,
             adalora_config=config.adalora_config,
             layers_to_align=config.latent_alignment_layers,
+            audio_model_id=config.audio_model,
         )
 
         if torch.cuda.is_available():
@@ -98,7 +99,7 @@ class TrainingSessionV1(TrainingSession):
 
         # Frozen whisper model for alignment
         frozen_whisper_model = WhisperModel.from_pretrained(
-            "openai/whisper-base",
+            config.audio_model,
             low_cpu_mem_usage=True,
             use_safetensors=True,
         ).to(device)
@@ -976,7 +977,7 @@ def load_training_session(
     if not os.path.exists(adalora_adapter_path):
         raise ValueError(f"Cannot find {adalora_adapter_path}.")
 
-    base_whisper = WhisperModel.from_pretrained("openai/whisper-base")
+    base_whisper = WhisperModel.from_pretrained(config.audio_model)
     peft_encoder = PeftModel.from_pretrained(base_whisper, adalora_adapter_path)
     adalora_config = PeftConfig.from_pretrained(adalora_adapter_path)
 

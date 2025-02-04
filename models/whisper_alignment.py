@@ -13,12 +13,14 @@ from losses import CLIPLoss
 
 
 class WhisperAlignment(nn.Module):
+
     def __init__(
         self,
         brain_module_config: tp.Union[SimpleConvConfig, SpectralConvConfig],
         adalora_config: AdaLoraConfig,
         layers_to_align: Optional[List[int]] = [-1],
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
+        audio_model_id: str = "openai/whisper-tiny.en",
     ):
         """Uses the encoder hidden states from a pre-trained model for alignment
 
@@ -37,8 +39,6 @@ class WhisperAlignment(nn.Module):
             self.brain_module_config = brain_module_config
             self.brain_module = SpectralConv(brain_module_config)
 
-        self.model_id = "openai/whisper-base"
-
         if torch.cuda.get_device_capability() in [(7, 0), (8, 0), (9, 0)]:
             torch_dtype = torch.bfloat16
         elif torch.cuda.is_available():
@@ -46,8 +46,10 @@ class WhisperAlignment(nn.Module):
         else:
             torch_dtype = torch.float32
 
+        self.audio_model_id = audio_model_id
+
         whisper_model = WhisperModel.from_pretrained(
-            self.model_id,
+            self.audio_model_id,
             low_cpu_mem_usage=True,
             use_safetensors=True,
             torch_dtype=torch_dtype,
@@ -64,7 +66,6 @@ class WhisperAlignment(nn.Module):
 
         # Which hidden layers to align, last by default
         self.layers_to_align = layers_to_align
-        assert all([i < 32 for i in layers_to_align]), "Invalid layer index"
 
         # AdaLora
         self.adalora_config = adalora_config
@@ -77,12 +78,16 @@ class WhisperAlignment(nn.Module):
         print(f"Found {len(target_modules)} target modules for AdaLora: {suffixes}")
         self.adalora_config.target_modules = target_modules
         self.encoder = get_peft_model(encoder, adalora_config)
+        self.d_model = self.encoder.base_model.config.d_model
 
         print(
-            f"AdaLora model has {sum(p.numel() for p in self.encoder.parameters() if p.requires_grad)} parameters"
+            f"{audio_model_id} loaded with {sum(p.numel() for p in self.encoder.parameters())} frozen params ({self.encoder.base_model.config.encoder_layers} layers and {self.d_model}) dim."
+        )
+        print(
+            f"AdaLora has {sum(p.numel() for p in self.encoder.parameters() if p.requires_grad)} trainable params."
         )
 
-        self.clip_loss = CLIPLoss(dim=512)
+        self.clip_loss = CLIPLoss(dim=self.d_model)
 
         self.device = device
         self.to(device)
@@ -112,12 +117,11 @@ class WhisperAlignment(nn.Module):
             Hidden outputs [B, 80, 3000] of length brain encoder layers
 
             List of hidden states for each encoder layer in layers_to_align [B, T, D]
-            Where 1500 = T, 1280 = D
         """
 
         x, quantizer_metrics, channel_weights, hidden_outputs = self.brain_module(
             x, recording, conditions, mel, train, return_hidden_outputs
-        )  # [B, 80, T]
+        )  # [B, self.d_model, T]
         B, C, T = x.size()
 
         assert C == 80, f"Expected {80} channels, got {C}"
@@ -144,7 +148,7 @@ class WhisperAlignment(nn.Module):
         x = x[:, :, :T]  # Trim padding
 
         # Sort hidden states, trim to time step
-        if self.layers_to_align == [-1] or self.config.latent_alignment_layers == [32]:
+        if self.layers_to_align == [-1]:
             hidden_states = [encoder_outputs.last_hidden_state[:, :T, :]]
         else:
             hidden_states = [
