@@ -596,6 +596,10 @@ class TrainingSessionV1(TrainingSession):
                                 self.model.encoder.base_model.update_and_allocate(
                                     self.adalora_steps
                                 )
+                            if self.adalora_steps == self.config.adalora_config.tinit:
+                                self.log_print(
+                                    f"Starting rank reallocation at step {self.adalora_steps}."
+                                )
 
                             self.adalora_steps += 1
                             self.optimizer.zero_grad()
