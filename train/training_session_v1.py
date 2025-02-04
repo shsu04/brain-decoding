@@ -251,17 +251,17 @@ class TrainingSessionV1(TrainingSession):
             }
             self.metrics["train"].append(final_metrics)
 
-            self.log_print(
+            self.log_no_print(
                 f"Epoch {epoch}, Loss: {final_metrics['loss']:.4f}, Mel Loss: {final_metrics['mel_loss']:.4f}"
             )
-            self.log_print(
+            self.log_no_print(
                 f"Clip Loss: {final_metrics['clip_loss']:.4f}, MSE Loss: {final_metrics['mse_loss']:.4f}, Commitment Loss: {final_metrics['commitment_loss']:.4f}"
             )
-            self.log_print(
+            self.log_no_print(
                 f"Perplexity: {final_metrics['perplexity']:.4f}, Accuracy: {final_metrics['accuracy']:.4f}, Top 5 Accuracy: {final_metrics['top_5_accuracy']:.4f}, Top 10 Accuracy: {final_metrics['top_10_accuracy']:.4f}"
             )
-            self.log_print(
-                f"Final Layer Clip Loss: {final_metrics['final_layer_losses']['clip_loss']:.4f}, Final Layer MSE Loss: {final_metrics['final_layer_losses']['mse_loss']:.4f}, Final Layer Cosine Similarity Loss: {final_metrics['final_layer_losses']['cosine_similarity']:.4f}, Final Layer Total Loss: {final_metrics['final_layer_losses']['total']:.4f}"
+            self.log_no_print(
+                f"Final Layer Clip Loss: {final_metrics['final_layer_losses']['clip_loss']:.4f}, Final Layer MSE Loss: {final_metrics['final_layer_losses']['mse_loss']:.4f}, Final Layer CosSim Loss: {final_metrics['final_layer_losses']['cosine_similarity']:.4f}, Final Layer Total Loss: {final_metrics['final_layer_losses']['total']:.4f}"
             )
 
             # Testing
@@ -283,6 +283,8 @@ class TrainingSessionV1(TrainingSession):
             self.log_print(
                 f"Epoch {epoch} completed in {elapsed_minutes:.2f}m. {elapsed_minutes / training_size:.2f}m per recording."
             )
+
+            self.save(f"epoch_{epoch}")
 
             # Early stopping
             average_test_accuracy = (
@@ -318,7 +320,6 @@ class TrainingSessionV1(TrainingSession):
                     f"New highest average test accuracy: {self.highest_average_test_accuracy:.4f}, lowest final layer total loss: {self.lowest_final_layer_total_loss:.4f} at epoch {self.highest_epoch}."
                 )
                 # Save model
-                self.save(f"epoch_{epoch}")
 
             if epoch - self.highest_epoch > 10:
                 self.log_print(
@@ -332,10 +333,10 @@ class TrainingSessionV1(TrainingSession):
                 f"{test}: Acc: {metrics['accuracy']:.4f}, Top 5: {metrics['top_5_accuracy']:.4f}, Top 10: {metrics['top_10_accuracy']:.4f}"
             )
             self.log_print(
-                f"Final Layer Clip Loss: {metrics['final_layer_losses']['clip_loss']:.4f}, Final Layer MSE Loss: {metrics['final_layer_losses']['mse_loss']:.4f}"
+                f"FinLayer Clip Loss: {metrics['final_layer_losses']['clip_loss']:.4f}, FinLayer MSE Loss: {metrics['final_layer_losses']['mse_loss']:.4f}"
             )
             self.log_print(
-                f"Final Layer Cosine Similarity Loss: {metrics['final_layer_losses']['cosine_similarity']:.4f}, Final Layer Total Loss: {metrics['final_layer_losses']['total']:.4f}"
+                f"FinLayer CosSim Loss: {metrics['final_layer_losses']['cosine_similarity']:.4f}, FinLayer Total Loss: {metrics['final_layer_losses']['total']:.4f}"
             )
 
     def run_batch(self, batch: AudioBatch, train: bool) -> tp.Dict[str, float]:
@@ -684,7 +685,7 @@ class TrainingSessionV1(TrainingSession):
             f"Perplexity: {metrics['perplexity']:.4f}, Accuracy: {metrics['accuracy']:.4f}, Top 5 Accuracy: {metrics['top_5_accuracy']:.4f}, Top 10 Accuracy: {metrics['top_10_accuracy']:.4f}"
         )
         self.logger.info(
-            f"Final Layer Clip Loss: {final_layer_losses['clip_loss']:.4f}, Final Layer MSE Loss: {final_layer_losses['mse_loss']:.4f}, Final Layer Cosine Similarity Loss: {final_layer_losses['cosine_similarity']:.4f}, Final Layer Total Loss: {final_layer_losses['total']:.4f}"
+            f"Final Layer Clip Loss: {final_layer_losses['clip_loss']:.4f}, Final Layer MSE Loss: {final_layer_losses['mse_loss']:.4f}, Final Layer CosSim Loss: {final_layer_losses['cosine_similarity']:.4f}, Final Layer Total Loss: {final_layer_losses['total']:.4f}"
         )
 
         return metrics, total
@@ -781,17 +782,17 @@ class TrainingSessionV1(TrainingSession):
             }
             self.metrics["test"][test].append(final_metrics)
 
-            self.log_print(
+            self.log_no_print(
                 f"Test {test} completed., Loss: {final_metrics['loss']:.4f}, Mel Loss: {final_metrics['mel_loss']:.4f}"
             )
-            self.log_print(
+            self.log_no_print(
                 f"Clip Loss: {final_metrics['clip_loss']:.4f}, MSE Loss: {final_metrics['mse_loss']:.4f}, Commitment Loss: {final_metrics['commitment_loss']:.4f}"
             )
-            self.log_print(
+            self.log_no_print(
                 f"Perplexity: {final_metrics['perplexity']:.4f}, Accuracy: {final_metrics['accuracy']:.4f}, Top 5 Accuracy: {final_metrics['top_5_accuracy']:.4f}, Top 10 Accuracy: {final_metrics['top_10_accuracy']:.4f}"
             )
-            self.log_print(
-                f"Final Layer Clip Loss: {final_metrics['final_layer_losses']['clip_loss']:.4f}, Final Layer MSE Loss: {final_metrics['final_layer_losses']['mse_loss']:.4f}, Final Layer Cosine Similarity Loss: {final_metrics['final_layer_losses']['cosine_similarity']:.4f}, Final Layer Total Loss: {final_metrics['final_layer_losses']['total']:.4f}"
+            self.log_no_print(
+                f"FinLayer Clip Loss: {final_metrics['final_layer_losses']['clip_loss']:.4f}, FinLayer MSE Loss: {final_metrics['final_layer_losses']['mse_loss']:.4f}, FinLayer CosSim Loss: {final_metrics['final_layer_losses']['cosine_similarity']:.4f}, FinLayer Total Loss: {final_metrics['final_layer_losses']['total']:.4f}"
             )
             test_dataloader[test].stop()
 
@@ -934,7 +935,7 @@ def load_training_session(
     studies: tp.Dict[str, str] = None,
     data_path: str = "/home/ubuntu/brain-decoding/data",
     clear_cache: bool = False,
-    cache_enabled: bool = True,
+    cache_name: str = None,
     max_cache_size: int = 100,
 ):
     """Loads a training session from the save path."""
@@ -960,7 +961,7 @@ def load_training_session(
         data_path=data_path,
         save_path="temp",
         clear_cache=clear_cache,
-        cache_enabled=cache_enabled,
+        cache_name=cache_name,
         max_cache_size=max_cache_size,
     )
     training_session.save_path = save_path
@@ -969,7 +970,10 @@ def load_training_session(
     training_session.model.brain_module.load_state_dict(
         brain_checkpoint["brain_encoder"]
     )
-    if training_session.model.condition_to_idx != brain_checkpoint["conditions"]:
+    if (
+        training_session.model.brain_module.condition_to_idx
+        != brain_checkpoint["conditions"]
+    ):
         raise ValueError("Condition to idx mismatch.")
 
     # Load adalora
@@ -977,8 +981,15 @@ def load_training_session(
     if not os.path.exists(adalora_adapter_path):
         raise ValueError(f"Cannot find {adalora_adapter_path}.")
 
-    base_whisper = WhisperModel.from_pretrained(config.audio_model)
-    peft_encoder = PeftModel.from_pretrained(base_whisper, adalora_adapter_path)
+    whisper_model = WhisperModel.from_pretrained(
+        config.audio_model, low_cpu_mem_usage=True, use_safetensors=True
+    )
+    encoder = whisper_model.get_encoder()
+    encoder._freeze_parameters()
+    del whisper_model.decoder
+    del whisper_model
+
+    peft_encoder = PeftModel.from_pretrained(encoder, adalora_adapter_path)
     adalora_config = PeftConfig.from_pretrained(adalora_adapter_path)
 
     # Load adalora into whisper alignment model

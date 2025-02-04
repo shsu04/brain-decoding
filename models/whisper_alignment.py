@@ -81,7 +81,7 @@ class WhisperAlignment(nn.Module):
         self.d_model = self.encoder.base_model.config.d_model
 
         print(
-            f"{audio_model_id} loaded with {sum(p.numel() for p in self.encoder.parameters())} frozen params ({self.encoder.base_model.config.encoder_layers} layers and {self.d_model}) dim."
+            f"{audio_model_id} loaded with {sum(p.numel() for p in self.encoder.parameters())} frozen params ({self.encoder.base_model.config.encoder_layers} layers and {self.d_model} dim)."
         )
         print(
             f"AdaLora has {sum(p.numel() for p in self.encoder.parameters() if p.requires_grad)} trainable params."

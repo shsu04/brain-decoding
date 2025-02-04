@@ -233,6 +233,10 @@ class TrainingSession(ABC):
         self.logger.info(message)
         self.epoch_logger.info(message)
 
+    def log_no_print(self, message: str):
+        self.logger.info(message)
+        self.epoch_logger.info(message)
+
     def delete_subdirectories(self, save_path):
         """Recursively deletes all subdirectories in the given save_path."""
         if not os.path.exists(save_path):
