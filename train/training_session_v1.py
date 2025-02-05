@@ -309,7 +309,7 @@ class TrainingSessionV1(TrainingSession):
                 / 3
             )
 
-            if (average_test_accuracy > self.highest_average_test_accuracy) and (
+            if (average_test_accuracy > self.highest_average_test_accuracy) or (
                 average_final_layer_total_loss < self.lowest_final_layer_total_loss
             ):
                 self.highest_average_test_accuracy = average_test_accuracy
