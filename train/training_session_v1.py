@@ -324,7 +324,7 @@ class TrainingSessionV1(TrainingSession):
                 )
                 # Save model
 
-            if epoch - self.highest_epoch > 20:
+            if epoch - self.highest_epoch > 15:
                 self.log_print(
                     f"Early stopping at epoch {epoch}. Highest top 10 accuracy at epoch {self.highest_epoch}."
                 )
