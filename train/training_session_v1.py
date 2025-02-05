@@ -124,12 +124,12 @@ class TrainingSessionV1(TrainingSession):
         # Compile if on NVIDIA V100, A100, or H100 for faster training
         if not gpu_ok:
             self.log_print(
-                "GPU is not Volta, Ampere, or Hopper architecture. Speedup numbers may be lower "
+                "GPU is not Ampere, or Hopper architecture. Speedup numbers may be lower "
                 "than expected without compilation."
             )
         if gpu_ok:
             self.frozen_encoder = torch.compile(
-                self.frozen_encoder.forward, mode="reduce-overhead"
+                self.frozen_encoder.forward, mode="default"
             )
 
     def train(
@@ -324,7 +324,7 @@ class TrainingSessionV1(TrainingSession):
                 )
                 # Save model
 
-            if epoch - self.highest_epoch > 10:
+            if epoch - self.highest_epoch > 20:
                 self.log_print(
                     f"Early stopping at epoch {epoch}. Highest top 10 accuracy at epoch {self.highest_epoch}."
                 )
