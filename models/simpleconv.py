@@ -458,6 +458,7 @@ class SimpleConv(nn.Module):
 
         # # Normalize to [0, 1]
         # x = (x + 4.0) / 4.0
-        x = 3 * torch.tanh(x)
+
+        x = 1.25 * torch.tanh(x) + 0.75
 
         return x

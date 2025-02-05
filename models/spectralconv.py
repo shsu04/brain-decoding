@@ -469,17 +469,18 @@ class SpectralConv(torch.nn.Module):
     def whisper_normalization(self, x: torch.Tensor):
         """Follow Whisper's mel spectrogram normalization"""
 
-        # Ensure no negative energy
-        x = F.relu(x)
-        x = torch.clamp(x, min=1e-10).log10()
+        # # Ensure no negative energy
+        # x = F.relu(x)
+        # x = torch.clamp(x, min=1e-10).log10()
 
-        # Dynamic range compression
-        batch_max = (
-            x.view(x.size(0), -1).max(dim=1, keepdim=True)[0].unsqueeze(-1)
-        )  # Shape: [B, 1, 1]
-        x = torch.maximum(x, batch_max - 8.0)
+        # # Dynamic range compression
+        # batch_max = (
+        #     x.view(x.size(0), -1).max(dim=1, keepdim=True)[0].unsqueeze(-1)
+        # )  # Shape: [B, 1, 1]
+        # x = torch.maximum(x, batch_max - 8.0)
 
-        # Normalize to [0, 1]
-        x = (x + 4.0) / 4.0
+        # # Normalize to [0, 1]
+        # x = (x + 4.0) / 4.0
 
+        x = 1.25 * torch.tanh(x) + 0.75
         return x
