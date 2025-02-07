@@ -459,6 +459,13 @@ class SimpleConv(nn.Module):
         # # Normalize to [0, 1]
         # x = (x + 4.0) / 4.0
 
-        x = 1.25 * torch.tanh(x) + 0.75
+        max_values_batch = torch.max(
+            x.flatten(start_dim=1, end_dim=2), dim=1
+        ).values  # [B, C, T] -> [B, C * T] -> [B]
+
+        # [B, 1, 1]
+        max_values_batch = max_values_batch.unsqueeze(-1).unsqueeze(-1)
+        # [B, C, T]
+        x = torch.clip(x, min=max_values_batch - 3, max=max_values_batch)
 
         return x
