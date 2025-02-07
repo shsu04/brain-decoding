@@ -487,7 +487,6 @@ class TrainingSessionV1(TrainingSession):
                         mse_loss = torch.tensor(0.0).to(self.device)
 
                     if self.config.mel_alignment_objectives["cosine_similarity"] > 0:
-                        # [B, C, T] -> [B, T, C]
                         cosine_similarity_loss = self.cosine_similarity_loss(
                             x.transpose(1, 2), audio_batch.transpose(1, 2)
                         )
@@ -562,7 +561,8 @@ class TrainingSessionV1(TrainingSession):
 
                         if self.config.latent_alignment_objectives["clip_loss"] > 0:
                             latent_alignment_clip_results = self.clip_loss_latent(
-                                hidden_output, frozen_encoder_output
+                                hidden_output.transpose(1, 2),
+                                frozen_encoder_output.transpose(1, 2),
                             )
                             latent_alignment_losses["clip_loss"].append(
                                 latent_alignment_clip_results["loss"]
