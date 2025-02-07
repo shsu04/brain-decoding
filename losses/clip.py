@@ -8,8 +8,8 @@ class CLIPLoss(nn.Module):
     def __init__(self, dim: int):
         super().__init__()
         self.temperature = nn.Parameter(torch.tensor(1.0))
-        self.linear_x1 = torch.nn.LazyLinear(dim)
-        self.linear_x2 = torch.nn.LazyLinear(dim)
+        self.linear_x1 = nn.Conv1d(in_channels=dim, out_channels=dim, kernel_size=1)
+        self.linear_x2 = nn.Conv1d(in_channels=dim, out_channels=dim, kernel_size=1)
 
     def forward(
         self,
