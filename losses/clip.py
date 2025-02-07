@@ -15,7 +15,7 @@ class CLIPLoss(nn.Module):
         self,
         x_1: torch.Tensor,
         x_2: torch.Tensor,
-        segment_level: bool = True,
+        segment_level: bool = False,
     ) -> dict[str, float]:
         """
         Computes CLIP loss on two embeddings, x_1 and x_2. Both of shape [B, C, T]
