@@ -247,7 +247,7 @@ class SimpleConv(nn.Module):
         )
 
         # Leave the temp param
-        self.clip_loss = CLIPLoss(dim=final_channels)
+        self.clip_loss = CLIPLoss(dim=self.config.out_channels)
 
     def forward(
         self,
