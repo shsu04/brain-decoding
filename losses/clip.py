@@ -15,7 +15,7 @@ class CLIPLoss(nn.Module):
         self,
         x_1: torch.Tensor,
         x_2: torch.Tensor,
-        segment_level: bool = False,
+        segment_level: bool = True,
     ) -> dict[str, float]:
         """
         Computes CLIP loss on two embeddings, x_1 and x_2. Both of shape [B, C, T]
@@ -33,26 +33,50 @@ class CLIPLoss(nn.Module):
         x_1 = self.linear_x1(x_1)
         x_2 = self.linear_x2(x_2)
 
-        inv_norms = 1 / (1e-8 + x_1.norm(dim=(1, 2), p=2))  # [B]
+        segment_len = 10
+        S = T // segment_len
 
-        # Segment level
-        # Compute similarity, [B, C, T] x [B, C, T] -> [B, B]
-        segment_level_logits = (
-            torch.einsum("bct,dct,d->bd", x_1, x_2, inv_norms) / self.temperature
-        )
-        segment_level_targets = torch.arange(
-            x_1.size(0), device=x_1.device
-        )  # Diagonal targets
-        segment_level_probs = F.log_softmax(segment_level_logits, dim=-1)
+        # [B, C, T] -> [B, C, S, segment_len]
+        x_1 = x_1.reshape(B, C, S, segment_len)
+        x_2 = x_2.reshape(B, C, S, segment_len)
+        x_1 = x_1.permute(0, 2, 1, 3)  # [B, S, C, segment_len]
+        x_2 = x_2.permute(0, 2, 1, 3)
+        x_1 = x_1.reshape(B * S, C, segment_len)  # [B * S, C, segment_len]
+        x_2 = x_2.reshape(B * S, C, segment_len)
+
+        x_1_norms = (x_1**2).sum(dim=(1, 2), keepdim=False).sqrt() + 1e-8  # [B*S]
+        x_2_norms = (x_2**2).sum(dim=(1, 2), keepdim=False).sqrt() + 1e-8  # [B*S]
+
+        raw_logits = torch.einsum("bct,dct->bd", x_1, x_2)  # [BS, BS]
+        denominator = x_1_norms.unsqueeze(1) * x_2_norms.unsqueeze(0)
+        logits = raw_logits / denominator / self.temperature
+
+        targets = torch.arange(B * S, device=x_1.device)
+        probs = F.log_softmax(logits, dim=-1)
 
         if segment_level:
-            clip_loss = F.cross_entropy(
-                segment_level_probs, segment_level_targets, reduction="mean"
-            )
+            clip_loss = F.cross_entropy(probs, targets, reduction="mean")
+
+        # inv_norms = 1 / (1e-8 + x_1.norm(dim=(1, 2), p=2))  # [B]
+
+        # # Segment level
+        # # Compute similarity, [B, C, T] x [B, C, T] -> [B, B]
+        # segment_level_logits = (
+        #     torch.einsum("bct,dct,d->bd", x_1, x_2, inv_norms) / self.temperature
+        # )
+        # segment_level_targets = torch.arange(
+        #     x_1.size(0), device=x_1.device
+        # )  # Diagonal targets
+        # segment_level_probs = F.log_softmax(segment_level_logits, dim=-1)
+
+        # if segment_level:
+        #     clip_loss = F.cross_entropy(
+        #         segment_level_probs, segment_level_targets, reduction="mean"
+        #     )
         # Time step level, optional
         else:
             # Shorten time steps for efficiency since clip scales quadratically
-            keep_T = max(1, T // 5)
+            keep_T = max(1, T // 10)
             x1_kept_list, x2_kept_list = [], []
             indices = torch.randperm(T, device=x_1.device)[:keep_T]
 
