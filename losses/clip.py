@@ -51,11 +51,13 @@ class CLIPLoss(nn.Module):
         denominator = x_1_norms.unsqueeze(1) * x_2_norms.unsqueeze(0)
         logits = raw_logits / denominator / self.temperature
 
-        targets = torch.arange(B * S, device=x_1.device)
-        probs = F.log_softmax(logits, dim=-1)
+        segment_level_targets = torch.arange(B * S, device=x_1.device)
+        segment_level_probs = F.log_softmax(logits, dim=-1)
 
         if segment_level:
-            clip_loss = F.cross_entropy(probs, targets, reduction="mean")
+            clip_loss = F.cross_entropy(
+                segment_level_probs, segment_level_targets, reduction="mean"
+            )
 
         # inv_norms = 1 / (1e-8 + x_1.norm(dim=(1, 2), p=2))  # [B]
 
