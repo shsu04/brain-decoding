@@ -33,27 +33,27 @@ class CLIPLoss(nn.Module):
         B, C, T = x_1.size()
 
         # Towers
-        x_1 = self.linear_x1(x_1)
-        x_2 = self.linear_x2(x_2)
+        x_1_embed = self.linear_x1(x_1)
+        x_2_embed = self.linear_x2(x_2)
 
-        inv_norms = 1 / (1e-8 + x_1.norm(dim=(1, 2), p=2))  # [B]
+        inv_norms = 1 / (1e-8 + x_1_embed.norm(dim=(1, 2), p=2))  # [B]
 
         # Segment level
         # Compute similarity, [B, C, T] x [B, C, T] -> [B, B]
         segment_level_logits = (
-            torch.einsum("bct,dct,d->bd", x_1, x_2, inv_norms) / self.temperature
+            torch.einsum("bct,dct,d->bd", x_1_embed, x_2_embed, inv_norms)
+            / self.temperature
         )
         segment_level_targets = torch.arange(
-            x_1.size(0), device=x_1.device
+            x_1_embed.size(0), device=x_1_embed.device
         )  # Diagonal targets
         segment_level_probs = F.log_softmax(segment_level_logits, dim=-1)
 
-        if segment_level:
-            clip_loss = F.cross_entropy(
-                segment_level_probs, segment_level_targets, reduction="mean"
-            )
+        clip_loss = F.cross_entropy(
+            segment_level_probs, segment_level_targets, reduction="mean"
+        )
         # Time step level, optional
-        else:
+        if not segment_level:
             # # Shorten time steps for efficiency since clip scales quadratically
             # keep_T = max(1, T // 10)
             # x1_kept_list, x2_kept_list = [], []
@@ -105,6 +105,9 @@ class CLIPLoss(nn.Module):
             else:
                 M = B * S
 
+            # Towers after drop
+            x_1, x_2 = self.linear_x1(x_1), self.linear_x2(x_2)
+
             # Normalize embeddings
             x_1_norms = (x_1**2).sum(dim=(1, 2), keepdim=False).sqrt() + 1e-8  # [B*S]
             x_2_norms = (x_2**2).sum(dim=(1, 2), keepdim=False).sqrt() + 1e-8  # [B*S]
@@ -116,8 +119,10 @@ class CLIPLoss(nn.Module):
             time_level_targets = torch.arange(M, device=x_1.device)
             time_level_probs = F.log_softmax(logits, dim=-1)
 
-            clip_loss = F.cross_entropy(
-                time_level_probs, time_level_targets, reduction="mean"
+            # Add with segment level loss
+            clip_loss = (
+                F.cross_entropy(time_level_probs, time_level_targets, reduction="mean")
+                + 0.2 * clip_loss
             )
 
         return {

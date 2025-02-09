@@ -42,7 +42,7 @@ class TrainingSession(ABC):
         os.makedirs(save_path, exist_ok=True)
 
         # Batch logger
-        general_logger = logging.getLogger("general_logger")
+        general_logger = logging.getLogger(f"general_logger_{save_path}")
         general_logger.setLevel(logging.INFO)
         if not general_logger.handlers:
             fh = logging.FileHandler(
@@ -54,7 +54,7 @@ class TrainingSession(ABC):
             general_logger.propagate = False
 
         # Epoch Results Logger
-        epoch_logger = logging.getLogger("epoch_logger")
+        epoch_logger = logging.getLogger(f"epoch_logger_{save_path}")
         epoch_logger.setLevel(logging.INFO)
         if not epoch_logger.handlers:
             fh = logging.FileHandler(os.path.join(save_path, "epoch_log.log"), mode="w")
