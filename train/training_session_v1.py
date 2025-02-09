@@ -494,7 +494,9 @@ class TrainingSessionV1(TrainingSession):
                         cosine_similarity_loss = torch.tensor(0.0).to(self.device)
 
                     if self.config.mel_alignment_objectives["clip_loss"] > 0:
-                        clip_results = self.clip_loss_mel(x_1=x, x_2=audio_batch)
+                        clip_results = self.clip_loss_mel(
+                            x_1=x, x_2=audio_batch, mel=True
+                        )
                         clip_loss, clip_metrics = (
                             clip_results["loss"],
                             clip_results["metrics"],
