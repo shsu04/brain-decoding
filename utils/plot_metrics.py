@@ -77,6 +77,9 @@ def beautify_metric_name(metric_name: str, top_percent: bool = False) -> str:
         if top_percent and "Accuracy" not in title_str and not title_str.endswith("%"):
             title_str += " %"
         return title_str
+    elif metric_name.startswith("mse"):
+        title_str = "MSE"
+        return title_str
     else:
         title_str = metric_name.replace("_", " ").title()
         if top_percent and title_str.lower() != "accuracy":
