@@ -105,7 +105,7 @@ class CLIPLoss(nn.Module):
             else:
                 M = B * S
 
-            # Towers after drop
+            # Towers after drop, from original input
             x_1, x_2 = self.linear_x1(x_1), self.linear_x2(x_2)
 
             # Normalize embeddings
@@ -122,7 +122,7 @@ class CLIPLoss(nn.Module):
             # Add with segment level loss
             clip_loss = (
                 F.cross_entropy(time_level_probs, time_level_targets, reduction="mean")
-                + 0.2 * clip_loss
+                + 0.1 * clip_loss
             )
 
         return {
