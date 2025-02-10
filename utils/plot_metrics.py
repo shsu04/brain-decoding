@@ -1,20 +1,95 @@
+import os
+import typing as tp
+import numpy as np
 import torch
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-import numpy as np
-import os
-import typing as tp
-from matplotlib.ticker import AutoMinorLocator
 import seaborn as sns
+from matplotlib.ticker import AutoMinorLocator
 
 
 def moving_average(values: tp.List[float], window_size: int) -> tp.List[float]:
-    """Compute a simple moving average of a list of values."""
+    """
+    Compute a simple moving average of a list of values.
+    If window_size <= 1, returns the original values (no smoothing).
+    """
     if window_size <= 1:
-        return values  # No smoothing
+        return values
     cumsum = np.cumsum(np.insert(values, 0, 0))
     smoothed = (cumsum[window_size:] - cumsum[:-window_size]) / float(window_size)
     return smoothed.tolist()
+
+
+def expand_available_metrics(metric_dict: tp.Dict) -> tp.Set[str]:
+    """
+    Return all top-level keys plus any sub-keys in "final_layer_losses"
+    (with "final_layer_losses_" prefixed).
+    """
+    keys = set(metric_dict.keys())
+    if "final_layer_losses" in metric_dict and isinstance(
+        metric_dict["final_layer_losses"], dict
+    ):
+        for subkey in metric_dict["final_layer_losses"].keys():
+            keys.add("final_layer_losses_" + subkey)
+    return keys
+
+
+def get_metric_value(metric_dict: tp.Dict, key: str):
+    """
+    Retrieve the value for `key` from `metric_dict`. If `key` starts with
+    "final_layer_losses_", look inside the nested "final_layer_losses" dictionary.
+    Otherwise, return metric_dict[key] if it exists, else np.nan.
+    """
+    if key in metric_dict:
+        return metric_dict[key]
+    elif key.startswith("final_layer_losses_"):
+        subkey = key[len("final_layer_losses_") :]
+        return metric_dict.get("final_layer_losses", {}).get(subkey, np.nan)
+    else:
+        return np.nan
+
+
+def beautify_metric_name(metric_name: str, top_percent: bool = False) -> str:
+    """
+    Convert a metric key into a more readable form for plotting:
+      - If metric_name starts with "final_layer_losses_", it becomes something
+        like "Final Layer MSE Loss" or "Final Layer Cosine Similarity Loss".
+      - Otherwise, underscores are replaced with spaces, and it is title-cased.
+      - If top_percent=True and it’s not "Accuracy", optionally append '%'.
+    """
+    if metric_name.startswith("final_layer_losses_"):
+        # Remove the prefix
+        subkey = metric_name[len("final_layer_losses_") :]
+        if subkey.endswith("_loss"):
+            subkey = subkey[: -len("_loss")]  # remove trailing "_loss"
+        subkey_title = subkey.replace("_", " ").title()
+
+        # Special replacements
+        subkey_title = subkey_title.replace("Mse", "MSE")
+        if "Cosine Similarity" in subkey_title:
+            subkey_title = subkey_title.replace(
+                "Cosine Similarity", "Cosine Similarity Loss"
+            )
+        elif not subkey_title.endswith("Loss"):
+            subkey_title += " Loss"
+
+        title_str = "Final Layer " + subkey_title
+        if top_percent and "Accuracy" not in title_str and not title_str.endswith("%"):
+            title_str += " %"
+        return title_str
+    else:
+        title_str = metric_name.replace("_", " ").title()
+        if top_percent and title_str.lower() != "accuracy":
+            title_str += " %"
+        return title_str
+
+
+def enable_fine_grid(ax):
+    """Enable major and minor axis grid lines on the given Axes object."""
+    ax.grid(True, which="major", linestyle="-", linewidth=0.5, alpha=0.75)
+    ax.grid(True, which="minor", linestyle="--", linewidth=0.5, alpha=0.5)
+    ax.xaxis.set_minor_locator(AutoMinorLocator())
+    ax.yaxis.set_minor_locator(AutoMinorLocator())
 
 
 def display_metrics(
@@ -22,23 +97,13 @@ def display_metrics(
     train_metrics: tp.Optional[tp.List[str]] = None,
     test_metrics: tp.Optional[tp.List[str]] = None,
     test_subset: str = None,
-    smooth_window: int = 1,  # Increase to >1 to apply smoothing
+    smooth_window: int = 1,
 ):
     """
     Displays specified training and test metrics for multiple experiments side by side.
     Each metric is shown in its own subplot. If multiple metrics are provided, multiple
     subplots are created. Smoothing can be applied to reduce noise.
-
     Only one legend is displayed for all graphs, on the right side.
-
-    Arguments:
-        studies: A dictionary where keys are titles (labels) for the experiments and
-                 values are paths to the corresponding saved training sessions.
-        train_metrics: A list of training metrics to plot. If None or empty, no training plots.
-        test_metrics: A list of test metrics to plot. If None or empty, no test plots.
-        test_subset: If provided, select a particular test subset from metrics["test"].
-                     If None, the first available test subset is chosen.
-        smooth_window: Window size for moving average smoothing. 1 means no smoothing.
     """
     if train_metrics is None:
         train_metrics = []
@@ -50,18 +115,13 @@ def display_metrics(
         print("No metrics provided for either training or testing.")
         return
 
-    # Try to use seaborn-whitegrid style; if not available, revert to default
     try:
         plt.style.use("seaborn-whitegrid")
     except OSError:
-        print(
-            "Warning: 'seaborn-whitegrid' style is not available. Using default style."
-        )
+        print("Warning: 'seaborn-whitegrid' style not available. Using default style.")
         plt.style.use("default")
 
     sns.set_palette("tab20", len(studies))
-
-    # Configure fonts and style for a compact, paper-friendly figure
     mpl.rcParams.update(
         {
             "font.size": 12,
@@ -72,22 +132,15 @@ def display_metrics(
             "legend.fontsize": 14,
         }
     )
-
     mpl.rcParams.update()
 
     fig, axes = plt.subplots(1, total_metrics, figsize=(4 * total_metrics, 4))
-    # If there's only one metric total, axes will not be a list, so make it a list.
     if total_metrics == 1:
         axes = [axes]
 
-    # Assign axes to training and testing metrics
     train_axes = axes[: len(train_metrics)]
     test_axes = axes[len(train_metrics) :]
-
-    # Track which studies got plotted so we can build a single combined legend
-    study_lines = {}  # {study_title: line_handle}
-
-    # We'll store the chosen test_subset after we pick it once, so we can use it in titles
+    study_lines = {}
     chosen_test_subset = None
 
     for title, save_path in studies.items():
@@ -100,13 +153,10 @@ def display_metrics(
 
         data = torch.load(metrics_path)
         metrics = data.get("metrics", {})
-
-        # Load training data
         train_data = metrics.get("train", [])
-
-        # Load testing data
         test_dict = metrics.get("test", {})
-        # Determine which test subset to use
+
+        # Decide which test subset to use
         if len(test_dict) > 0:
             available_test_subsets = list(test_dict.keys())
             if test_subset is None:
@@ -115,7 +165,7 @@ def display_metrics(
                 if test_subset not in test_dict:
                     print(
                         f"Test subset '{test_subset}' not found for '{title}'. "
-                        f"Available test subsets: {available_test_subsets}"
+                        f"Available: {available_test_subsets}"
                     )
                     selected_test = None
                 else:
@@ -126,11 +176,10 @@ def display_metrics(
         if selected_test is not None and len(test_dict[selected_test]) == 0:
             print(
                 f"No test data for subset '{selected_test}' in '{title}'. "
-                f"Available subsets: {list(test_dict.keys())}"
+                f"Available: {list(test_dict.keys())}"
             )
             selected_test = None
 
-        # Remember the chosen subset for titles (if we have test metrics)
         if (
             chosen_test_subset is None
             and selected_test is not None
@@ -147,7 +196,7 @@ def display_metrics(
                 if tm not in available_train_metrics:
                     print(
                         f"Training metric '{tm}' not found for '{title}'. "
-                        f"Available training metrics: {list(available_train_metrics)}"
+                        f"Available: {list(available_train_metrics)}"
                     )
                     continue
 
@@ -160,26 +209,23 @@ def display_metrics(
                     train_x, train_values, label=title, linewidth=1
                 )
                 study_lines[title] = line[0]
-
         else:
             if len(train_metrics) > 0:
                 print(
-                    f"No training data found for '{title}'. Available sets: {list(metrics.keys())}. "
-                    "Skipping training metrics for this study."
+                    f"No training data found for '{title}'. "
+                    f"Skipping training metrics."
                 )
 
         # Plot testing metrics
         if selected_test is not None:
             test_data_list = test_dict[selected_test]
             if len(test_data_list) > 0:
-                available_test_metrics = (
-                    test_data_list[0].keys() if len(test_data_list) > 0 else []
-                )
+                available_test_metrics = test_data_list[0].keys()
                 for j, tm in enumerate(test_metrics):
                     if tm not in available_test_metrics:
                         print(
                             f"Test metric '{tm}' not found for '{title}' in subset '{selected_test}'. "
-                            f"Available test metrics: {list(available_test_metrics)}"
+                            f"Available: {list(available_test_metrics)}"
                         )
                         continue
                     test_values = [m[tm] for m in test_data_list if tm in m]
@@ -200,51 +246,35 @@ def display_metrics(
             if len(test_metrics) > 0 and len(test_dict) == 0:
                 print(f"No test metrics available for '{title}'.")
 
-    # Set labels and titles for training metrics
+    # Training axes labels
     for i, tm in enumerate(train_metrics):
         ax = train_axes[i]
-
         enable_fine_grid(ax)
         ax.set_axisbelow(True)
-
         ax.set_ylabel(tm.replace("_", " ").title())
         ax.set_xlabel("Epoch (Train Recordings)")
         ax.set_title("Training " + tm.replace("_", " ").title())
 
-    # Set labels and titles for testing metrics
+    # Testing axes labels
     for j, tm in enumerate(test_metrics):
         ax = test_axes[j]
-
         enable_fine_grid(ax)
         ax.set_axisbelow(True)
-
         ax.set_ylabel(tm.replace("_", " ").title())
-        ax.set_xlabel(f"Epoch {chosen_test_subset}")
-        # Include the chosen subset in the title if available
-        title_str = "Testing " + tm.replace("_", " ").title()
-        ax.set_title(title_str)
+        if chosen_test_subset is not None:
+            ax.set_xlabel(f"Epoch {chosen_test_subset}")
+        else:
+            ax.set_xlabel("Epoch (Test)")
+        ax.set_title("Testing " + tm.replace("_", " ").title())
 
-    # Create a single combined legend to the right of all plots
     handles = list(study_lines.values())
     labels = list(study_lines.keys())
 
-    # Adjust layout to make space on the right for the legend
+    # Layout adjustments
     plt.tight_layout(rect=[0, 0, 0.85, 1])
-    # Place the legend outside the plotting area
     plt.tight_layout(pad=2.0)
     fig.legend(handles, labels, loc="center left", bbox_to_anchor=(1.0, 0.5))
-
     plt.show()
-
-
-def enable_fine_grid(ax):
-    """Enable major and minor axis grid"""
-    ax.grid(True, which="major", linestyle="-", linewidth=0.5, alpha=0.75)
-    ax.grid(True, which="minor", linestyle="--", linewidth=0.5, alpha=0.5)
-
-    # Turn on minor ticks for both axes
-    ax.xaxis.set_minor_locator(AutoMinorLocator())
-    ax.yaxis.set_minor_locator(AutoMinorLocator())
 
 
 def display_best_performance_barchart(
@@ -256,40 +286,20 @@ def display_best_performance_barchart(
     """
     Displays a bar chart of the best (maximum) test performance across different test subsets
     for multiple experiments (studies). Each test metric gets its own subplot. The x-axis
-    represents the given test subsets, and each study's best score is shown side-by-side in a grouped bar.
-
-    Now updated to replicate the training logic:
-    We first determine the "best epoch" by summing a chosen metric (e.g., top_10_accuracy)
-    across all test subsets and identifying the epoch with the highest sum. We then take that epoch's values
-    for all requested test metrics.
-
-    Arguments:
-        studies: A dictionary where keys are titles (labels) for the experiments and
-                 values are paths to the corresponding saved training sessions (containing metrics.pt).
-        test_metrics: A list of test metrics to consider for plotting.
-        test_subsets: A list of test subsets (categories) to plot on the x-axis.
+    represents the given test subsets, and each study's best score is shown side-by-side
+    in a grouped bar chart.
     """
-
     if len(test_metrics) == 0 or len(test_subsets) == 0:
         print("No test metrics or test subsets provided.")
         return
 
-    # This is the metric we use to determine the best epoch, similar to the training loop.
-    # You can change it if you use a different metric to select the best epoch.
-    summation_metric = "accuracy"
-
-    # Try to use seaborn-whitegrid style; if not available, revert to default
     try:
         plt.style.use("seaborn-whitegrid")
     except OSError:
-        print(
-            "Warning: 'seaborn-whitegrid' style is not available. Using default style."
-        )
+        print("Warning: 'seaborn-whitegrid' style not available. Using default style.")
         plt.style.use("default")
 
     sns.set_palette("tab20", len(studies))
-
-    # Configure fonts and style
     mpl.rcParams.update(
         {
             "font.size": 18,
@@ -302,26 +312,23 @@ def display_best_performance_barchart(
     )
     mpl.rcParams.update()
 
-    # Prepare figure with one subplot per test metric
     n_metrics = len(test_metrics)
     fig, axes = plt.subplots(1, n_metrics, figsize=(6 * n_metrics, 5), squeeze=False)
-    axes = axes[0]  # (1, n) shape, select the row
-
+    axes = axes[0]  # (1, n_metrics) shape
     n_categories = len(test_subsets)
     study_titles = list(studies.keys())
     n_studies = len(study_titles)
 
-    # We'll store the best epoch performance for each study here:
-    # best_perf[metric][subset][study_title] = value at best epoch
+    # best_perf[metric][subset][study_title]
     best_perf = {m: {s: {} for s in test_subsets} for m in test_metrics}
 
     for title, save_path in studies.items():
         metrics_path = os.path.join(save_path, "metrics.pt")
-
         if not os.path.exists(metrics_path):
             print(
                 f"Warning: No metrics found at {metrics_path} for '{title}'. Skipping."
             )
+            # Fill in NaNs to keep it consistent
             for tm in test_metrics:
                 for subset in test_subsets:
                     best_perf[tm][subset][title] = np.nan
@@ -330,18 +337,16 @@ def display_best_performance_barchart(
         data = torch.load(metrics_path)
         highest_metrics = data.get("highest_metrics", {})
 
-        for subset_i, subset in enumerate(test_subsets):
+        for subset in test_subsets:
             for tm in test_metrics:
-                val = highest_metrics[subset].get(tm, np.nan)
+                val = get_metric_value(highest_metrics.get(subset, {}), tm)
                 best_perf[tm][subset][title] = val
 
-    # Now plot the bar charts using best_perf
     bar_width = 0.8 / n_studies
     x_positions = np.arange(n_categories)
 
     for i, tm in enumerate(test_metrics):
         ax = axes[i]
-
         enable_fine_grid(ax)
         ax.set_axisbelow(True)
 
@@ -355,18 +360,15 @@ def display_best_performance_barchart(
             ax.bar(bar_positions, vals, width=bar_width, label=study_title)
 
         ax.set_xticks(x_positions)
-        formatted_subsets = [s.replace("_", " ").title() for s in test_subsets]
-        ax.set_xticklabels(formatted_subsets, rotation=0)
+        ax.set_xticklabels(
+            [s.replace("_", " ").title() for s in test_subsets], rotation=0
+        )
 
-        title = tm.replace("_", " ").title()
+        pretty_name = beautify_metric_name(tm, top_percent)
+        ax.set_title(pretty_name)
+        ax.set_ylabel(pretty_name)
 
-        # Fix the top % vs absolute values
-        if top_percent and title != "Accuracy":
-            title += " %"
-
-        ax.set_title(title)
-        ax.set_ylabel(title)
-
+        # Legend on the last plot
         if i == n_metrics - 1:
             ax.legend(study_titles, loc="best", bbox_to_anchor=(1.0, 1.0))
 
