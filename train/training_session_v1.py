@@ -132,6 +132,14 @@ class TrainingSessionV1(TrainingSession):
                 self.frozen_encoder.forward, mode="default"
             )
 
+        self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            self.optimizer,
+            max_lr=self.config.learning_rate,
+            total_steps=self.config.epochs * len(self.dataset["train"]),
+            pct_start=0.1,  # 10% of steps for warmup
+            anneal_strategy="cos",  # or 'cos'
+        )
+
     def train(
         self,
         device: str,
@@ -591,6 +599,7 @@ class TrainingSessionV1(TrainingSession):
                         if train:
                             self.scaler.scale(loss).backward()
                             self.scaler.step(self.optimizer)
+                            self.scheduler.step()
                             self.scaler.update()
 
                             # Only do rank re-allocation after tinit steps:
