@@ -118,7 +118,7 @@ class TrainingSessionV1(TrainingSession):
             self.optimizer,
             max_lr=self.config.learning_rate,
             total_steps=self.config.epochs * len(self.dataset["train"]),
-            pct_start=0.1,
+            pct_start=0.5,
             anneal_strategy="cos",
         )
 
@@ -578,7 +578,6 @@ class TrainingSessionV1(TrainingSession):
                         if train:
                             self.scaler.scale(total_loss).backward()
                             self.scaler.step(self.optimizer)
-                            self.scheduler.step()
                             self.scaler.update()
 
                             if self.adalora_steps >= self.config.adalora_config.tinit:
@@ -653,6 +652,7 @@ class TrainingSessionV1(TrainingSession):
                     missed_batches += 1
                     raise ex
 
+        self.scheduler.step()
         total_samples -= missed_recordings
         batches = len(batch_indices) - missed_batches
 
