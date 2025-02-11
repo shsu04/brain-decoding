@@ -523,10 +523,10 @@ class TrainingSessionV1(TrainingSession):
 
                         # clip
                         if self.config.latent_alignment_objectives["clip_loss"] > 0:
-                            la_cl = self.clip_loss_latent(
+                            la_clip_results = self.clip_loss_latent(
                                 hid_out.transpose(1, 2), fro_out.transpose(1, 2)
                             )
-                            la_clip_loss, la_clip_metrics = la_cl
+                            la_clip_loss, la_clip_metrics = la_clip_results['loss'], la_clip_results['metrics']
                         else:
                             la_clip_loss = torch.tensor(0.0).to(device)
                             la_clip_metrics = {
