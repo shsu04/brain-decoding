@@ -140,7 +140,7 @@ class TrainingSessionV1(TrainingSession):
             try:
                 self.model.train()
                 epoch_start_time = time.time()
-                self.logger.info(f"\nStarting epoch {epoch}.")
+                self.logger.info(f"Starting epoch {epoch}.")
 
                 epoch_training_dataset = self.dataset["train"].copy()
                 dataloader = self.get_dataloader(
@@ -238,7 +238,7 @@ class TrainingSessionV1(TrainingSession):
 
             # Print
             self.log_no_print(
-                f"\nEpoch {epoch}, Loss: {final_metrics['loss']:.4f}, Mel Loss: {final_metrics['mel_loss']:.4f}"
+                f"Epoch {epoch}, Loss: {final_metrics['loss']:.4f}, Mel Loss: {final_metrics['mel_loss']:.4f}"
             )
             self.log_no_print(
                 f"Clip Loss: {final_metrics['clip_loss']:.4f}, MSE Loss: {final_metrics['mse_loss']:.4f}, CosSim: {final_metrics['cosine_similarity_loss']:.4f}, Commit: {final_metrics['commitment_loss']:.4f}"
@@ -268,7 +268,7 @@ class TrainingSessionV1(TrainingSession):
             # Testing
             try:
                 with torch.no_grad():
-                    self.logger.info(f"\nStarting testing for epoch {epoch}.")
+                    self.logger.info(f"Starting testing for epoch {epoch}.")
                     self.test(
                         buffer_size=buffer_size,
                         num_workers=num_workers,
@@ -314,7 +314,7 @@ class TrainingSessionV1(TrainingSession):
                     for test in self.metrics["test"].keys()
                 }
                 self.log_print(
-                    f"\nNew highest test accuracy: {self.highest_average_test_accuracy:.4f}, "
+                    f"New highest test accuracy: {self.highest_average_test_accuracy:.4f}, "
                     f"lowest final-layer loss: {self.lowest_final_layer_total_loss:.4f}, "
                     f"epoch {self.highest_epoch}."
                 )
@@ -325,25 +325,25 @@ class TrainingSessionV1(TrainingSession):
                 )
                 break
 
-        self.log_print("\nTraining completed.")
+        self.log_print("Training completed.")
         for test, mt in self.highest_metrics.items():
             self.log_print(
                 f"{test}: Acc: {mt['accuracy']:.4f}, Top5: {mt['top_5_accuracy']:.4f}, Top10: {mt['top_10_accuracy']:.4f}"
             )
             self.log_print(
-                f"\nLoss: {mt['loss']:.4f}, Mel: {mt['mel_loss']:.4f}, "
+                f"Loss: {mt['loss']:.4f}, Mel: {mt['mel_loss']:.4f}, "
                 f"Clip: {mt['clip_loss']:.4f}, MSE: {mt['mse_loss']:.4f}, "
                 f"CosSim: {mt['cosine_similarity_loss']:.4f}"
             )
             fll = mt["final_layer_losses"]
             self.log_print(
-                f"\nFinLayer Clip: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, "
+                f"FinLayer Clip: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, "
                 f"CosSim: {fll['cosine_similarity']:.4f}, Total: {fll['total']:.4f}"
             )
 
             # Combine final-layer accuracies into a single string:
             self.log_print(
-                f'\nFinLayer Acc: {mt["latent_alignment_metrics"]["clip_accuracy"][-1]:.4f}, '
+                f'FinLayer Acc: {mt["latent_alignment_metrics"]["clip_accuracy"][-1]:.4f}, '
                 f'FinLayer Top5: {mt["latent_alignment_metrics"]["clip_top5_accuracy"][-1]:.4f}, '
                 f'FinLayer Top10: {mt["latent_alignment_metrics"]["clip_top10_accuracy"][-1]:.4f}'
             )
@@ -585,7 +585,7 @@ class TrainingSessionV1(TrainingSession):
                                 )
                             if self.adalora_steps == self.config.adalora_config.tinit:
                                 self.log_print(
-                                    f"\nStarting rank reallocation at step {self.adalora_steps}."
+                                    f"Starting rank reallocation at step {self.adalora_steps}."
                                 )
                             self.adalora_steps += 1
                             self.optimizer.zero_grad()
@@ -703,7 +703,7 @@ class TrainingSessionV1(TrainingSession):
         }
 
         self.logger.info(
-            f"\n{recording.study_name} {recording.subject_id} sess {recording.session_id}, Loss: {metrics['loss']:.4f}"
+            f"{recording.study_name} {recording.subject_id} sess {recording.session_id}, Loss: {metrics['loss']:.4f}"
         )
         self.logger.info(
             f"Mel Loss: {metrics['mel_loss']:.4f}, Clip Loss: {metrics['clip_loss']:.4f}, "
