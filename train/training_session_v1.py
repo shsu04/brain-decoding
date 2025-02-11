@@ -704,7 +704,6 @@ class TrainingSessionV1(TrainingSession):
             ),
         }
 
-        self.logger.info("\n")
         self.logger.info(
             f"{recording.study_name} {recording.subject_id} sess {recording.session_id}, Loss: {metrics['loss']:.4f}"
         )
