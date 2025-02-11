@@ -4,7 +4,6 @@ import gc
 import random
 import time
 from tqdm import tqdm
-import typing as tp
 import json
 from torch.optim import AdamW
 import os
@@ -12,7 +11,6 @@ import torch
 from transformers import WhisperModel
 import torch.nn as nn
 from peft import PeftModel, PeftConfig
-
 
 from dataloader import DataLoader
 from dataloader.audio_batch import AudioBatch
@@ -26,7 +24,6 @@ device = "cuda"
 
 
 class TrainingSessionV1(TrainingSession):
-
     def __init__(
         self,
         config: TrainingConfigV1 = None,
@@ -38,21 +35,6 @@ class TrainingSessionV1(TrainingSession):
         cache_name: str = "cache",
         download_studies: bool = False,
     ):
-        """
-        Initializes a training session with the provided configuration and data.
-        This version deals with audio batches for Whisper latent alignment,
-        architecture exploration, and dataset integration.
-
-        Arguments:
-            config -- The configuration for the training session.
-            studies -- dict of studies, batch type. Partition policy determined in TrainingConfig
-                    Batch type determines how to load data from study.
-
-            data_path -- The path to the data directory.
-            save_path -- The path to the directory where the model and logs will be saved.
-            clear_cache -- Whether to clear the cache for the studies.
-            max_cache_size -- The maximum number of stimulis in cache.
-        """
         super().__init__(
             config=config,
             studies=studies,
@@ -121,22 +103,22 @@ class TrainingSessionV1(TrainingSession):
             if major >= 7:
                 gpu_ok = True
 
-        # Compile if on NVIDIA V100, A100, or H100 for faster training
+        # (Optional) compile if on modern GPU
         if not gpu_ok:
             self.log_print(
-                "GPU is not Ampere, or Hopper architecture. Speedup numbers may be lower "
-                "than expected without compilation."
+                "GPU is not Ampere/Hopper, skipping torch.compile for speed."
             )
         if gpu_ok:
             self.frozen_encoder = torch.compile(
                 self.frozen_encoder.forward, mode="default"
             )
 
+        # Example scheduler
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
             self.optimizer,
             max_lr=self.config.learning_rate,
             total_steps=self.config.epochs * len(self.dataset["train"]),
-            pct_start=0.1,  # 10% of steps for warmup
+            pct_start=0.1,
             anneal_strategy="cos",
         )
 
@@ -148,9 +130,6 @@ class TrainingSessionV1(TrainingSession):
         max_cache_size: int,
         current_epoch: int = 0,
     ):
-        """Max cache size for the cache dir in GB"""
-
-        # Set all training parameters (including temp in clip)
         self.device = device
         self.model.to(device)
         self.clip_loss_mel.to(device)
@@ -159,21 +138,17 @@ class TrainingSessionV1(TrainingSession):
 
         for epoch in range(current_epoch + 1, self.config.epochs + 1):
             try:
-                self.model.to(device).train()
+                self.model.train()
                 epoch_start_time = time.time()
                 self.logger.info(f"Starting epoch {epoch}.")
 
-                # Shuffle for each epoch, and start fetching
                 epoch_training_dataset = self.dataset["train"].copy()
-
-                # Fetch recordings
                 dataloader = self.get_dataloader(
                     buffer_size=buffer_size,
                     num_workers=num_workers,
                     max_cache_size=max_cache_size,
                 )
 
-                # For reproducibility
                 self.set_seed(int(self.config.seed + epoch))
                 random.shuffle(epoch_training_dataset)
                 dataloader.start_fetching(epoch_training_dataset, cache=True)
@@ -188,91 +163,103 @@ class TrainingSessionV1(TrainingSession):
 
             all_metrics, total_batches = [], 0
 
-            # Run each batch
             while True:
-
                 batch = dataloader.get_recording()
                 if batch is None:
                     break
-
                 try:
                     results, num_batches = self.run_batch(batch, train=True)
                     all_metrics.append(results)
                     total_batches += num_batches
-
                 except Exception as e:
-                    # Do log errors
                     self.log_print(
-                        f"Error in epoch {epoch}, {batch.recording.study_name} {batch.recording.subject_id} {batch.recording.session_id} {batch.recording.task_id}. Skipping. {e}"
+                        f"Error in epoch {epoch}, {batch.recording.study_name} {batch.recording.subject_id} {batch.recording.session_id} {batch.recording.task_id}. {e}"
                     )
                     self.save(f"error_epoch_{epoch}")
                     raise e
 
                 del batch
                 gc.collect()
-
                 pbar.update(1)
+
             pbar.close()
 
             final_metrics = {
-                "loss": sum([batch["loss"] for batch in all_metrics]) / training_size,
-                "mel_loss": sum([batch["mel_loss"] for batch in all_metrics])
-                / training_size,
-                "clip_loss": sum([batch["clip_loss"] for batch in all_metrics])
-                / training_size,
+                "loss": sum(b["loss"] for b in all_metrics) / training_size,
+                "mel_loss": sum(b["mel_loss"] for b in all_metrics) / training_size,
+                "clip_loss": sum(b["clip_loss"] for b in all_metrics) / training_size,
                 "cosine_similarity_loss": sum(
-                    [batch["cosine_similarity_loss"] for batch in all_metrics]
+                    b["cosine_similarity_loss"] for b in all_metrics
                 )
                 / training_size,
-                "mse_loss": sum([batch["mse_loss"] for batch in all_metrics])
+                "mse_loss": sum(b["mse_loss"] for b in all_metrics) / training_size,
+                "commitment_loss": sum(b["commitment_loss"] for b in all_metrics)
                 / training_size,
-                "commitment_loss": sum(
-                    [batch["commitment_loss"] for batch in all_metrics]
-                )
-                / training_size,
-                "perplexity": sum([batch["perplexity"] for batch in all_metrics])
-                / training_size,
+                "perplexity": sum(b["perplexity"] for b in all_metrics) / training_size,
                 "alignment_losses": {
                     key: [
-                        sum(
-                            [batch["alignment_losses"][key][i] for batch in all_metrics]
-                        )
+                        sum(b["alignment_losses"][key][i] for b in all_metrics)
                         / training_size
                         for i in range(len(self.config.latent_alignment_layers))
                     ]
                     for key in all_metrics[0]["alignment_losses"]
                 },
                 "final_layer_losses": {
-                    key: sum(
-                        [batch["final_layer_losses"][key] for batch in all_metrics]
-                    )
+                    key: sum(b["final_layer_losses"][key] for b in all_metrics)
                     / training_size
                     for key in all_metrics[0]["final_layer_losses"]
                 },
-                "accuracy": sum([batch["accuracy"] for batch in all_metrics])
+                "latent_alignment_metrics": {},
+                "accuracy": sum(b["accuracy"] for b in all_metrics) / training_size,
+                "top_5_accuracy": sum(b["top_5_accuracy"] for b in all_metrics)
                 / training_size,
-                "top_5_accuracy": sum(
-                    [batch["top_5_accuracy"] for batch in all_metrics]
-                )
-                / training_size,
-                "top_10_accuracy": sum(
-                    [batch["top_10_accuracy"] for batch in all_metrics]
-                )
+                "top_10_accuracy": sum(b["top_10_accuracy"] for b in all_metrics)
                 / training_size,
             }
+
+            # If we have latent alignment metrics, average them across the entire epoch
+            if "latent_alignment_metrics" in all_metrics[0]:
+                lam_keys = all_metrics[0]["latent_alignment_metrics"].keys()
+                final_lam: tp.Dict[str, tp.List[float]] = {}
+                for lam_key in lam_keys:
+                    layer_vals = []
+                    for layer_idx in range(len(self.config.latent_alignment_layers)):
+                        total_val = 0.0
+                        for m in all_metrics:
+                            total_val += m["latent_alignment_metrics"][lam_key][
+                                layer_idx
+                            ]
+                        layer_vals.append(total_val / training_size)
+                    final_lam[lam_key] = layer_vals
+                final_metrics["latent_alignment_metrics"] = final_lam
+
             self.metrics["train"].append(final_metrics)
 
+            # Print
             self.log_no_print(
                 f"Epoch {epoch}, Loss: {final_metrics['loss']:.4f}, Mel Loss: {final_metrics['mel_loss']:.4f}"
             )
             self.log_no_print(
-                f"Clip Loss: {final_metrics['clip_loss']:.4f}, MSE Loss: {final_metrics['mse_loss']:.4f}, CosSim Loss: {final_metrics['cosine_similarity_loss']}, Commit Loss: {final_metrics['commitment_loss']:.4f}"
+                f"Clip Loss: {final_metrics['clip_loss']:.4f}, MSE Loss: {final_metrics['mse_loss']:.4f}, CosSim: {final_metrics['cosine_similarity_loss']:.4f}, Commit: {final_metrics['commitment_loss']:.4f}"
             )
             self.log_no_print(
-                f"Perplexity: {final_metrics['perplexity']:.4f}, Accuracy: {final_metrics['accuracy']:.4f}, Top 5 Accuracy: {final_metrics['top_5_accuracy']:.4f}, Top 10 Accuracy: {final_metrics['top_10_accuracy']:.4f}"
+                f"Perplexity: {final_metrics['perplexity']:.4f}, Acc: {final_metrics['accuracy']:.4f}, Top5: {final_metrics['top_5_accuracy']:.4f}, Top10: {final_metrics['top_10_accuracy']:.4f}"
             )
+
+            if "latent_alignment_metrics" in final_metrics:
+                lam = final_metrics["latent_alignment_metrics"]
+                # Example: show final layer clip_accuracy
+                if "clip_correct" in lam:  # if we stored it as "clip_correct"
+                    last_idx = len(lam["clip_correct"]) - 1
+                    # This is still a count or ratio if we didn't rename it. If you want to rename
+                    # it to something like 'clip_accuracy', see run_batch code below.
+                    self.log_no_print(
+                        f"Final layer latent clip (acc maybe): {lam['clip_correct'][last_idx]:.4f}"
+                    )
+
+            fll = final_metrics["final_layer_losses"]
             self.log_no_print(
-                f"FinLayer Clip Loss: {final_metrics['final_layer_losses']['clip_loss']:.4f}, FinLayer MSE Loss: {final_metrics['final_layer_losses']['mse_loss']:.4f}, FinLayer CosSim Loss: {final_metrics['final_layer_losses']['cosine_similarity']:.4f}, FinLayer Total Loss: {final_metrics['final_layer_losses']['total']:.4f}"
+                f"FinLayer Clip Loss: {fll['clip_loss']:.4f}, MSE Loss: {fll['mse_loss']:.4f}, CosSim Loss: {fll['cosine_similarity']:.4f}, Total: {fll['total']:.4f}"
             )
 
             # Testing
@@ -290,35 +277,31 @@ class TrainingSessionV1(TrainingSession):
                 raise e
 
             elapsed_minutes = (time.time() - epoch_start_time) / 60
-
             self.log_print(
-                f"Epoch {epoch} completed in {elapsed_minutes:.2f}m. {elapsed_minutes / training_size:.2f}m per recording."
+                f"Epoch {epoch} done in {elapsed_minutes:.2f}m. {elapsed_minutes / training_size:.2f}m/recording."
             )
 
             self.save(f"epoch_{epoch}")
 
-            # Early stopping
+            # Early stopping logic
             average_test_accuracy = (
                 sum(
-                    [
-                        self.metrics["test"][test][-1]["accuracy"]
-                        for test in self.metrics["test"].keys()
-                    ]
+                    self.metrics["test"][t][-1]["accuracy"]
+                    for t in self.metrics["test"]
                 )
                 / 3
             )
             average_final_layer_total_loss = (
                 sum(
-                    [
-                        self.metrics["test"][test][-1]["final_layer_losses"]["total"]
-                        for test in self.metrics["test"].keys()
-                    ]
+                    self.metrics["test"][t][-1]["final_layer_losses"]["total"]
+                    for t in self.metrics["test"]
                 )
                 / 3
             )
 
-            if (average_test_accuracy > self.highest_average_test_accuracy) or (
-                average_final_layer_total_loss < self.lowest_final_layer_total_loss
+            if (
+                average_test_accuracy > self.highest_average_test_accuracy
+                or average_final_layer_total_loss < self.lowest_final_layer_total_loss
             ):
                 self.highest_average_test_accuracy = average_test_accuracy
                 self.lowest_final_layer_total_loss = average_final_layer_total_loss
@@ -328,37 +311,32 @@ class TrainingSessionV1(TrainingSession):
                     for test in self.metrics["test"].keys()
                 }
                 self.log_print(
-                    f"New highest average test accuracy: {self.highest_average_test_accuracy:.4f}, lowest FinLayer total loss: {self.lowest_final_layer_total_loss:.4f} at epoch {self.highest_epoch}."
+                    f"New highest test accuracy: {self.highest_average_test_accuracy:.4f}, lowest final-layer loss: {self.lowest_final_layer_total_loss:.4f}, epoch {self.highest_epoch}."
                 )
-                # Save model
 
             if epoch - self.highest_epoch > 10:
                 self.log_print(
-                    f"Early stopping at epoch {epoch}. Highest top 10 accuracy at epoch {self.highest_epoch}."
+                    f"Early stopping at epoch {epoch}. Highest top10 at epoch {self.highest_epoch}."
                 )
                 break
 
         self.log_print("Training completed.")
-        for test, metrics in self.highest_metrics.items():
+        for test, mt in self.highest_metrics.items():
             self.log_print(
-                f"{test}: Acc: {metrics['accuracy']:.4f}, Top 5: {metrics['top_5_accuracy']:.4f}, Top 10: {metrics['top_10_accuracy']:.4f}"
+                f"{test}: Acc: {mt['accuracy']:.4f}, Top5: {mt['top_5_accuracy']:.4f}, Top10: {mt['top_10_accuracy']:.4f}"
             )
             self.log_print(
-                f"Loss: {metrics['loss']:.4f}, Mel Loss: {metrics['mel_loss']:.4f}, Clip Loss: {metrics['clip_loss']:.4f}, MSE Loss: {metrics['mse_loss']:.4f}, CosSim Loss: {metrics['cosine_similarity_loss']:.4f}, Commit Loss: {metrics['commitment_loss']:.4f}"
+                f"Loss: {mt['loss']:.4f}, Mel: {mt['mel_loss']:.4f}, Clip: {mt['clip_loss']:.4f}, MSE: {mt['mse_loss']:.4f}, CosSim: {mt['cosine_similarity_loss']:.4f}"
             )
+            fll = mt["final_layer_losses"]
             self.log_print(
-                f"FinLayer Clip Loss: {metrics['final_layer_losses']['clip_loss']:.4f}, FinLayer MSE Loss: {metrics['final_layer_losses']['mse_loss']:.4f}"
-            )
-            self.log_print(
-                f"FinLayer CosSim Loss: {metrics['final_layer_losses']['cosine_similarity']:.4f}, FinLayer Total Loss: {metrics['final_layer_losses']['total']:.4f}"
+                f"FinLayer Clip: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, CosSim: {fll['cosine_similarity']:.4f}, Total: {fll['total']:.4f}"
             )
 
-    def run_batch(self, batch: AudioBatch, train: bool) -> tp.Dict[str, float]:
+    def run_batch(self, batch: AudioBatch, train: bool) -> tp.Tuple[dict, int]:
         """
-        Per recording processing for training and testing. Returns average metrics
-        and losses for the recording. Returns metrics on CPU.
+        The main place we do forward/backward. We'll convert raw clip_correct to 'accuracy' by dividing by total at the end.
         """
-        # Some processing to ensure dims match
         brain_segments, audio_segments, recording = (
             batch.brain_segments["all"],
             batch.audio_segments,
@@ -368,16 +346,15 @@ class TrainingSessionV1(TrainingSession):
             brain_segments, audio_segments
         )
 
-        # Initialize recording metrics
-        (
-            recording_loss,
-            recording_mel_loss,
-            recording_clip_loss,
-            recording_cosine_similarity_loss,
-            recording_mse_loss,
-            recording_commitment_loss,
-        ) = (0, 0, 0, 0, 0, 0)
+        # Accumulators for sums
+        recording_loss = 0.0
+        recording_mel_loss = 0.0
+        recording_clip_loss = 0.0
+        recording_cosine_similarity_loss = 0.0
+        recording_mse_loss = 0.0
+        recording_commitment_loss = 0.0
 
+        # Per-layer alignment losses
         recording_latent_alignment_losses = {
             "cosine_similarity": [0.0 for _ in self.config.latent_alignment_layers],
             "mse_loss": [0.0 for _ in self.config.latent_alignment_layers],
@@ -385,64 +362,59 @@ class TrainingSessionV1(TrainingSession):
             "total": [0.0 for _ in self.config.latent_alignment_layers],
         }
 
-        (total, missed_recordings, missed_batches) = (
-            brain_segments.shape[0],
-            0,
-            0,
-        )
-        (
-            recording_correct,
-            recording_top_5,
-            recording_top_10,
-            recording_perplexity,
-            recording_temp,
-        ) = (
-            0,
-            0,
-            0,
-            0,
-            0,
-        )
+        # CHANGED / NEW:
+        # We'll store the *raw* correct counts, then convert them to accuracy by dividing by 'total' at the end.
+        recording_latent_alignment_correct = [
+            0.0 for _ in self.config.latent_alignment_layers
+        ]
+        recording_latent_alignment_top5 = [
+            0.0 for _ in self.config.latent_alignment_layers
+        ]
+        recording_latent_alignment_top10 = [
+            0.0 for _ in self.config.latent_alignment_layers
+        ]
 
-        # Models config decides if it is used
+        # For mel-level clip correctness
+        recording_correct = 0.0
+        recording_top_5 = 0.0
+        recording_top_10 = 0.0
+        recording_perplexity = 0.0
+        recording_temp = 0.0
+
+        total_samples = brain_segments.shape[0]
+        missed_recordings = 0
+        missed_batches = 0
+
         conditions = {
             "study": f"{recording.study_name}",
             "subject": f"{recording.study_name}_{recording.subject_id}",
         }
 
-        # Shuffle segments
-        shuffle_indices = torch.randperm(brain_segments.shape[0])
-        brain_segments, audio_segments = (
-            brain_segments[shuffle_indices],
-            audio_segments[shuffle_indices],
-        )  # [B, C, T], [B, mel_bins, T]
+        shuffle_idx = torch.randperm(total_samples)
+        brain_segments = brain_segments[shuffle_idx]
+        audio_segments = audio_segments[shuffle_idx]
 
-        # Process by specified batch size
+        # We'll slice by batch_size
         batch_indices = [
-            (i, min(i + self.config.batch_size, total))
-            for i in range(0, total, self.config.batch_size)
+            (i, min(i + self.config.batch_size, total_samples))
+            for i in range(0, total_samples, self.config.batch_size)
         ]
 
-        with torch.autocast(dtype=self.autocast_dtype, device_type=device):
-            for i, (start, end) in enumerate(batch_indices):
+        with torch.autocast(device_type=device, dtype=self.autocast_dtype):
+            for start, end in batch_indices:
                 try:
                     if train:
                         self.optimizer.zero_grad()
 
-                    # Slice by batch
-                    brain_batch, audio_batch = (
-                        brain_segments[start:end].to(self.device),
-                        audio_segments[start:end].to(self.device),
-                    )
-
-                    # Brain module
+                    brain_batch = brain_segments[start:end].to(device)
+                    audio_batch = audio_segments[start:end].to(device)
 
                     (
-                        x,  # [B, C, T]
+                        x,
                         quantizer_metrics,
                         channel_weights,
                         hidden_outputs,
-                        encoder_hidden_states,  # L * [B, T, D]
+                        encoder_hidden_states,
                     ) = self.model(
                         x=[brain_batch],
                         recording=[recording],
@@ -453,14 +425,8 @@ class TrainingSessionV1(TrainingSession):
                     )
                     del channel_weights, hidden_outputs, brain_batch
 
-                    # Frozen module
+                    # Frozen
                     with torch.no_grad():
-
-                        if self.config.latent_alignment_layers == [-1]:
-                            output_hidden_states = False
-                        else:
-                            output_hidden_states = True
-
                         outputs = self.frozen_encoder(
                             nn.functional.pad(
                                 audio_batch,
@@ -468,13 +434,11 @@ class TrainingSessionV1(TrainingSession):
                                 mode="constant",
                                 value=0.0,
                             ),
-                            output_hidden_states=output_hidden_states,
+                            output_hidden_states=(
+                                self.config.latent_alignment_layers != [-1]
+                            ),
                         )
-
-                        # Trim to time ste
-                        if (self.config.latent_alignment_layers == [-1]) or (
-                            self.config.latent_alignment_layers == [32]
-                        ):
+                        if self.config.latent_alignment_layers == [-1]:
                             frozen_encoder_outputs = [
                                 outputs.last_hidden_state[:, : audio_batch.size(2), :]
                             ]
@@ -483,45 +447,42 @@ class TrainingSessionV1(TrainingSession):
                                 outputs.hidden_states[l][:, : audio_batch.size(2), :]
                                 for l in self.model.layers_to_align
                             ]
-
                             del outputs
                             gc.collect()
-                            torch.cuda.empty_cache()
 
-                    # Brain module losses
+                    # Mel alignment objectives
                     if self.config.mel_alignment_objectives["mse_loss"] > 0:
-                        mse_loss = self.mse_loss(pred=x, target=audio_batch)
+                        mse_l = self.mse_loss(pred=x, target=audio_batch)
                     else:
-                        mse_loss = torch.tensor(0.0).to(self.device)
+                        mse_l = torch.tensor(0.0).to(device)
 
                     if self.config.mel_alignment_objectives["cosine_similarity"] > 0:
-                        cosine_similarity_loss = self.cosine_similarity_loss(
+                        cosim_l = self.cosine_similarity_loss(
                             x.transpose(1, 2), audio_batch.transpose(1, 2)
                         )
                     else:
-                        cosine_similarity_loss = torch.tensor(0.0).to(self.device)
+                        cosim_l = torch.tensor(0.0).to(device)
 
                     if self.config.mel_alignment_objectives["clip_loss"] > 0:
-                        clip_results = self.clip_loss_mel(
-                            x_1=x, x_2=audio_batch, mel=True
-                        )
-                        clip_loss, clip_metrics = (
-                            clip_results["loss"],
-                            clip_results["metrics"],
+                        clip_mel = self.clip_loss_mel(x_1=x, x_2=audio_batch, mel=True)
+                        mel_clip_loss, mel_clip_metrics = (
+                            clip_mel["loss"],
+                            clip_mel["metrics"],
                         )
                     else:
-                        clip_loss, clip_metrics = torch.tensor(0.0).to(self.device), {
+                        mel_clip_loss = torch.tensor(0.0).to(device)
+                        mel_clip_metrics = {
                             "correct": 0,
                             "top_5_correct": 0,
                             "top_10_correct": 0,
                         }
 
-                    # Sum loss based on config
                     mel_loss = (
-                        self.config.mel_alignment_objectives["clip_loss"] * clip_loss
-                        + self.config.mel_alignment_objectives["mse_loss"] * mse_loss
+                        self.config.mel_alignment_objectives["clip_loss"]
+                        * mel_clip_loss
+                        + self.config.mel_alignment_objectives["mse_loss"] * mse_l
                         + self.config.mel_alignment_objectives["cosine_similarity"]
-                        * cosine_similarity_loss
+                        * cosim_l
                     )
 
                     if quantizer_metrics is not None:
@@ -531,78 +492,75 @@ class TrainingSessionV1(TrainingSession):
                                 * quantizer_metrics["commitment_loss"]
                             )
 
-                    # Losses by layer
-                    latent_alignment_losses = {
+                    # Latent alignment for each layer
+                    la_losses = {
                         "cosine_similarity": [],
                         "mse_loss": [],
                         "clip_loss": [],
                         "total": [],
                     }
+                    la_correct = []
+                    la_top5 = []
+                    la_top10 = []
 
-                    for l, (frozen_encoder_output, hidden_output) in enumerate(
+                    for l_idx, (fro_out, hid_out) in enumerate(
                         zip(frozen_encoder_outputs, encoder_hidden_states)
                     ):
-                        # Align latent spaces
-
+                        # cos
                         if (
                             self.config.latent_alignment_objectives["cosine_similarity"]
                             > 0
                         ):
-                            latent_alignment_losses["cosine_similarity"].append(
-                                self.cosine_similarity_loss(
-                                    frozen_encoder_output, hidden_output
-                                )
-                            )
+                            la_cos = self.cosine_similarity_loss(fro_out, hid_out)
                         else:
-                            latent_alignment_losses["cosine_similarity"].append(
-                                torch.tensor(0.0).to(self.device)
-                            )
+                            la_cos = torch.tensor(0.0).to(device)
 
+                        # mse
                         if self.config.latent_alignment_objectives["mse_loss"] > 0:
-                            latent_alignment_losses["mse_loss"].append(
-                                self.mse_loss(
-                                    pred=hidden_output, target=frozen_encoder_output
-                                )
-                            )
+                            la_mse = self.mse_loss(pred=hid_out, target=fro_out)
                         else:
-                            latent_alignment_losses["mse_loss"].append(
-                                torch.tensor(0.0).to(self.device)
-                            )
+                            la_mse = torch.tensor(0.0).to(device)
 
+                        # clip
                         if self.config.latent_alignment_objectives["clip_loss"] > 0:
-                            latent_alignment_clip_results = self.clip_loss_latent(
-                                hidden_output.transpose(1, 2),
-                                frozen_encoder_output.transpose(1, 2),
+                            la_cl = self.clip_loss_latent(
+                                hid_out.transpose(1, 2), fro_out.transpose(1, 2)
                             )
-                            latent_alignment_losses["clip_loss"].append(
-                                latent_alignment_clip_results["loss"]
-                            )
+                            la_clip_loss, la_clip_metrics = la_cl
                         else:
-                            latent_alignment_losses["clip_loss"].append(
-                                torch.tensor(0.0).to(self.device)
-                            )
+                            la_clip_loss = torch.tensor(0.0).to(device)
+                            la_clip_metrics = {
+                                "correct": 0,
+                                "top_5_correct": 0,
+                                "top_10_correct": 0,
+                            }
 
-                        # Avoid recalculation
-                        latent_alignment_losses["total"].append(
+                        la_tot = (
                             self.config.latent_alignment_objectives["cosine_similarity"]
-                            * latent_alignment_losses["cosine_similarity"][l]
+                            * la_cos
                             + self.config.latent_alignment_objectives["mse_loss"]
-                            * latent_alignment_losses["mse_loss"][l]
+                            * la_mse
                             + self.config.latent_alignment_objectives["clip_loss"]
-                            * latent_alignment_losses["clip_loss"][l]
+                            * la_clip_loss
                         )
+                        la_losses["cosine_similarity"].append(la_cos)
+                        la_losses["mse_loss"].append(la_mse)
+                        la_losses["clip_loss"].append(la_clip_loss)
+                        la_losses["total"].append(la_tot)
 
-                    loss = sum(latent_alignment_losses["total"]) + mel_loss
+                        la_correct.append(la_clip_metrics["correct"])
+                        la_top5.append(la_clip_metrics["top_5_correct"])
+                        la_top10.append(la_clip_metrics["top_10_correct"])
 
-                    # Backward pass
-                    if not torch.isnan(loss).any():
+                    total_loss = sum(la_losses["total"]) + mel_loss
+
+                    if not torch.isnan(total_loss).any():
                         if train:
-                            self.scaler.scale(loss).backward()
+                            self.scaler.scale(total_loss).backward()
                             self.scaler.step(self.optimizer)
                             self.scheduler.step()
                             self.scaler.update()
 
-                            # Only do rank re-allocation after tinit steps:
                             if self.adalora_steps >= self.config.adalora_config.tinit:
                                 self.model.encoder.base_model.update_and_allocate(
                                     self.adalora_steps
@@ -611,78 +569,99 @@ class TrainingSessionV1(TrainingSession):
                                 self.log_print(
                                     f"Starting rank reallocation at step {self.adalora_steps}."
                                 )
-
                             self.adalora_steps += 1
                             self.optimizer.zero_grad()
 
-                        # Store brain losses, move to CPU
-                        recording_loss += loss.detach().to("cpu").item()
-                        recording_clip_loss += clip_loss.detach().to("cpu").item()
+                        # Accumulate
+                        recording_loss += total_loss.detach().cpu().item()
+                        recording_mse_loss += mse_l.detach().cpu().item()
                         recording_cosine_similarity_loss += (
-                            cosine_similarity_loss.detach().to("cpu").item()
+                            cosim_l.detach().cpu().item()
                         )
-                        recording_mse_loss += mse_loss.detach().to("cpu").item()
-                        recording_mel_loss += mel_loss.detach().to("cpu").item()
+                        recording_clip_loss += mel_clip_loss.detach().cpu().item()
+                        recording_mel_loss += mel_loss.detach().cpu().item()
 
-                        # Quantizer metrics
                         if quantizer_metrics is not None:
                             if "perplexity" in quantizer_metrics:
-                                perplexity = (
+                                perplex = (
                                     quantizer_metrics["perplexity"]
                                     .detach()
-                                    .to("cpu")
-                                    .mean(dim=0)
+                                    .cpu()
+                                    .mean()
                                 )
-                                recording_perplexity += perplexity.item()
+                                recording_perplexity += perplex.item()
                             if "temp" in quantizer_metrics:
                                 recording_temp += (
-                                    quantizer_metrics["temp"].detach().to("cpu").item()
+                                    quantizer_metrics["temp"].detach().cpu().item()
                                 )
                             if "commitment_loss" in quantizer_metrics:
                                 recording_commitment_loss += (
                                     quantizer_metrics["commitment_loss"]
                                     .detach()
-                                    .to("cpu")
+                                    .cpu()
                                     .item()
                                 )
 
-                        # Store latent alignment losses
-                        for key in latent_alignment_losses:
-                            for l, value in enumerate(latent_alignment_losses[key]):
-                                recording_latent_alignment_losses[key][l] += (
-                                    value.detach().to("cpu").item()
+                        # sum up layerwise
+                        for key in la_losses:
+                            for i_l, val in enumerate(la_losses[key]):
+                                recording_latent_alignment_losses[key][i_l] += (
+                                    val.detach().cpu().item()
                                 )
 
-                        # Store metrics, already on CPU
-                        recording_correct += clip_metrics["correct"]
-                        recording_top_5 += clip_metrics["top_5_correct"]
-                        recording_top_10 += clip_metrics["top_10_correct"]
+                        # sum up raw correct counts
+                        for i_l in range(len(self.config.latent_alignment_layers)):
+                            recording_latent_alignment_correct[i_l] += la_correct[i_l]
+                            recording_latent_alignment_top5[i_l] += la_top5[i_l]
+                            recording_latent_alignment_top10[i_l] += la_top10[i_l]
+
+                        # mel-level clip metrics
+                        recording_correct += mel_clip_metrics["correct"]
+                        recording_top_5 += mel_clip_metrics["top_5_correct"]
+                        recording_top_10 += mel_clip_metrics["top_10_correct"]
 
                     else:
                         self.log_print(
-                            f"Loss is NaN for {recording.study_name} {recording.subject_id} {recording.session_id} {recording.task_id}."
+                            f"NaN loss on {recording.study_name} subj {recording.subject_id} task {recording.task_id}."
                         )
                         missed_recordings += end - start
                         missed_batches += 1
 
-                except Exception as e:
-                    self.log_print(
-                        f"Error in processing {recording.study_name} {recording.subject_id} {recording.session_id} {recording.task_id}."
-                    )
+                except Exception as ex:
+                    self.log_print(f"Error in run_batch: {ex}")
                     missed_recordings += end - start
                     missed_batches += 1
-                    raise e
+                    raise ex
 
-        gc.collect()
-        torch.cuda.empty_cache()
-
-        # Correct for missed recordings and batches
-        total -= missed_recordings
+        # done all slices
+        total_samples -= missed_recordings
         batches = len(batch_indices) - missed_batches
 
+        # Average the losses by #batches
         for key in recording_latent_alignment_losses:
-            for l in range(len(recording_latent_alignment_losses[key])):
-                recording_latent_alignment_losses[key][l] /= batches
+            for i_l in range(len(recording_latent_alignment_losses[key])):
+                recording_latent_alignment_losses[key][i_l] /= batches
+
+        # CHANGED / NEW:
+        # Instead of dividing by `batches`, we convert raw "correct" counts to "accuracy"
+        # by dividing by total_samples (like mel's "correct / total").
+        # Then rename them, e.g. "clip_accuracy", "clip_top5_accuracy", etc.
+        latent_alignment_metrics = {
+            "clip_accuracy": [],
+            "clip_top5_accuracy": [],
+            "clip_top10_accuracy": [],
+        }
+        for i_l in range(len(self.config.latent_alignment_layers)):
+            if total_samples > 0:
+                clip_acc = recording_latent_alignment_correct[i_l] / total_samples
+                clip_top5_acc = recording_latent_alignment_top5[i_l] / total_samples
+                clip_top10_acc = recording_latent_alignment_top10[i_l] / total_samples
+            else:
+                clip_acc, clip_top5_acc, clip_top10_acc = 0.0, 0.0, 0.0
+
+            latent_alignment_metrics["clip_accuracy"].append(clip_acc)
+            latent_alignment_metrics["clip_top5_accuracy"].append(clip_top5_acc)
+            latent_alignment_metrics["clip_top10_accuracy"].append(clip_top10_acc)
 
         final_layer_losses = {
             key: recording_latent_alignment_losses[key][-1]
@@ -695,48 +674,56 @@ class TrainingSessionV1(TrainingSession):
             "clip_loss": recording_clip_loss / batches,
             "cosine_similarity_loss": recording_cosine_similarity_loss / batches,
             "mse_loss": recording_mse_loss / batches,
-            "commitment_loss": (recording_commitment_loss) / batches,
+            "commitment_loss": recording_commitment_loss / batches,
             "perplexity": recording_perplexity / batches,
             "alignment_losses": recording_latent_alignment_losses,
             "final_layer_losses": final_layer_losses,
-            "accuracy": recording_correct / total,
-            "top_5_accuracy": recording_top_5 / total,
-            "top_10_accuracy": recording_top_10 / total,
+            "latent_alignment_metrics": latent_alignment_metrics,  # <--- final aligned accuracies
+            "accuracy": (recording_correct / total_samples) if total_samples else 0.0,
+            "top_5_accuracy": (
+                (recording_top_5 / total_samples) if total_samples else 0.0
+            ),
+            "top_10_accuracy": (
+                (recording_top_10 / total_samples) if total_samples else 0.0
+            ),
         }
 
         self.logger.info(
-            f"{recording.study_name} {recording.subject_id} {recording.session_id} {recording.task_id}, Loss: {metrics['loss']:.4f}"
+            f"{recording.study_name} {recording.subject_id} sess {recording.session_id}, Loss: {metrics['loss']:.4f}"
         )
         self.logger.info(
-            f"Mel Loss: {metrics['mel_loss']:.4f}, Clip Loss: {metrics['clip_loss']:.4f}, MSE Loss: {metrics['mse_loss']:.4f}, Commit Loss: {metrics['commitment_loss']:.4f}, CosSim Loss: {metrics['cosine_similarity_loss']:.4f}"
+            f"Mel Loss: {metrics['mel_loss']:.4f}, Clip Loss: {metrics['clip_loss']:.4f}, MSE: {metrics['mse_loss']:.4f}, Commit: {metrics['commitment_loss']:.4f}, CosSim: {metrics['cosine_similarity_loss']:.4f}"
         )
         self.logger.info(
-            f"Perplexity: {metrics['perplexity']:.4f}, Accuracy: {metrics['accuracy']:.4f}, Top 5 Accuracy: {metrics['top_5_accuracy']:.4f}, Top 10 Accuracy: {metrics['top_10_accuracy']:.4f}"
-        )
-        self.logger.info(
-            f"FinLayer Clip Loss: {final_layer_losses['clip_loss']:.4f}, FinLayer MSE Loss: {final_layer_losses['mse_loss']:.4f}, FinLayer CosSim Loss: {final_layer_losses['cosine_similarity']:.4f}, FinLayer Total Loss: {final_layer_losses['total']:.4f}"
+            f"Perplex: {metrics['perplexity']:.4f}, Acc: {metrics['accuracy']:.4f}, Top5: {metrics['top_5_accuracy']:.4f}, Top10: {metrics['top_10_accuracy']:.4f}"
         )
 
-        return metrics, total
+        # Print final-layer alignment accuracies
+        fll = final_layer_losses
+        self.logger.info(
+            f"FinalLayer Clip Loss: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, CosSim: {fll['cosine_similarity']:.4f}, Tot: {fll['total']:.4f}"
+        )
+        # Show final-layer clip accuracy
+        if "clip_accuracy" in latent_alignment_metrics:
+            last_l = len(latent_alignment_metrics["clip_accuracy"]) - 1
+            final_acc = latent_alignment_metrics["clip_accuracy"][last_l]
+            self.logger.info(f"LatentAlign final-layer clip acc: {final_acc:.4f}")
+
+        return metrics, total_samples
 
     def test(self, buffer_size: int, num_workers: int, max_cache_size: int):
-        """Max cache size in GB"""
         self.model.eval().to(self.device)
         self.set_seed(int(self.config.seed))
-        test_start_time = time.time()
+        start_time = time.time()
 
         test_datasets, test_sizes, test_dataloader = {}, {}, {}
-
-        # Create dataset and loader
         for test in self.dataset["test"].keys():
-            # Randomly subsample recordings for each type of test
             if len(self.dataset["test"][test]) < self.config.random_test_size:
                 test_datasets[test] = self.dataset["test"][test]
             else:
                 test_datasets[test] = random.sample(
                     self.dataset["test"][test], self.config.random_test_size
                 )
-
             test_sizes[test] = len(test_datasets[test])
             test_dataloader[test] = self.get_dataloader(
                 buffer_size=test_sizes[test],
@@ -745,94 +732,94 @@ class TrainingSessionV1(TrainingSession):
             )
             test_dataloader[test].start_fetching(test_datasets[test], cache=True)
 
-        # Run tests
-        for test in test_datasets.keys():
-            all_metrics, total_batches, i = [], 0, 0
+        for test in test_datasets:
+            all_metrics, total_batches = [], 0
             while True:
                 batch = test_dataloader[test].get_recording()
                 if batch is None:
                     break
                 try:
-                    results, num_batches = self.run_batch(batch, train=False)
+                    results, num_b = self.run_batch(batch, train=False)
                     all_metrics.append(results)
-                    total_batches += num_batches
-                    i += 1
+                    total_batches += num_b
                 except Exception as e:
-                    self.log_print(
-                        f"Error in testing {test}, {batch.recording.study_name} {batch.recording.subject_id} {batch.recording.session_id} {batch.recording.task_id}. Skipping."
-                    )
+                    self.log_print(f"Error in testing {test}, skipping. {e}")
                     test_sizes[test] -= 1
                     continue
                 del batch
                 gc.collect()
 
-            final_metrics = {
-                "loss": sum([batch["loss"] for batch in all_metrics])
+            if test_sizes[test] == 0:
+                continue
+
+            fm = {
+                "loss": sum(m["loss"] for m in all_metrics) / test_sizes[test],
+                "mel_loss": sum(m["mel_loss"] for m in all_metrics) / test_sizes[test],
+                "clip_loss": sum(m["clip_loss"] for m in all_metrics)
                 / test_sizes[test],
-                "mel_loss": sum([batch["mel_loss"] for batch in all_metrics])
-                / test_sizes[test],
-                "clip_loss": sum([batch["clip_loss"] for batch in all_metrics])
-                / test_sizes[test],
-                "mse_loss": sum([batch["mse_loss"] for batch in all_metrics])
-                / test_sizes[test],
+                "mse_loss": sum(m["mse_loss"] for m in all_metrics) / test_sizes[test],
                 "cosine_similarity_loss": sum(
-                    [batch["cosine_similarity_loss"] for batch in all_metrics]
+                    m["cosine_similarity_loss"] for m in all_metrics
                 )
                 / test_sizes[test],
-                "commitment_loss": sum(
-                    [batch["commitment_loss"] for batch in all_metrics]
-                )
+                "commitment_loss": sum(m["commitment_loss"] for m in all_metrics)
                 / test_sizes[test],
-                "perplexity": sum([batch["perplexity"] for batch in all_metrics])
+                "perplexity": sum(m["perplexity"] for m in all_metrics)
                 / test_sizes[test],
                 "alignment_losses": {
                     key: [
-                        sum(
-                            [batch["alignment_losses"][key][i] for batch in all_metrics]
-                        )
+                        sum(m["alignment_losses"][key][i] for m in all_metrics)
                         / test_sizes[test]
                         for i in range(len(self.config.latent_alignment_layers))
                     ]
                     for key in all_metrics[0]["alignment_losses"]
                 },
                 "final_layer_losses": {
-                    key: sum(
-                        [batch["final_layer_losses"][key] for batch in all_metrics]
-                    )
+                    key: sum(m["final_layer_losses"][key] for m in all_metrics)
                     / test_sizes[test]
                     for key in all_metrics[0]["final_layer_losses"]
                 },
-                "accuracy": sum([batch["accuracy"] for batch in all_metrics])
+                "latent_alignment_metrics": {},
+                "accuracy": sum(m["accuracy"] for m in all_metrics) / test_sizes[test],
+                "top_5_accuracy": sum(m["top_5_accuracy"] for m in all_metrics)
                 / test_sizes[test],
-                "top_5_accuracy": sum(
-                    [batch["top_5_accuracy"] for batch in all_metrics]
-                )
-                / test_sizes[test],
-                "top_10_accuracy": sum(
-                    [batch["top_10_accuracy"] for batch in all_metrics]
-                )
+                "top_10_accuracy": sum(m["top_10_accuracy"] for m in all_metrics)
                 / test_sizes[test],
             }
-            self.metrics["test"][test].append(final_metrics)
+
+            # If we have alignment metrics
+            if "latent_alignment_metrics" in all_metrics[0]:
+                lam_keys = all_metrics[0]["latent_alignment_metrics"].keys()
+                final_lam = {}
+                for lam_key in lam_keys:
+                    layer_vals = []
+                    for idx in range(len(self.config.latent_alignment_layers)):
+                        total_val = 0.0
+                        for mm in all_metrics:
+                            total_val += mm["latent_alignment_metrics"][lam_key][idx]
+                        layer_vals.append(total_val / test_sizes[test])
+                    final_lam[lam_key] = layer_vals
+                fm["latent_alignment_metrics"] = final_lam
+
+            self.metrics["test"][test].append(fm)
 
             self.log_no_print(
-                f"Test {test} completed., Loss: {final_metrics['loss']:.4f}, Mel Loss: {final_metrics['mel_loss']:.4f}"
+                f"Test {test} done. Loss: {fm['loss']:.4f}, Mel: {fm['mel_loss']:.4f}"
             )
             self.log_no_print(
-                f"Clip Loss: {final_metrics['clip_loss']:.4f}, MSE Loss: {final_metrics['mse_loss']:.4f}, Commit Loss: {final_metrics['commitment_loss']:.4f}, CosSim Loss: {final_metrics['cosine_similarity_loss']:.4f}"
+                f"Clip: {fm['clip_loss']:.4f}, MSE: {fm['mse_loss']:.4f}, CosSim: {fm['cosine_similarity_loss']:.4f}, Commit: {fm['commitment_loss']:.4f}"
             )
             self.log_no_print(
-                f"Perplexity: {final_metrics['perplexity']:.4f}, Accuracy: {final_metrics['accuracy']:.4f}, Top 5 Accuracy: {final_metrics['top_5_accuracy']:.4f}, Top 10 Accuracy: {final_metrics['top_10_accuracy']:.4f}"
+                f"Perplex: {fm['perplexity']:.4f}, Acc: {fm['accuracy']:.4f}, Top5: {fm['top_5_accuracy']:.4f}, Top10: {fm['top_10_accuracy']:.4f}"
             )
+            fll = fm["final_layer_losses"]
             self.log_no_print(
-                f"FinLayer Clip Loss: {final_metrics['final_layer_losses']['clip_loss']:.4f}, FinLayer MSE Loss: {final_metrics['final_layer_losses']['mse_loss']:.4f}, FinLayer CosSim Loss: {final_metrics['final_layer_losses']['cosine_similarity']:.4f}, FinLayer Total Loss: {final_metrics['final_layer_losses']['total']:.4f}"
+                f"FinLayer Clip: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, CosSim: {fll['cosine_similarity']:.4f}, Tot: {fll['total']:.4f}"
             )
             test_dataloader[test].stop()
 
-        # Log info
-        elapsed_minutes = (time.time() - test_start_time) / 60
-        self.log_print(f"Testing completed in {elapsed_minutes:.2f}m.")
-        return
+        elaps = (time.time() - start_time) / 60
+        self.log_print(f"Testing done in {elaps:.2f}m.")
 
     def get_dataloader(self, buffer_size, num_workers, max_cache_size):
         dataloader = DataLoader(
@@ -865,69 +852,45 @@ class TrainingSessionV1(TrainingSession):
         brain: torch.Tensor,
         audio: torch.Tensor,
     ):
-        """
-        If any nan in brain or audio data, discard the batch.
-
-        Arguments:
-            brain -- The brain data tensor, [B, C, T]
-            audio -- The audio data, [B, mel_bins, T]
-        """
-
         valid_mask = ~(
             torch.isnan(brain).any(dim=(1, 2)) | torch.isnan(audio).any(dim=(1, 2))
         )
-
         if valid_mask.all():
             return brain, audio
-
-        # Apply the same mask to both tensors
         filtered_brain = brain[valid_mask]
         filtered_audio = audio[valid_mask]
-
         if filtered_brain.shape[0] != filtered_audio.shape[0]:
-            raise ValueError(
-                "Filtered brain and audio data must have the same number of samples"
-            )
-
+            raise ValueError("Filtered brain and audio must match in length")
         return filtered_brain, filtered_audio
 
     def pre_process_all_recordings(
         self, buffer_size: int, num_workers: int, max_cache_size: int
     ):
-        """Pre-processes all data and saves as .pt in cache at once."""
-
         if self.recordings is None:
             self.partition_datasets()
-
         dataloader = self.get_dataloader(buffer_size, num_workers, max_cache_size)
-
-        total_recordings, remaining = len(self.recordings), len(self.recordings)
-        pbar = tqdm(total=total_recordings, desc="Loading recordings")
+        total_rec = len(self.recordings)
+        pbar = tqdm(total=total_rec, desc="Loading recordings")
 
         dataloader.start_fetching(self.recordings)
-
+        done = 0
         while True:
-            recording = dataloader.get_recording()
-            if recording is None:
+            r = dataloader.get_recording()
+            if r is None:
                 break
-            remaining -= 1
+            done += 1
             pbar.update(1)
 
     def save(self, name: str):
-        """Saves the model and logs to the save path."""
         with torch.no_grad():
-
-            # self.delete_subdirectories(self.save_path)
-
-            # Training session config
             if not os.path.exists(self.save_path):
                 os.makedirs(self.save_path)
 
             config = self.config.to_dict()
-            with open(self.save_path + "/training_config.json", "w") as json_file:
-                json.dump(config, json_file, indent=4)
-            checkpoint_path = f"{self.save_path}/{name}"
-            os.makedirs(checkpoint_path, exist_ok=True)
+            with open(self.save_path + "/training_config.json", "w") as jf:
+                json.dump(config, jf, indent=4)
+            ckp_path = f"{self.save_path}/{name}"
+            os.makedirs(ckp_path, exist_ok=True)
 
             # Save model
             torch.save(
@@ -936,9 +899,9 @@ class TrainingSessionV1(TrainingSession):
                     "brain_encoder": self.model.brain_module.cpu().state_dict(),
                     "conditions": self.model.brain_module.condition_to_idx,
                 },
-                f"{checkpoint_path}/brain_encoder.pt",
+                f"{ckp_path}/brain_encoder.pt",
             )
-            self.model.encoder.save_pretrained(f"{checkpoint_path}/adalora_adapter")
+            self.model.encoder.save_pretrained(f"{ckp_path}/adalora_adapter")
 
             # Save metrics
             torch.save(
@@ -953,13 +916,12 @@ class TrainingSessionV1(TrainingSession):
                     "adalora_steps": self.adalora_steps,
                     "scaler": self.scaler.state_dict(),
                 },
-                f"{checkpoint_path}/metrics.pt",
+                f"{ckp_path}/metrics.pt",
             )
 
         self.model.to(self.device)
         gc.collect()
         torch.cuda.empty_cache()
-
         return
 
 
@@ -971,24 +933,20 @@ def load_training_session(
     cache_name: str = None,
     max_cache_size: int = 100,
 ):
-    """Loads a training session from the save path."""
-    # Load training session config
     if not os.path.exists(save_path):
         raise FileNotFoundError(f"Save path {save_path} does not exist.")
 
-    # Load config
-    brain_checkpoint_path = os.path.join(save_path, "brain_encoder.pt")
-    if not os.path.exists(brain_checkpoint_path):
-        raise ValueError(f"Cannot find {brain_checkpoint_path}.")
-    brain_checkpoint = torch.load(brain_checkpoint_path, map_location="cpu")
-    config_dict = brain_checkpoint["config"]
+    brain_ckp_path = os.path.join(save_path, "brain_encoder.pt")
+    if not os.path.exists(brain_ckp_path):
+        raise ValueError(f"Cannot find {brain_ckp_path}.")
+    brain_ckp = torch.load(brain_ckp_path, map_location="cpu")
+    config_dict = brain_ckp["config"]
+    config = TrainingConfigV1(
+        brain_encoder_config=None,
+        data_partition=None,
+    ).from_dict(config_dict)
 
-    config = TrainingConfigV1(brain_encoder_config=None, data_partition=None).from_dict(
-        config_dict
-    )
-
-    # Load training session
-    training_session = TrainingSessionV1(
+    ts = TrainingSessionV1(
         config=config,
         studies=studies,
         data_path=data_path,
@@ -997,63 +955,55 @@ def load_training_session(
         cache_name=cache_name,
         max_cache_size=max_cache_size,
     )
-    training_session.save_path = save_path
+    ts.save_path = save_path
 
-    # Load brain model
-    training_session.model.brain_module.load_state_dict(
-        brain_checkpoint["brain_encoder"]
-    )
-    if (
-        training_session.model.brain_module.condition_to_idx
-        != brain_checkpoint["conditions"]
-    ):
-        raise ValueError("Condition to idx mismatch.")
+    ts.model.brain_module.load_state_dict(brain_ckp["brain_encoder"])
+    if ts.model.brain_module.condition_to_idx != brain_ckp["conditions"]:
+        raise ValueError("Condition mismatch.")
 
-    # Load adalora
     adalora_adapter_path = os.path.join(save_path, "adalora_adapter")
     if not os.path.exists(adalora_adapter_path):
-        raise ValueError(f"Cannot find {adalora_adapter_path}.")
+        raise ValueError(f"No adalora_adapter in {adalora_adapter_path}.")
 
     whisper_model = WhisperModel.from_pretrained(
         config.audio_model, low_cpu_mem_usage=True, use_safetensors=True
     )
-    encoder = whisper_model.get_encoder()
-    encoder._freeze_parameters()
+    enc = whisper_model.get_encoder()
+    enc._freeze_parameters()
     del whisper_model.decoder
     del whisper_model
 
-    peft_encoder = PeftModel.from_pretrained(encoder, adalora_adapter_path)
+    peft_enc = PeftModel.from_pretrained(enc, adalora_adapter_path)
     adalora_config = PeftConfig.from_pretrained(adalora_adapter_path)
+    ts.model.adalora_config = adalora_config
+    ts.model.encoder = peft_enc
 
-    # Load adalora into whisper alignment model
-    training_session.model.adalora_config = adalora_config
-    training_session.model.encoder = peft_encoder
-
-    # Load metrics
     metrics_path = os.path.join(save_path, "metrics.pt")
-
     if os.path.exists(metrics_path):
-        metrics = torch.load(metrics_path)
-        training_session.metrics = metrics.get("metrics", {})
-        training_session.highest_epoch = metrics.get("highest_epoch", 0)
-        training_session.highest_metrics = metrics.get("highest_metrics", {})
-        training_session.lowest_final_layer_total_loss = metrics.get(
+        loaded = torch.load(metrics_path, map_location="cpu")
+        if "metrics" in loaded:
+            ts.metrics = loaded["metrics"]
+        else:
+            ts.metrics = {}
+        ts.highest_epoch = loaded.get("highest_epoch", 0)
+        ts.highest_metrics = loaded.get("highest_metrics", {})
+        ts.lowest_final_layer_total_loss = loaded.get(
             "lowest_final_layer_total_loss", float("inf")
         )
-        training_session.highest_average_test_accuracy = metrics.get(
+        ts.highest_average_test_accuracy = loaded.get(
             "highest_average_test_accuracy", 0
         )
-        training_session.adalora_steps = metrics.get("adalora_steps", 0)
-
-        training_session.optimizer.load_state_dict(metrics["optimizer"])
-        training_session.scaler.load_state_dict(metrics["scaler"])
-        training_session.error = metrics["error"]
+        ts.adalora_steps = loaded.get("adalora_steps", 0)
+        if "optimizer" in loaded:
+            ts.optimizer.load_state_dict(loaded["optimizer"])
+        if "scaler" in loaded:
+            ts.scaler.load_state_dict(loaded["scaler"])
+        ts.error = loaded.get("error", None)
     else:
-        training_session.metrics = {}
-        training_session.logger.warning(f"Metrics file not found at {metrics_path}.")
+        ts.metrics = {}
+        ts.logger.warning(f"No metrics found at {metrics_path}.")
 
     shutil.rmtree("temp")
     gc.collect()
     torch.cuda.empty_cache()
-
-    return training_session
+    return ts
