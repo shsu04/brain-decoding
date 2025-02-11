@@ -314,7 +314,6 @@ class TrainingSessionV1(TrainingSession):
                     test: self.metrics["test"][test][-1]
                     for test in self.metrics["test"].keys()
                 }
-                self.log_print("\n")
                 self.log_print(
                     f"New highest test accuracy: {self.highest_average_test_accuracy:.4f}, "
                     f"lowest final-layer loss: {self.lowest_final_layer_total_loss:.4f}, "
