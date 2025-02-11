@@ -118,7 +118,7 @@ class TrainingSessionV1(TrainingSession):
             self.optimizer,
             max_lr=self.config.learning_rate,
             total_steps=self.config.epochs * len(self.dataset["train"]),
-            pct_start=0.5,
+            pct_start=0.1,
             anneal_strategy="cos",
         )
 
