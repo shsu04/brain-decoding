@@ -652,7 +652,9 @@ class TrainingSessionV1(TrainingSession):
                     missed_batches += 1
                     raise ex
 
-        self.scheduler.step()
+        if train:
+            self.scheduler.step()
+
         total_samples -= missed_recordings
         batches = len(batch_indices) - missed_batches
 
