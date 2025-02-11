@@ -140,7 +140,7 @@ class TrainingSessionV1(TrainingSession):
             try:
                 self.model.train()
                 epoch_start_time = time.time()
-                self.logger.info(f"Starting epoch {epoch}.")
+                self.logger.info(f"\nStarting epoch {epoch}.")
 
                 epoch_training_dataset = self.dataset["train"].copy()
                 dataloader = self.get_dataloader(
@@ -184,6 +184,7 @@ class TrainingSessionV1(TrainingSession):
 
             pbar.close()
 
+            # Aggregate metrics across the entire epoch
             final_metrics = {
                 "loss": sum(b["loss"] for b in all_metrics) / training_size,
                 "mel_loss": sum(b["mel_loss"] for b in all_metrics) / training_size,
@@ -237,7 +238,7 @@ class TrainingSessionV1(TrainingSession):
 
             # Print
             self.log_no_print(
-                f"Epoch {epoch}, Loss: {final_metrics['loss']:.4f}, Mel Loss: {final_metrics['mel_loss']:.4f}"
+                f"\nEpoch {epoch}, Loss: {final_metrics['loss']:.4f}, Mel Loss: {final_metrics['mel_loss']:.4f}"
             )
             self.log_no_print(
                 f"Clip Loss: {final_metrics['clip_loss']:.4f}, MSE Loss: {final_metrics['mse_loss']:.4f}, CosSim: {final_metrics['cosine_similarity_loss']:.4f}, Commit: {final_metrics['commitment_loss']:.4f}"
@@ -246,15 +247,17 @@ class TrainingSessionV1(TrainingSession):
                 f"Perplexity: {final_metrics['perplexity']:.4f}, Acc: {final_metrics['accuracy']:.4f}, Top5: {final_metrics['top_5_accuracy']:.4f}, Top10: {final_metrics['top_10_accuracy']:.4f}"
             )
 
+            # Print final-layer alignment metrics if available
             if "latent_alignment_metrics" in final_metrics:
                 lam = final_metrics["latent_alignment_metrics"]
-                # Example: show final layer clip_accuracy
-                if "clip_correct" in lam:  # if we stored it as "clip_correct"
-                    last_idx = len(lam["clip_correct"]) - 1
-                    # This is still a count or ratio if we didn't rename it. If you want to rename
-                    # it to something like 'clip_accuracy', see run_batch code below.
+                # Show final layer clip accuracy, top5, top10
+                if "clip_accuracy" in lam:
+                    last_l = len(lam["clip_accuracy"]) - 1
+                    final_acc = lam["clip_accuracy"][last_l]
+                    final_acc_5 = lam["clip_top5_accuracy"][last_l]
+                    final_acc_10 = lam["clip_top10_accuracy"][last_l]
                     self.log_no_print(
-                        f"Final layer latent clip (acc maybe): {lam['clip_correct'][last_idx]:.4f}"
+                        f"Final layer latent clip acc: {final_acc:.4f}, top5: {final_acc_5:.4f}, top10: {final_acc_10:.4f}"
                     )
 
             fll = final_metrics["final_layer_losses"]
@@ -265,7 +268,7 @@ class TrainingSessionV1(TrainingSession):
             # Testing
             try:
                 with torch.no_grad():
-                    self.logger.info(f"Starting testing for epoch {epoch}.")
+                    self.logger.info(f"\nStarting testing for epoch {epoch}.")
                     self.test(
                         buffer_size=buffer_size,
                         num_workers=num_workers,
@@ -311,7 +314,9 @@ class TrainingSessionV1(TrainingSession):
                     for test in self.metrics["test"].keys()
                 }
                 self.log_print(
-                    f"New highest test accuracy: {self.highest_average_test_accuracy:.4f}, lowest final-layer loss: {self.lowest_final_layer_total_loss:.4f}, epoch {self.highest_epoch}."
+                    f"\nNew highest test accuracy: {self.highest_average_test_accuracy:.4f}, "
+                    f"lowest final-layer loss: {self.lowest_final_layer_total_loss:.4f}, "
+                    f"epoch {self.highest_epoch}."
                 )
 
             if epoch - self.highest_epoch > 10:
@@ -320,22 +325,33 @@ class TrainingSessionV1(TrainingSession):
                 )
                 break
 
-        self.log_print("Training completed.")
+        self.log_print("\nTraining completed.")
         for test, mt in self.highest_metrics.items():
             self.log_print(
                 f"{test}: Acc: {mt['accuracy']:.4f}, Top5: {mt['top_5_accuracy']:.4f}, Top10: {mt['top_10_accuracy']:.4f}"
             )
             self.log_print(
-                f"Loss: {mt['loss']:.4f}, Mel: {mt['mel_loss']:.4f}, Clip: {mt['clip_loss']:.4f}, MSE: {mt['mse_loss']:.4f}, CosSim: {mt['cosine_similarity_loss']:.4f}"
+                f"\nLoss: {mt['loss']:.4f}, Mel: {mt['mel_loss']:.4f}, "
+                f"Clip: {mt['clip_loss']:.4f}, MSE: {mt['mse_loss']:.4f}, "
+                f"CosSim: {mt['cosine_similarity_loss']:.4f}"
             )
             fll = mt["final_layer_losses"]
             self.log_print(
-                f"FinLayer Clip: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, CosSim: {fll['cosine_similarity']:.4f}, Total: {fll['total']:.4f}"
+                f"\nFinLayer Clip: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, "
+                f"CosSim: {fll['cosine_similarity']:.4f}, Total: {fll['total']:.4f}"
+            )
+
+            # Combine final-layer accuracies into a single string:
+            self.log_print(
+                f'\nFinLayer Acc: {mt["latent_alignment_metrics"]["clip_accuracy"][-1]:.4f}, '
+                f'FinLayer Top5: {mt["latent_alignment_metrics"]["clip_top5_accuracy"][-1]:.4f}, '
+                f'FinLayer Top10: {mt["latent_alignment_metrics"]["clip_top10_accuracy"][-1]:.4f}'
             )
 
     def run_batch(self, batch: AudioBatch, train: bool) -> tp.Tuple[dict, int]:
         """
-        The main place we do forward/backward. We'll convert raw clip_correct to 'accuracy' by dividing by total at the end.
+        The main place we do forward/backward. We've added final-layer top-5 and top-10
+        accuracy just like top-1.
         """
         brain_segments, audio_segments, recording = (
             batch.brain_segments["all"],
@@ -362,8 +378,7 @@ class TrainingSessionV1(TrainingSession):
             "total": [0.0 for _ in self.config.latent_alignment_layers],
         }
 
-        # CHANGED / NEW:
-        # We'll store the *raw* correct counts, then convert them to accuracy by dividing by 'total' at the end.
+        # Layer-wise raw correct counts
         recording_latent_alignment_correct = [
             0.0 for _ in self.config.latent_alignment_layers
         ]
@@ -526,7 +541,10 @@ class TrainingSessionV1(TrainingSession):
                             la_clip_results = self.clip_loss_latent(
                                 hid_out.transpose(1, 2), fro_out.transpose(1, 2)
                             )
-                            la_clip_loss, la_clip_metrics = la_clip_results['loss'], la_clip_results['metrics']
+                            la_clip_loss, la_clip_metrics = (
+                                la_clip_results["loss"],
+                                la_clip_results["metrics"],
+                            )
                         else:
                             la_clip_loss = torch.tensor(0.0).to(device)
                             la_clip_metrics = {
@@ -567,7 +585,7 @@ class TrainingSessionV1(TrainingSession):
                                 )
                             if self.adalora_steps == self.config.adalora_config.tinit:
                                 self.log_print(
-                                    f"Starting rank reallocation at step {self.adalora_steps}."
+                                    f"\nStarting rank reallocation at step {self.adalora_steps}."
                                 )
                             self.adalora_steps += 1
                             self.optimizer.zero_grad()
@@ -633,7 +651,6 @@ class TrainingSessionV1(TrainingSession):
                     missed_batches += 1
                     raise ex
 
-        # done all slices
         total_samples -= missed_recordings
         batches = len(batch_indices) - missed_batches
 
@@ -642,10 +659,7 @@ class TrainingSessionV1(TrainingSession):
             for i_l in range(len(recording_latent_alignment_losses[key])):
                 recording_latent_alignment_losses[key][i_l] /= batches
 
-        # CHANGED / NEW:
-        # Instead of dividing by `batches`, we convert raw "correct" counts to "accuracy"
-        # by dividing by total_samples (like mel's "correct / total").
-        # Then rename them, e.g. "clip_accuracy", "clip_top5_accuracy", etc.
+        # Convert raw correct to accuracy by dividing by total_samples
         latent_alignment_metrics = {
             "clip_accuracy": [],
             "clip_top5_accuracy": [],
@@ -678,7 +692,7 @@ class TrainingSessionV1(TrainingSession):
             "perplexity": recording_perplexity / batches,
             "alignment_losses": recording_latent_alignment_losses,
             "final_layer_losses": final_layer_losses,
-            "latent_alignment_metrics": latent_alignment_metrics,  # <--- final aligned accuracies
+            "latent_alignment_metrics": latent_alignment_metrics,
             "accuracy": (recording_correct / total_samples) if total_samples else 0.0,
             "top_5_accuracy": (
                 (recording_top_5 / total_samples) if total_samples else 0.0
@@ -689,25 +703,34 @@ class TrainingSessionV1(TrainingSession):
         }
 
         self.logger.info(
-            f"{recording.study_name} {recording.subject_id} sess {recording.session_id}, Loss: {metrics['loss']:.4f}"
+            f"\n{recording.study_name} {recording.subject_id} sess {recording.session_id}, Loss: {metrics['loss']:.4f}"
         )
         self.logger.info(
-            f"Mel Loss: {metrics['mel_loss']:.4f}, Clip Loss: {metrics['clip_loss']:.4f}, MSE: {metrics['mse_loss']:.4f}, Commit: {metrics['commitment_loss']:.4f}, CosSim: {metrics['cosine_similarity_loss']:.4f}"
+            f"Mel Loss: {metrics['mel_loss']:.4f}, Clip Loss: {metrics['clip_loss']:.4f}, "
+            f"MSE: {metrics['mse_loss']:.4f}, Commit: {metrics['commitment_loss']:.4f}, "
+            f"CosSim: {metrics['cosine_similarity_loss']:.4f}"
         )
         self.logger.info(
-            f"Perplex: {metrics['perplexity']:.4f}, Acc: {metrics['accuracy']:.4f}, Top5: {metrics['top_5_accuracy']:.4f}, Top10: {metrics['top_10_accuracy']:.4f}"
+            f"Perplex: {metrics['perplexity']:.4f}, Acc: {metrics['accuracy']:.4f}, "
+            f"Top5: {metrics['top_5_accuracy']:.4f}, Top10: {metrics['top_10_accuracy']:.4f}"
         )
 
-        # Print final-layer alignment accuracies
+        # Print final-layer alignment losses:
         fll = final_layer_losses
         self.logger.info(
-            f"FinalLayer Clip Loss: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, CosSim: {fll['cosine_similarity']:.4f}, Tot: {fll['total']:.4f}"
+            f"FinalLayer Clip Loss: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, "
+            f"CosSim: {fll['cosine_similarity']:.4f}, Tot: {fll['total']:.4f}"
         )
-        # Show final-layer clip accuracy
+        # Print final-layer accuracy, top5, top10
         if "clip_accuracy" in latent_alignment_metrics:
             last_l = len(latent_alignment_metrics["clip_accuracy"]) - 1
             final_acc = latent_alignment_metrics["clip_accuracy"][last_l]
-            self.logger.info(f"LatentAlign final-layer clip acc: {final_acc:.4f}")
+            final_acc_5 = latent_alignment_metrics["clip_top5_accuracy"][last_l]
+            final_acc_10 = latent_alignment_metrics["clip_top10_accuracy"][last_l]
+            self.logger.info(
+                f"LatentAlign final-layer clip acc: {final_acc:.4f}, "
+                f"top5: {final_acc_5:.4f}, top10: {final_acc_10:.4f}"
+            )
 
         return metrics, total_samples
 
@@ -807,15 +830,32 @@ class TrainingSessionV1(TrainingSession):
                 f"Test {test} done. Loss: {fm['loss']:.4f}, Mel: {fm['mel_loss']:.4f}"
             )
             self.log_no_print(
-                f"Clip: {fm['clip_loss']:.4f}, MSE: {fm['mse_loss']:.4f}, CosSim: {fm['cosine_similarity_loss']:.4f}, Commit: {fm['commitment_loss']:.4f}"
+                f"Clip: {fm['clip_loss']:.4f}, MSE: {fm['mse_loss']:.4f}"
+                f"CosSim: {fm['cosine_similarity_loss']:.4f}, Commit: {fm['commitment_loss']:.4f}"
             )
             self.log_no_print(
-                f"Perplex: {fm['perplexity']:.4f}, Acc: {fm['accuracy']:.4f}, Top5: {fm['top_5_accuracy']:.4f}, Top10: {fm['top_10_accuracy']:.4f}"
+                f"Perplex: {fm['perplexity']:.4f}, Acc: {fm['accuracy']:.4f}, "
+                f"Top5: {fm['top_5_accuracy']:.4f}, Top10: {fm['top_10_accuracy']:.4f}"
             )
             fll = fm["final_layer_losses"]
             self.log_no_print(
-                f"FinLayer Clip: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, CosSim: {fll['cosine_similarity']:.4f}, Tot: {fll['total']:.4f}"
+                f"FinLayer Clip: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, "
+                f"CosSim: {fll['cosine_similarity']:.4f}, Tot: {fll['total']:.4f}"
             )
+
+            # Also print final-layer clip acc, top5, top10
+            if "latent_alignment_metrics" in fm:
+                lam = fm["latent_alignment_metrics"]
+                if "clip_accuracy" in lam:
+                    last_l = len(lam["clip_accuracy"]) - 1
+                    final_acc = lam["clip_accuracy"][last_l]
+                    final_acc_5 = lam["clip_top5_accuracy"][last_l]
+                    final_acc_10 = lam["clip_top10_accuracy"][last_l]
+                    self.log_no_print(
+                        f"Final layer latent clip acc: {final_acc:.4f}, "
+                        f"top5: {final_acc_5:.4f}, top10: {final_acc_10:.4f}"
+                    )
+
             test_dataloader[test].stop()
 
         elaps = (time.time() - start_time) / 60
