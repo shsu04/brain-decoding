@@ -137,7 +137,7 @@ class TrainingSessionV1(TrainingSession):
             max_lr=self.config.learning_rate,
             total_steps=self.config.epochs * len(self.dataset["train"]),
             pct_start=0.1,  # 10% of steps for warmup
-            anneal_strategy="cos",  # or 'cos'
+            anneal_strategy="cos",
         )
 
     def train(
