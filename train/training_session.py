@@ -58,7 +58,7 @@ class TrainingSession(ABC):
         epoch_logger.setLevel(logging.INFO)
         if not epoch_logger.handlers:
             fh = logging.FileHandler(os.path.join(save_path, "epoch_log.log"), mode="w")
-            formatter = logging.Formatter("Epoch %(message)s")
+            formatter = logging.Formatter("%(message)s")
             fh.setFormatter(formatter)
             epoch_logger.addHandler(fh)
             epoch_logger.propagate = False

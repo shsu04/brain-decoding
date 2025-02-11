@@ -834,7 +834,7 @@ class TrainingSessionV1(TrainingSession):
                 f"Test {test} done. Loss: {fm['loss']:.4f}, Mel: {fm['mel_loss']:.4f}"
             )
             self.log_no_print(
-                f"Clip: {fm['clip_loss']:.4f}, MSE: {fm['mse_loss']:.4f}"
+                f"Clip: {fm['clip_loss']:.4f}, MSE: {fm['mse_loss']:.4f}, "
                 f"CosSim: {fm['cosine_similarity_loss']:.4f}, Commit: {fm['commitment_loss']:.4f}"
             )
             self.log_no_print(
