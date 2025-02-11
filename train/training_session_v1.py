@@ -237,6 +237,7 @@ class TrainingSessionV1(TrainingSession):
             self.metrics["train"].append(final_metrics)
 
             # Print
+            self.log_no_print("\n")
             self.log_no_print(
                 f"Epoch {epoch}, Loss: {final_metrics['loss']:.4f}, Mel Loss: {final_metrics['mel_loss']:.4f}"
             )
@@ -313,6 +314,7 @@ class TrainingSessionV1(TrainingSession):
                     test: self.metrics["test"][test][-1]
                     for test in self.metrics["test"].keys()
                 }
+                self.log_print("\n")
                 self.log_print(
                     f"New highest test accuracy: {self.highest_average_test_accuracy:.4f}, "
                     f"lowest final-layer loss: {self.lowest_final_layer_total_loss:.4f}, "
@@ -327,6 +329,7 @@ class TrainingSessionV1(TrainingSession):
 
         self.log_print("Training completed.")
         for test, mt in self.highest_metrics.items():
+            self.log_print("\n")
             self.log_print(
                 f"{test}: Acc: {mt['accuracy']:.4f}, Top5: {mt['top_5_accuracy']:.4f}, Top10: {mt['top_10_accuracy']:.4f}"
             )
@@ -702,6 +705,7 @@ class TrainingSessionV1(TrainingSession):
             ),
         }
 
+        self.logger.info("\n")
         self.logger.info(
             f"{recording.study_name} {recording.subject_id} sess {recording.session_id}, Loss: {metrics['loss']:.4f}"
         )
