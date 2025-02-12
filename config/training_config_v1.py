@@ -44,6 +44,7 @@ class TrainingConfigV1(TrainingConfig):
         learning_rate: float = 3e-4,
         weight_decay: float = 1e-4,
         epochs: int = 50,
+        steps_per_epoch: int = 400,
         batch_size: int = 128,
         random_test_size: int = 3,
         seed: int = 42,
@@ -115,6 +116,7 @@ class TrainingConfigV1(TrainingConfig):
         self.epochs = epochs
         self.random_test_size = random_test_size
         self.seed = seed
+        self.steps_per_epoch = steps_per_epoch
 
         # MEL ALIGNMENT
         assert all(

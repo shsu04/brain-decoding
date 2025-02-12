@@ -117,7 +117,7 @@ class TrainingSessionV1(TrainingSession):
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
             self.optimizer,
             max_lr=self.config.learning_rate,
-            total_steps=self.config.epochs * len(self.dataset["train"]),
+            total_steps=self.config.epochs * self.config.steps_per_epoch,
             pct_start=0.10,
             anneal_strategy="cos",
         )
@@ -599,6 +599,7 @@ class TrainingSessionV1(TrainingSession):
                             self.optimizer.zero_grad()
 
                             self.adalora_steps += 1
+                            self.scheduler.step()
 
                         # Accumulate
                         recording_loss += total_loss.detach().cpu().item()
@@ -660,9 +661,6 @@ class TrainingSessionV1(TrainingSession):
                     missed_recordings += end - start
                     missed_batches += 1
                     raise ex
-
-        if train:
-            self.scheduler.step()
 
         total_samples -= missed_recordings
         batches = len(batch_indices) - missed_batches
