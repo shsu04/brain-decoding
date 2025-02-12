@@ -110,7 +110,8 @@ class TrainingSessionV1(TrainingSession):
             )
         if gpu_ok:
             self.frozen_encoder = torch.compile(
-                self.frozen_encoder.forward, mode="default"
+                self.frozen_encoder.forward,
+                mode="reduce-overhead",
             )
 
         # Example scheduler
@@ -581,7 +582,7 @@ class TrainingSessionV1(TrainingSession):
                             # Clip gradients
                             self.scaler.unscale_(self.optimizer)
                             torch.nn.utils.clip_grad_norm_(
-                                self.model.parameters(), max_norm=10.0
+                                self.model.parameters(), max_norm=8.0
                             )
 
                             if self.adalora_steps >= self.config.adalora_config.tinit:
@@ -668,7 +669,10 @@ class TrainingSessionV1(TrainingSession):
         # Average the losses by #batches
         for key in recording_latent_alignment_losses:
             for i_l in range(len(recording_latent_alignment_losses[key])):
-                recording_latent_alignment_losses[key][i_l] /= batches
+                if batches > 0:
+                    recording_latent_alignment_losses[key][i_l] /= batches
+                else:
+                    recording_latent_alignment_losses[key][i_l] = 0.0
 
         # Convert raw correct to accuracy by dividing by total_samples
         latent_alignment_metrics = {
@@ -694,13 +698,17 @@ class TrainingSessionV1(TrainingSession):
         }
 
         metrics = {
-            "loss": recording_loss / batches,
-            "mel_loss": recording_mel_loss / batches,
-            "clip_loss": recording_clip_loss / batches,
-            "cosine_similarity_loss": recording_cosine_similarity_loss / batches,
-            "mse_loss": recording_mse_loss / batches,
-            "commitment_loss": recording_commitment_loss / batches,
-            "perplexity": recording_perplexity / batches,
+            "loss": recording_loss / batches if batches > 0 else 0.0,
+            "mel_loss": recording_mel_loss / batches if batches > 0 else 0.0,
+            "clip_loss": recording_clip_loss / batches if batches > 0 else 0.0,
+            "cosine_similarity_loss": (
+                recording_cosine_similarity_loss / batches if batches > 0 else 0.0
+            ),
+            "mse_loss": recording_mse_loss / batches if batches > 0 else 0.0,
+            "commitment_loss": (
+                recording_commitment_loss / batches if batches > 0 else 0.0
+            ),
+            "perplexity": recording_perplexity / batches if batches > 0 else 0.0,
             "alignment_losses": recording_latent_alignment_losses,
             "final_layer_losses": final_layer_losses,
             "latent_alignment_metrics": latent_alignment_metrics,
