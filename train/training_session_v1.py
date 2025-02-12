@@ -183,6 +183,7 @@ class TrainingSessionV1(TrainingSession):
                 gc.collect()
                 pbar.update(1)
 
+            dataloader.stop()
             pbar.close()
 
             # Aggregate metrics across the entire epoch
