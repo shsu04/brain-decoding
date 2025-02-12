@@ -134,7 +134,7 @@ class RNNEncoder(nn.Module):
                     nhead=nhead,
                     batch_first=True,
                     dropout=dropout,
-                    dim_feedforward=2 * d_model,
+                    dim_feedforward=4 * d_model,
                 ),
                 num_layers=layers,
             )
