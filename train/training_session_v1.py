@@ -428,6 +428,12 @@ class TrainingSessionV1(TrainingSession):
                     brain_batch = brain_segments[start:end].to(device)
                     audio_batch = audio_segments[start:end].to(device)
 
+                    pad_len = 3000 - audio_batch.size(2)
+                    attention_mask = torch.zeros(
+                        audio_batch.size(0), 3000, device=device
+                    )  # [B, T]
+                    attention_mask[:, : audio_batch.size(2)] = 1
+
                     (
                         x,
                         quantizer_metrics,
@@ -441,21 +447,24 @@ class TrainingSessionV1(TrainingSession):
                         mel=[audio_batch],
                         train=train,
                         return_hidden_outputs=False,
+                        attention_mask=attention_mask,
                     )
                     del channel_weights, hidden_outputs, brain_batch
 
                     # Frozen
                     with torch.no_grad():
+
                         outputs = self.frozen_encoder(
                             nn.functional.pad(
                                 audio_batch,
-                                (0, 3000 - audio_batch.size(2)),
+                                (0, pad_len),
                                 mode="constant",
                                 value=0.0,
                             ),
                             output_hidden_states=(
                                 self.config.latent_alignment_layers != [-1]
                             ),
+                            attention_mask=attention_mask,
                         )
                         if self.config.latent_alignment_layers == [-1]:
                             frozen_encoder_outputs = [
@@ -466,7 +475,7 @@ class TrainingSessionV1(TrainingSession):
                                 outputs.hidden_states[l][:, : audio_batch.size(2), :]
                                 for l in self.model.layers_to_align
                             ]
-                            del outputs
+                            del outputs, attention_mask
                             gc.collect()
 
                     # Mel alignment objectives

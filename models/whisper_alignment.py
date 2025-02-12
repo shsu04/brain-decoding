@@ -100,6 +100,7 @@ class WhisperAlignment(nn.Module):
         mel: tp.List[torch.Tensor] = None,
         train: bool = False,
         return_hidden_outputs: bool = False,
+        attention_mask=None,
     ) -> tuple[List[torch.Tensor], torch.Tensor]:
         """
         Arguments:
@@ -143,7 +144,9 @@ class WhisperAlignment(nn.Module):
             output_hidden_states = True
 
         # Whisper
-        encoder_outputs = self.encoder(x, output_hidden_states=output_hidden_states)
+        encoder_outputs = self.encoder(
+            x, output_hidden_states=output_hidden_states, attention_mask=attention_mask
+        )
 
         x = x[:, :, :T]  # Trim padding
 
