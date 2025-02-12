@@ -581,7 +581,7 @@ class TrainingSessionV1(TrainingSession):
                             # Clip gradients
                             self.scaler.unscale_(self.optimizer)
                             torch.nn.utils.clip_grad_norm_(
-                                self.model.parameters(), max_norm=5.0
+                                self.model.parameters(), max_norm=10.0
                             )
 
                             if self.adalora_steps >= self.config.adalora_config.tinit:
