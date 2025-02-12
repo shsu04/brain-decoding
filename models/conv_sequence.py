@@ -80,7 +80,7 @@ class ConvSequence(nn.Module):
                 dilation = 1
 
             kernel_k = (
-                (kernel * 2 - 1) if (half and (k < len(channels) - 4)) else kernel
+                (kernel * 2 - 1) if (half and (k < len(channels) - 3)) else kernel
             )
             pad_k = kernel_k // 2 * dilation
 
@@ -88,7 +88,7 @@ class ConvSequence(nn.Module):
                 chin,
                 chout,
                 kernel_k,
-                (stride * 2) if (half and (k == len(channels) - 4)) else stride,
+                (stride * 2) if (half and (k == len(channels) - 3)) else stride,
                 pad_k,
                 dilation=dilation,
                 groups=1,
