@@ -118,7 +118,7 @@ class TrainingSessionV1(TrainingSession):
             self.optimizer,
             max_lr=self.config.learning_rate,
             total_steps=self.config.epochs * len(self.dataset["train"]),
-            pct_start=0.05,
+            pct_start=0.10,
             anneal_strategy="cos",
         )
 
@@ -577,7 +577,11 @@ class TrainingSessionV1(TrainingSession):
                     if not torch.isnan(total_loss).any():
                         if train:
                             self.scaler.scale(total_loss).backward()
+                            self.scaler.unscale_(self.optimizer)
                             self.scaler.step(self.optimizer)
+                            torch.nn.utils.clip_grad_norm_(
+                                self.model.parameters(), max_norm=5.0
+                            )
                             self.scaler.update()
                             self.optimizer.zero_grad()
 
@@ -644,15 +648,15 @@ class TrainingSessionV1(TrainingSession):
 
         if train:
 
+            self.scheduler.step()
+            self.adalora_steps += 1
+
             if self.adalora_steps >= self.config.adalora_config.tinit:
                 self.model.encoder.base_model.update_and_allocate(self.adalora_steps)
             if self.adalora_steps == self.config.adalora_config.tinit:
                 self.log_print(
                     f"Starting rank reallocation at recording {self.adalora_steps}."
                 )
-
-            self.scheduler.step()
-            self.adalora_steps += 1
 
         total_samples -= missed_recordings
         batches = len(batch_indices) - missed_batches
