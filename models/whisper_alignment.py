@@ -130,7 +130,7 @@ class WhisperAlignment(nn.Module):
         # Pad or truncate
         if T < 3000:
             pad_len = 3000 - T
-            x = nn.functional.pad(x, (0, pad_len), mode="constant", value=0.0)
+            x = nn.functional.pad(x, (0, pad_len), mode="constant", value=-0.2)
         elif T > 3000:
             # If longer, trim
             x = x[:, :, :3000]

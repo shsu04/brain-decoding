@@ -428,6 +428,7 @@ class TrainingSessionV1(TrainingSession):
                     brain_batch = brain_segments[start:end].to(device)
                     audio_batch = audio_segments[start:end].to(device)
 
+                    # Attention mask
                     pad_len = 3000 - audio_batch.size(2)
                     attention_mask = torch.zeros(
                         audio_batch.size(0), 3000, device=device
@@ -459,7 +460,7 @@ class TrainingSessionV1(TrainingSession):
                                 audio_batch,
                                 (0, pad_len),
                                 mode="constant",
-                                value=0.0,
+                                value=-0.2,
                             ),
                             output_hidden_states=(
                                 self.config.latent_alignment_layers != [-1]
@@ -592,7 +593,7 @@ class TrainingSessionV1(TrainingSession):
                             # Clip gradients
                             self.scaler.unscale_(self.optimizer)
                             torch.nn.utils.clip_grad_norm_(
-                                self.model.parameters(), max_norm=8.0
+                                self.model.parameters(), max_norm=3.0
                             )
 
                             if self.adalora_steps >= self.config.adalora_config.tinit:
