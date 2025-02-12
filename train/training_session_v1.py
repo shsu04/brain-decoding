@@ -577,13 +577,28 @@ class TrainingSessionV1(TrainingSession):
                     if not torch.isnan(total_loss).any():
                         if train:
                             self.scaler.scale(total_loss).backward()
+
+                            # Clip gradients
                             self.scaler.unscale_(self.optimizer)
-                            self.scaler.step(self.optimizer)
                             torch.nn.utils.clip_grad_norm_(
                                 self.model.parameters(), max_norm=5.0
                             )
+
+                            if self.adalora_steps >= self.config.adalora_config.tinit:
+                                self.model.encoder.base_model.update_and_allocate(
+                                    self.adalora_steps
+                                )
+                            if self.adalora_steps == self.config.adalora_config.tinit:
+                                self.log_print(
+                                    f"Starting rank reallocation at recording {self.adalora_steps}."
+                                )
+
+                            # Step
+                            self.scaler.step(self.optimizer)
                             self.scaler.update()
                             self.optimizer.zero_grad()
+
+                            self.adalora_steps += 1
 
                         # Accumulate
                         recording_loss += total_loss.detach().cpu().item()
@@ -647,16 +662,7 @@ class TrainingSessionV1(TrainingSession):
                     raise ex
 
         if train:
-
             self.scheduler.step()
-            self.adalora_steps += 1
-
-            if self.adalora_steps >= self.config.adalora_config.tinit:
-                self.model.encoder.base_model.update_and_allocate(self.adalora_steps)
-            if self.adalora_steps == self.config.adalora_config.tinit:
-                self.log_print(
-                    f"Starting rank reallocation at recording {self.adalora_steps}."
-                )
 
         total_samples -= missed_recordings
         batches = len(batch_indices) - missed_batches
