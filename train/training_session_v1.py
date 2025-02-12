@@ -644,8 +644,6 @@ class TrainingSessionV1(TrainingSession):
 
         if train:
 
-            self.scheduler.step()
-
             if self.adalora_steps >= self.config.adalora_config.tinit:
                 self.model.encoder.base_model.update_and_allocate(self.adalora_steps)
             if self.adalora_steps == self.config.adalora_config.tinit:
@@ -653,6 +651,7 @@ class TrainingSessionV1(TrainingSession):
                     f"Starting rank reallocation at recording {self.adalora_steps}."
                 )
 
+            self.scheduler.step()
             self.adalora_steps += 1
 
         total_samples -= missed_recordings
