@@ -41,9 +41,8 @@ class CLIPLoss(nn.Module):
 
         # Segment level
         # Compute similarity, [B, C, T] x [B, C, T] -> [B, B]
-        segment_level_logits = (
-            torch.einsum("bct,dct,d->bd", x_1_embed, x_2_embed, inv_norms)
-            / self.temperature
+        segment_level_logits = torch.einsum(
+            "bct,dct,d->bd", x_1_embed, x_2_embed, inv_norms
         )
 
         segment_level_targets = torch.arange(
@@ -116,7 +115,7 @@ class CLIPLoss(nn.Module):
 
             raw_logits = torch.einsum("bct,dct->bd", x_1, x_2)  # [BS, BS]
             denominator = x_1_norms.unsqueeze(1) * x_2_norms.unsqueeze(0)
-            logits = raw_logits / denominator / self.temperature
+            logits = raw_logits / denominator
 
             time_level_targets = torch.arange(M, device=x_1.device)
             time_level_probs = F.log_softmax(logits, dim=-1)
