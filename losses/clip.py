@@ -38,7 +38,6 @@ class CLIPLoss(nn.Module):
 
         # Temp
         self.temperature = torch.clamp(self.temperature, min=0.001, max=2.0)
-
         inv_norms = 1 / (1e-8 + x_1_embed.norm(dim=(1, 2), p=2))  # [B]
 
         # Segment level
@@ -47,6 +46,7 @@ class CLIPLoss(nn.Module):
             torch.einsum("bct,dct,d->bd", x_1_embed, x_2_embed, inv_norms)
             / self.temperature
         )
+
         segment_level_targets = torch.arange(
             x_1_embed.size(0), device=x_1_embed.device
         )  # Diagonal targets
