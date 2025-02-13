@@ -154,6 +154,9 @@ class TrainingConfigV1(TrainingConfig):
         return config
 
     def from_dict(self, config: tp.Dict[str, tp.Any]):
+        if "mmd_loss" not in config["latent_alignment_objectives"]:
+            config["latent_alignment_objectives"]["mmd_loss"] = 0.0
+
         if "bins" in config["brain_encoder_config"]:
             self.brain_encoder_config = SpectralConvConfig.from_dict(
                 config["brain_encoder_config"]

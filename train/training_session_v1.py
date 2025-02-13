@@ -267,9 +267,16 @@ class TrainingSessionV1(TrainingSession):
                     )
 
             fll = final_metrics["final_layer_losses"]
-            self.log_no_print(
-                f"FinLayer Clip Loss: {fll['clip_loss']:.4f}, MSE Loss: {fll['mse_loss']:.4f}, CosSim Loss: {fll['cosine_similarity']:.4f}, Total: {fll['total']:.4f}"
-            )
+            if "mmd_loss" in fll:
+                self.log_no_print(
+                    f"FinLayer Clip Loss: {fll['clip_loss']:.4f}, MSE Loss: {fll['mse_loss']:.4f}, "
+                    f"CosSim Loss: {fll['cosine_similarity']:.4f}, MMD: {fll['mmd_loss']:.4f}, Total: {fll['total']:.4f}"
+                )
+            else:
+                self.log_no_print(
+                    f"FinLayer Clip Loss: {fll['clip_loss']:.4f}, MSE Loss: {fll['mse_loss']:.4f}, "
+                    f"CosSim Loss: {fll['cosine_similarity']:.4f}, Total: {fll['total']:.4f}"
+                )
 
             # Testing
             try:
@@ -343,10 +350,16 @@ class TrainingSessionV1(TrainingSession):
                 f"CosSim: {mt['cosine_similarity_loss']:.4f}"
             )
             fll = mt["final_layer_losses"]
-            self.log_print(
-                f"FinLayer Clip: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, "
-                f"CosSim: {fll['cosine_similarity']:.4f}, Total: {fll['total']:.4f}"
-            )
+            if "mmd_loss" in fll:
+                self.log_print(
+                    f"FinLayer Clip: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, "
+                    f"CosSim: {fll['cosine_similarity']:.4f}, MMD: {fll['mmd_loss']:.4f}, Total: {fll['total']:.4f}"
+                )
+            else:
+                self.log_print(
+                    f"FinLayer Clip: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, "
+                    f"CosSim: {fll['cosine_similarity']:.4f}, Total: {fll['total']:.4f}"
+                )
 
             # Combine final-layer accuracies into a single string:
             self.log_print(
@@ -382,6 +395,7 @@ class TrainingSessionV1(TrainingSession):
             "cosine_similarity": [0.0 for _ in self.config.latent_alignment_layers],
             "mse_loss": [0.0 for _ in self.config.latent_alignment_layers],
             "clip_loss": [0.0 for _ in self.config.latent_alignment_layers],
+            "mmd_loss": [0.0 for _ in self.config.latent_alignment_layers],
             "total": [0.0 for _ in self.config.latent_alignment_layers],
         }
 
@@ -457,7 +471,6 @@ class TrainingSessionV1(TrainingSession):
 
                     # Frozen
                     with torch.no_grad():
-
                         outputs = self.frozen_encoder(
                             nn.functional.pad(
                                 audio_batch,
@@ -529,6 +542,7 @@ class TrainingSessionV1(TrainingSession):
                         "cosine_similarity": [],
                         "mse_loss": [],
                         "clip_loss": [],
+                        "mmd_loss": [],
                         "total": [],
                     }
                     la_correct = []
@@ -570,6 +584,15 @@ class TrainingSessionV1(TrainingSession):
                                 "top_10_correct": 0,
                             }
 
+                        if (
+                            "mmd_loss" in self.config.latent_alignment_objectives
+                            and self.config.latent_alignment_objectives["mmd_loss"] > 0
+                        ):
+                            la_mmd_val = self.mmd_loss(source=hid_out, target=fro_out)
+                        else:
+                            la_mmd_val = torch.tensor(0.0).to(device)
+
+                        # sum
                         la_tot = (
                             self.config.latent_alignment_objectives["cosine_similarity"]
                             * la_cos
@@ -577,10 +600,16 @@ class TrainingSessionV1(TrainingSession):
                             * la_mse
                             + self.config.latent_alignment_objectives["clip_loss"]
                             * la_clip_loss
+                            + self.config.latent_alignment_objectives.get(
+                                "mmd_loss", 0.0
+                            )
+                            * la_mmd_val
                         )
+
                         la_losses["cosine_similarity"].append(la_cos)
                         la_losses["mse_loss"].append(la_mse)
                         la_losses["clip_loss"].append(la_clip_loss)
+                        la_losses["mmd_loss"].append(la_mmd_val)
                         la_losses["total"].append(la_tot)
 
                         la_correct.append(la_clip_metrics["correct"])
@@ -750,10 +779,17 @@ class TrainingSessionV1(TrainingSession):
 
         # Print final-layer alignment losses:
         fll = final_layer_losses
-        self.logger.info(
-            f"FinalLayer Clip Loss: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, "
-            f"CosSim: {fll['cosine_similarity']:.4f}, Tot: {fll['total']:.4f}"
-        )
+        # [CHANGED] show MMD if present
+        if "mmd_loss" in fll:
+            self.logger.info(
+                f"FinalLayer Clip Loss: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, "
+                f"CosSim: {fll['cosine_similarity']:.4f}, MMD: {fll['mmd_loss']:.4f}, Tot: {fll['total']:.4f}"
+            )
+        else:
+            self.logger.info(
+                f"FinalLayer Clip Loss: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, "
+                f"CosSim: {fll['cosine_similarity']:.4f}, Tot: {fll['total']:.4f}"
+            )
         # Print final-layer accuracy, top5, top10
         if "clip_accuracy" in latent_alignment_metrics:
             last_l = len(latent_alignment_metrics["clip_accuracy"]) - 1
@@ -871,10 +907,17 @@ class TrainingSessionV1(TrainingSession):
                 f"Top5: {fm['top_5_accuracy']:.4f}, Top10: {fm['top_10_accuracy']:.4f}"
             )
             fll = fm["final_layer_losses"]
-            self.log_no_print(
-                f"FinLayer Clip: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, "
-                f"CosSim: {fll['cosine_similarity']:.4f}, Tot: {fll['total']:.4f}"
-            )
+            # [CHANGED] MMD printed if present
+            if "mmd_loss" in fll:
+                self.log_no_print(
+                    f"FinLayer Clip: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, "
+                    f"CosSim: {fll['cosine_similarity']:.4f}, MMD: {fll['mmd_loss']:.4f}, Tot: {fll['total']:.4f}"
+                )
+            else:
+                self.log_no_print(
+                    f"FinLayer Clip: {fll['clip_loss']:.4f}, MSE: {fll['mse_loss']:.4f}, "
+                    f"CosSim: {fll['cosine_similarity']:.4f}, Tot: {fll['total']:.4f}"
+                )
 
             # Also print final-layer clip acc, top5, top10
             if "latent_alignment_metrics" in fm:
