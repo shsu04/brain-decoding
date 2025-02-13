@@ -72,7 +72,7 @@ class MMDLoss:
         B, T, D = source.size()
 
         # randomly select 10 samples from T
-        samples = 10
+        samples = 300
         indices = torch.randperm(source.size(1))  # [3000]
         indices = indices[:samples]  # [S]
 

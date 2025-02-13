@@ -338,7 +338,8 @@ class TrainingSessionV1(TrainingSession):
                 )
                 break
 
-        self.log_print("Training completed.")
+        self.log_print("\n")
+        self.log_print(f"Training completed. Highest epoch at {self.highest_epoch}.")
         for test, mt in self.highest_metrics.items():
             self.log_print("\n")
             self.log_print(
