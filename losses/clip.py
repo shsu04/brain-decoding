@@ -7,7 +7,7 @@ import torch.nn.functional as F
 class CLIPLoss(nn.Module):
     def __init__(self, dim: int):
         super().__init__()
-        self.temperature = nn.Parameter(torch.tensor(1.0))
+        self.temperature = nn.Parameter(torch.tensor(0.07))
         self.linear_x1 = nn.Conv1d(in_channels=dim, out_channels=dim, kernel_size=1)
         self.linear_x2 = nn.Conv1d(in_channels=dim, out_channels=dim, kernel_size=1)
 
@@ -36,12 +36,16 @@ class CLIPLoss(nn.Module):
         x_1_embed = self.linear_x1(x_1)
         x_2_embed = self.linear_x2(x_2)
 
+        # Temp
+        self.temperature = torch.clamp(self.temperature, min=0.001, max=2.0)
+
         inv_norms = 1 / (1e-8 + x_1_embed.norm(dim=(1, 2), p=2))  # [B]
 
         # Segment level
         # Compute similarity, [B, C, T] x [B, C, T] -> [B, B]
-        segment_level_logits = torch.einsum(
-            "bct,dct,d->bd", x_1_embed, x_2_embed, inv_norms
+        segment_level_logits = (
+            torch.einsum("bct,dct,d->bd", x_1_embed, x_2_embed, inv_norms)
+            / self.temperature
         )
         segment_level_targets = torch.arange(
             x_1_embed.size(0), device=x_1_embed.device
@@ -113,7 +117,7 @@ class CLIPLoss(nn.Module):
 
             raw_logits = torch.einsum("bct,dct->bd", x_1, x_2)  # [BS, BS]
             denominator = x_1_norms.unsqueeze(1) * x_2_norms.unsqueeze(0)
-            logits = raw_logits / denominator
+            logits = raw_logits / denominator / self.temperature
 
             time_level_targets = torch.arange(M, device=x_1.device)
             time_level_probs = F.log_softmax(logits, dim=-1)
