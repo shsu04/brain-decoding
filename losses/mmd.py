@@ -1,8 +1,7 @@
 import torch
-from torch import nn
 
 
-class MMDLoss(nn.Module):
+class MMDLoss:
     def __init__(
         self,
         kernel_type: str = "rbf",
@@ -20,7 +19,7 @@ class MMDLoss(nn.Module):
         super(MMDLoss, self).__init__()
         self.kernel_num = kernel_num
         self.kernel_mul = kernel_mul
-        self.fix_sigma = None
+        self.fix_sigma = fix_sigma
         self.kernel_type = kernel_type
 
     def guassian_kernel(

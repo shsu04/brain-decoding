@@ -17,6 +17,7 @@ from dataloader.audio_batch import AudioBatch
 from config import TrainingConfigV1
 from losses.mse import mse_loss_per_batch
 from losses.cos_sim import cosine_similarity_loss
+from losses.mmd import MMDLoss
 from train.training_session import TrainingSession
 from models.whisper_alignment import WhisperAlignment
 
@@ -72,11 +73,13 @@ class TrainingSessionV1(TrainingSession):
             self.clip_loss_latent,
             self.mse_loss,
             self.cosine_similarity_loss,
+            self.mmd_loss,
         ) = (
             self.model.brain_module.clip_loss,
             self.model.clip_loss,
             mse_loss_per_batch,
             cosine_similarity_loss,
+            MMDLoss(),
         )
 
         # Frozen whisper model for alignment
