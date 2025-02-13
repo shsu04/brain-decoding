@@ -37,7 +37,6 @@ class CLIPLoss(nn.Module):
         x_2_embed = self.linear_x2(x_2)
 
         # Temp
-        self.temperature = torch.clamp(self.temperature, min=0.001, max=2.0)
         inv_norms = 1 / (1e-8 + x_1_embed.norm(dim=(1, 2), p=2))  # [B]
 
         # Segment level
