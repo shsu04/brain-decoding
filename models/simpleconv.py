@@ -159,6 +159,7 @@ class SimpleConv(nn.Module):
             ], f"Invalid transformer input {self.config.transformer_input}"
 
             # Quantizer
+            self.quantizer_compression = None
             if self.config.quantizer:
 
                 assert self.config.quantizer in [
@@ -184,7 +185,9 @@ class SimpleConv(nn.Module):
                     )
 
                 if self.config.transformer_input == "concat":
-                    final_channels *= 2
+                    self.quantizer_compression = nn.Conv1d(
+                        final_channels, final_channels // 2, 1
+                    )
 
             self.rnn_encoders = RNNEncoder(
                 d_model=final_channels,
@@ -348,6 +351,7 @@ class SimpleConv(nn.Module):
                 quantized, quantizer_metrics = self.quantizer(x)  # [B, C, T]
                 if self.config.transformer_input == "concat":
                     x = torch.cat([x, quantized], dim=1)  # [B, 2C, T]
+                    x = self.quantizer_compression(x)  # [B, C, T]
                 elif self.config.transformer_input == "quantized":
                     x = quantized
 
