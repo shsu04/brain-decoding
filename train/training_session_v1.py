@@ -138,6 +138,7 @@ class TrainingSessionV1(TrainingSession):
         self.model.to(device)
         self.clip_loss_mel.to(device)
         self.clip_loss_latent.to(device)
+        self.mmd_loss.to(device)
         training_size = len(self.dataset["train"])
 
         for epoch in range(current_epoch + 1, self.config.epochs + 1):
@@ -184,6 +185,7 @@ class TrainingSessionV1(TrainingSession):
 
                 del batch
                 gc.collect()
+                torch.cuda.empty_cache()
                 pbar.update(1)
 
             dataloader.stop()
@@ -801,6 +803,9 @@ class TrainingSessionV1(TrainingSession):
                 f"LatentAlign final-layer clip acc: {final_acc:.4f}, "
                 f"top5: {final_acc_5:.4f}, top10: {final_acc_10:.4f}"
             )
+
+        gc.collect()
+        torch.cuda.empty_cache()
 
         return metrics, total_samples
 

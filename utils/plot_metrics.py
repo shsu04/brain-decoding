@@ -31,6 +31,10 @@ def expand_available_metrics(metric_dict: tp.Dict) -> tp.Set[str]:
     ):
         for subkey in metric_dict["final_layer_losses"].keys():
             keys.add("final_layer_losses_" + subkey)
+    if "latent_alignment_metrics" in metric_dict and isinstance(
+        metric_dict["latent_alignment_metrics"], dict
+    ):
+        keys.update(metric_dict["latent_alignment_metrics"].keys())
     return keys
 
 
@@ -45,6 +49,9 @@ def get_metric_value(metric_dict: tp.Dict, key: str):
     elif key.startswith("final_layer_losses_"):
         subkey = key[len("final_layer_losses_") :]
         return metric_dict.get("final_layer_losses", {}).get(subkey, np.nan)
+    elif key.startswith("latent_alignment_metrics_"):
+        subkey = key[len("latent_alignment_metrics_") :]
+        return metric_dict.get("latent_alignment_metrics", {}).get(subkey, np.nan)
     else:
         return np.nan
 
@@ -77,6 +84,7 @@ def beautify_metric_name(metric_name: str, top_percent: bool = False) -> str:
         if top_percent and "Accuracy" not in title_str and not title_str.endswith("%"):
             title_str += " %"
         return title_str
+
     elif metric_name.startswith("mse"):
         title_str = "MSE"
         return title_str

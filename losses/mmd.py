@@ -1,7 +1,8 @@
 import torch
+from torch import nn
 
 
-class MMDLoss:
+class MMDLoss(nn.Module):
     def __init__(
         self,
         kernel_type: str = "rbf",
@@ -72,7 +73,7 @@ class MMDLoss:
         B, T, D = source.size()
 
         # randomly select 10 samples from T
-        samples = 300
+        samples = 2
         indices = torch.randperm(source.size(1))  # [3000]
         indices = indices[:samples]  # [S]
 
