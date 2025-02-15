@@ -205,15 +205,20 @@ class ConditionalLayers(nn.Module):
         assert "unknown" in conditions, "Conditions must include an 'unknown' key"
 
         self.conditions = conditions
-        self.trained_indices = set()
+        num_conditions = len(conditions)
+        # Registered buffer to track which indices have been trained.
+        self.register_buffer(
+            "trained_mask", torch.zeros(num_conditions, dtype=torch.bool)
+        )
         self.weights = nn.Parameter(
-            torch.empty((len(conditions), in_channels, out_channels)),
+            torch.empty((num_conditions, in_channels, out_channels))
         )
         nn.init.kaiming_uniform_(self.weights, a=0)
 
     @property
     def trained_indices_list(self):
-        return list(self.trained_indices)
+        # Return list of trained indices from the buffer.
+        return self.trained_mask.nonzero(as_tuple=True)[0].tolist()
 
     def forward(
         self,
@@ -230,53 +235,42 @@ class ConditionalLayers(nn.Module):
         Returns:
             torch.Tensor -- output tensor with shape [B, C, T]
         """
-        num_conditions, in_dim, out_dim = self.weights.shape
-        B, in_dim_x, T = x.shape
+        S, C, D = self.weights.shape
+        B, Cx, T = x.shape
+        assert C == Cx, f"Input channels={Cx} must match in_dim={C} in self.weights."
 
-        assert (
-            in_dim == in_dim_x
-        ), f"Input channels={in_dim_x} must match in_dim={in_dim} in self.weights."
-
-        # If a single condition string
+        # If a single condition string, fallback to old logic:
         if isinstance(condition, str):
-            if condition not in self.conditions:
-                # Int index, or unknown
-                index = self.conditions.get(condition, self.conditions["unknown"])
+            index = self.conditions.get(condition, self.conditions["unknown"])
+            if self.training and not self.trained_mask[index]:
+                # if not empty, set weights to the mean of trained indices
+                if self.trained_mask.any():
+                    with torch.no_grad():
+                        self.weights[index].data = self.weights[self.trained_mask].mean(
+                            dim=0
+                        )
+                self.trained_mask[index] = True
+            w = self.weights[index]  # [C, D]
+            # [B, C, T] x [C, D] => [B, D, T]
+            return torch.einsum("bct,cd->bdt", x, w)
 
-                if index not in self.trained_indices:
-                    # if not empty, set the unknown to the mean of trained layers
-                    if self.trained_indices:
-                        with torch.no_grad():
-                            self.weights[index].data = self.weights[
-                                self.trained_indices_list
-                            ].mean(dim=0)
-
-                if self.training:
-                    self.trained_indices.add(index)
-
-                w = self.weights[index]
-                return torch.einsum("bct,cd->bdt", x, w)  # [B, D, T]
-
-        # Otherwise, if input is a LongTensor of shape [B]
+        # Otherwise, we assume condition is a LongTensor of shape [B]
         assert (
             condition.dim() == 1 and condition.shape[0] == B
-        ), f"Condition indices must be [B], got {condition.shape}"
-
-        # mark trained indices
+        ), f"condition indices must be [B], got {condition.shape}"
+        # Add to trained indices
         if self.training:
             unique_ids = condition.unique()
             for idx in unique_ids.tolist():
-                # if not empty, set the unknown to the mean of trained layers
-                if idx not in self.trained_indices and len(self.trained_indices) > 0:
+                if not self.trained_mask[idx] and self.trained_mask.any():
                     with torch.no_grad():
-                        self.weights[idx].data = self.weights[
-                            self.trained_indices_list
-                        ].mean(dim=0)
-                # add to trained indices
-                self.trained_indices.add(int(idx))
+                        self.weights[idx].data = self.weights[self.trained_mask].mean(
+                            dim=0
+                        )
+                self.trained_mask[idx] = True
 
-        W = self.weights[condition]
-        return torch.einsum("bct,bcd->bdt", x, W)
+        W = self.weights[condition]  # [B, C, D]
+        return torch.einsum("bct,bcd->bdt", x, W)  # [B, D, T]
 
     def __repr__(self):
         S, C, D = self.weights.shape
