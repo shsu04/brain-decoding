@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import random
 import typing as tp
 import torch
 from torch import nn
@@ -220,68 +221,121 @@ class ConditionalLayers(nn.Module):
         # Return list of trained indices from the buffer.
         return self.trained_mask.nonzero(as_tuple=True)[0].tolist()
 
+    # def forward(
+    #     self,
+    #     x: torch.Tensor,
+    #     condition: tp.Union[str, torch.LongTensor],
+    # ) -> torch.Tensor:
+    #     """Applies a conditional linear transformation to the input tensor.
+
+    #     Arguments:
+    #         x -- input tensor with shape [B, C, T]
+    #         condition -- string specifying condition or selected indices of shape [B]
+    #             This is different to channel merger as merging occurs before concatenation.
+
+    #     Returns:
+    #         torch.Tensor -- output tensor with shape [B, C, T]
+    #     """
+    #     S, C, D = self.weights.shape
+    #     B, Cx, T = x.shape
+    #     assert C == Cx, f"Input channels={Cx} must match in_dim={C} in self.weights."
+
+    #     # If a single condition string, fallback to old logic:
+    #     if isinstance(condition, str):
+    #         index = self.conditions.get(condition, self.conditions["unknown"])
+    #         if not self.trained_mask[index]:
+    #             # if not empty, set weights to the mean of trained indices
+    #             if self.trained_mask.any():
+    #                 with torch.no_grad():
+    #                     self.weights[index].data = self.weights[self.trained_mask].mean(
+    #                         dim=0
+    #                     )
+    #             if self.training:
+    #                 self.trained_mask[index] = True
+    #         w = self.weights[index]  # [C, D]
+    #         # [B, C, T] x [C, D] => [B, D, T]
+    #         return torch.einsum("bct,cd->bdt", x, w)
+
+    #     # Otherwise condition is a LongTensor of shape [B].
+    #     assert (
+    #         condition.dim() == 1 and condition.shape[0] == B
+    #     ), f"condition must be a LongTensor of shape [B], got {condition.shape}"
+
+    #     # Mean of trained weights if available
+    #     fallback = (
+    #         self.weights[self.trained_mask].mean(dim=0)
+    #         if self.trained_mask.any()
+    #         else None
+    #     )
+    #     # For each unique condition index in the batch
+    #     unique_ids = condition.unique().tolist()
+    #     for idx in unique_ids:
+    #         # If untrained, overwrite with fallback (if any), and mark trained in training mode
+    #         if not self.trained_mask[idx]:
+    #             if fallback is not None:
+    #                 with torch.no_grad():
+    #                     self.weights[idx].data = fallback
+    #             if self.training:
+    #                 self.trained_mask[idx] = True
+
+    #     # Gather the per-sample weights; shape = [B, C, D]
+    #     W = self.weights[condition]
+    #     # [B, C, T] x [B, C, D] => [B, D, T]
+    #     return torch.einsum("bct,bcd->bdt", x, W)
+
     def forward(
         self,
         x: torch.Tensor,
-        condition: tp.Union[str, torch.LongTensor],
+        condition: tp.Union[str, int],  # single str or int for the entire batch
+        train: bool = True,
+        p_unknown: float = 0.2,
     ) -> torch.Tensor:
-        """Applies a conditional linear transformation to the input tensor.
-
-        Arguments:
-            x -- input tensor with shape [B, C, T]
-            condition -- string specifying condition or selected indices of shape [B]
-                This is different to channel merger as merging occurs before concatenation.
+        """
+        Args:
+            x: [B, C, T] input (batch, channels, time)
+            condition: either a single string or an int referencing self.conditions
+            train: if True => route 10% of samples to 'unknown'; if False => 100% unknown
+            p_unknown: fraction to route to unknown in training mode (default=0.1 => 10%)
 
         Returns:
-            torch.Tensor -- output tensor with shape [B, C, T]
+            [B, D, T] output (batch, out_channels, time)
         """
-        S, C, D = self.weights.shape
-        B, Cx, T = x.shape
-        assert C == Cx, f"Input channels={Cx} must match in_dim={C} in self.weights."
+        B, C, T = x.shape
+        S, Cin, Cout = self.weights.shape
+        assert C == Cin, f"Expected in_channels={Cin}, got {C}."
 
-        # If a single condition string, fallback to old logic:
+        # Convert condition to an integer index
         if isinstance(condition, str):
-            index = self.conditions.get(condition, self.conditions["unknown"])
-            if not self.trained_mask[index]:
-                # if not empty, set weights to the mean of trained indices
-                if self.trained_mask.any():
-                    with torch.no_grad():
-                        self.weights[index].data = self.weights[self.trained_mask].mean(
-                            dim=0
-                        )
-                if self.training:
-                    self.trained_mask[index] = True
-            w = self.weights[index]  # [C, D]
-            # [B, C, T] x [C, D] => [B, D, T]
-            return torch.einsum("bct,cd->bdt", x, w)
+            idx = self.conditions.get(condition, self.conditions["unknown"])
+        elif isinstance(condition, int):
+            idx = condition
+        else:
+            raise ValueError(
+                "condition must be a single str or int in this minimal snippet."
+            )
 
-        # Otherwise condition is a LongTensor of shape [B].
-        assert (
-            condition.dim() == 1 and condition.shape[0] == B
-        ), f"condition must be a LongTensor of shape [B], got {condition.shape}"
+        # [B] with all = idx
+        cond_tensor = torch.full((B,), idx, dtype=torch.long, device=x.device)
 
-        # Mean of trained weights if available
-        fallback = (
-            self.weights[self.trained_mask].mean(dim=0)
-            if self.trained_mask.any()
-            else None
-        )
-        # For each unique condition index in the batch
-        unique_ids = condition.unique().tolist()
-        for idx in unique_ids:
-            # If untrained, overwrite with fallback (if any), and mark trained in training mode
-            if not self.trained_mask[idx]:
-                if fallback is not None:
-                    with torch.no_grad():
-                        self.weights[idx].data = fallback
-                if self.training:
-                    self.trained_mask[idx] = True
+        # If in test -> all to unknown
+        if not train:
+            cond_tensor[:] = self.conditions["unknown"]
+        else:
+            # training mode -> random route ~10% to 'unknown'
+            n_route = max(1, int(round(p_unknown * B)))
+            if n_route < B:
+                perm = torch.randperm(B, device=x.device)
+                route_indices = perm[:n_route]
+                cond_tensor[route_indices] = self.conditions["unknown"]
+            else:
+                # all to unknown
+                cond_tensor[:] = self.conditions["unknown"]
 
-        # Gather the per-sample weights; shape = [B, C, D]
-        W = self.weights[condition]
-        # [B, C, T] x [B, C, D] => [B, D, T]
-        return torch.einsum("bct,bcd->bdt", x, W)
+        W = self.weights[cond_tensor]  # [B, C, D]
+
+        # [B, C, T] * [B, C, C'] => [B, C', T]
+        out = torch.einsum("bct,bcd->bdt", x, W)
+        return out
 
     def __repr__(self):
-        S, C, D = self.weights.shape
-        return f"Condition layers({C}, {D}, {S})"
+        return f"{self.__class__.__name__}(conditions={list(self.conditions.keys())})"

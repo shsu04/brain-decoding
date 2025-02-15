@@ -338,7 +338,9 @@ class SimpleConv(nn.Module):
 
         if self.conditional_layers is not None:
             for cond_type, cond_layer in self.conditional_layers.items():
-                x = cond_layer(x, condition_indices_map[cond_type])
+                x = cond_layer(
+                    x=x, condition=condition_indices_map[cond_type], train=train
+                )
 
         # CNN
         x, hidden_outputs = self.encoders(x)  # [B, C, T]

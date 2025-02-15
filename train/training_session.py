@@ -211,11 +211,11 @@ class TrainingSession(ABC):
                     if task in data_partition["testing_tasks"]:
                         self.dataset["test"]["unseen_both"].append(recording)
                     else:
-                        self.dataset["test"]["unseen_task"].append(recording)
+                        self.dataset["test"]["unseen_subject"].append(recording)
                 # Unseen subject and train
                 else:
                     if task in data_partition["testing_tasks"]:
-                        self.dataset["test"]["unseen_subject"].append(recording)
+                        self.dataset["test"]["unseen_task"].append(recording)
                     else:
                         self.dataset["train"].append(recording)
 
