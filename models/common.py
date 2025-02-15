@@ -242,35 +242,45 @@ class ConditionalLayers(nn.Module):
         # If a single condition string, fallback to old logic:
         if isinstance(condition, str):
             index = self.conditions.get(condition, self.conditions["unknown"])
-            if self.training and not self.trained_mask[index]:
+            if not self.trained_mask[index]:
                 # if not empty, set weights to the mean of trained indices
                 if self.trained_mask.any():
                     with torch.no_grad():
                         self.weights[index].data = self.weights[self.trained_mask].mean(
                             dim=0
                         )
-                self.trained_mask[index] = True
+                if self.training:
+                    self.trained_mask[index] = True
             w = self.weights[index]  # [C, D]
             # [B, C, T] x [C, D] => [B, D, T]
             return torch.einsum("bct,cd->bdt", x, w)
 
-        # Otherwise, we assume condition is a LongTensor of shape [B]
+        # Otherwise condition is a LongTensor of shape [B].
         assert (
             condition.dim() == 1 and condition.shape[0] == B
-        ), f"condition indices must be [B], got {condition.shape}"
-        # Add to trained indices
-        if self.training:
-            unique_ids = condition.unique()
-            for idx in unique_ids.tolist():
-                if not self.trained_mask[idx] and self.trained_mask.any():
-                    with torch.no_grad():
-                        self.weights[idx].data = self.weights[self.trained_mask].mean(
-                            dim=0
-                        )
-                self.trained_mask[idx] = True
+        ), f"condition must be a LongTensor of shape [B], got {condition.shape}"
 
-        W = self.weights[condition]  # [B, C, D]
-        return torch.einsum("bct,bcd->bdt", x, W)  # [B, D, T]
+        # Mean of trained weights if available
+        fallback = (
+            self.weights[self.trained_mask].mean(dim=0)
+            if self.trained_mask.any()
+            else None
+        )
+        # For each unique condition index in the batch
+        unique_ids = condition.unique().tolist()
+        for idx in unique_ids:
+            # If untrained, overwrite with fallback (if any), and mark trained in training mode
+            if not self.trained_mask[idx]:
+                if fallback is not None:
+                    with torch.no_grad():
+                        self.weights[idx].data = fallback
+                if self.training:
+                    self.trained_mask[idx] = True
+
+        # Gather the per-sample weights; shape = [B, C, D]
+        W = self.weights[condition]
+        # [B, C, T] x [B, C, D] => [B, D, T]
+        return torch.einsum("bct,bcd->bdt", x, W)
 
     def __repr__(self):
         S, C, D = self.weights.shape
