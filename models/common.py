@@ -286,56 +286,74 @@ class ConditionalLayers(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        condition: tp.Union[str, int],  # single str or int for the entire batch
+        condition: tp.Union[
+            str, torch.Tensor
+        ],  # either a single str or a tensor (all same) for the batch
         train: bool = True,
         p_unknown: float = 0.2,
     ) -> torch.Tensor:
         """
         Args:
-            x: [B, C, T] input (batch, channels, time)
-            condition: either a single string or an int referencing self.conditions
-            train: if True => route 10% of samples to 'unknown'; if False => 100% unknown
-            p_unknown: fraction to route to unknown in training mode (default=0.1 => 10%)
-
+            x: [B, C, T] input tensor.
+            condition: either a single string or a LongTensor of shape [B] (assumed identical across the batch).
+            train: if True, then route a fraction (p_unknown) of samples to 'unknown' and mark new conditions as trained.
+                   if False, then for any untrained condition, use 'unknown'.
+            p_unknown: fraction of training samples to route to unknown.
         Returns:
-            [B, D, T] output (batch, out_channels, time)
+            [B, out_channels, T] output tensor.
         """
         B, C, T = x.shape
-        S, Cin, Cout = self.weights.shape
+        num_cond, Cin, Cout = self.weights.shape
         assert C == Cin, f"Expected in_channels={Cin}, got {C}."
 
-        # Convert condition to an integer index
+        # Convert condition to a [B]-sized LongTensor of indices.
         if isinstance(condition, str):
             idx = self.conditions.get(condition, self.conditions["unknown"])
-        elif isinstance(condition, int):
-            idx = condition
+            cond_tensor = torch.full((B,), idx, dtype=torch.long, device=x.device)
+        elif isinstance(condition, torch.Tensor):
+            # Assert all entries are the same.
+            assert torch.all(
+                condition == condition[0]
+            ), "All condition entries must be the same."
+            idx = condition[0].item()
+            cond_tensor = torch.full((B,), idx, dtype=torch.long, device=x.device)
         else:
             raise ValueError(
-                "condition must be a single str or int in this minimal snippet."
+                f"condition must be a string or a LongTensor, got {type(condition)}"
             )
 
-        # [B] with all = idx
-        cond_tensor = torch.full((B,), idx, dtype=torch.long, device=x.device)
+        if train:
+            # Mark any new condition as trained (simply record that it has been seen).
+            unique_ids = cond_tensor.unique().tolist()
+            for idx in unique_ids:
+                if not self.trained_mask[idx]:
+                    self.trained_mask[idx] = True
 
-        # If in test -> all to unknown
-        if not train:
-            cond_tensor[:] = self.conditions["unknown"]
-        else:
-            # training mode -> random route ~10% to 'unknown'
-            n_route = max(1, int(round(p_unknown * B)))
-            if n_route < B:
+            # Randomly route a fraction p_unknown of samples to 'unknown'.
+            n_route = int(round(p_unknown * B))
+            if n_route > 0 and n_route < B:
                 perm = torch.randperm(B, device=x.device)
                 route_indices = perm[:n_route]
                 cond_tensor[route_indices] = self.conditions["unknown"]
-            else:
-                # all to unknown
+            elif n_route >= B:
                 cond_tensor[:] = self.conditions["unknown"]
+        else:
+            # In inference mode: for any condition that is untrained, override with 'unknown'.
+            unknown_idx = self.conditions["unknown"]
+            unique_ids = cond_tensor.unique().tolist()
+            for idx in unique_ids:
+                if not self.trained_mask[idx]:
+                    cond_tensor[cond_tensor == idx] = unknown_idx
 
-        W = self.weights[cond_tensor]  # [B, C, D]
-
-        # [B, C, T] * [B, C, C'] => [B, C', T]
+        # Gather per-sample weights. Resulting shape: [B, C, out_channels]
+        W = self.weights[cond_tensor]
+        # Multiply: [B, C, T] x [B, C, out_channels] -> [B, out_channels, T]
         out = torch.einsum("bct,bcd->bdt", x, W)
         return out
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(conditions={list(self.conditions.keys())})"
+        return (
+            f"{self.__class__.__name__}(conditions={list(self.conditions.keys())}, "
+            f"weight_shape={tuple(self.weights.shape)}, "
+            f"trained_count={self.trained_mask.sum().item()})"
+        )
