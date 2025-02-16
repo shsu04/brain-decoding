@@ -310,6 +310,7 @@ class ConditionalLayers(nn.Module):
         if isinstance(condition, str):
             idx = self.conditions.get(condition, self.conditions["unknown"])
             cond_tensor = torch.full((B,), idx, dtype=torch.long, device=x.device)
+
         elif isinstance(condition, torch.Tensor):
             # Assert all entries are the same.
             assert torch.all(
@@ -317,6 +318,7 @@ class ConditionalLayers(nn.Module):
             ), "All condition entries must be the same."
             idx = condition[0].item()
             cond_tensor = torch.full((B,), idx, dtype=torch.long, device=x.device)
+
         else:
             raise ValueError(
                 f"condition must be a string or a LongTensor, got {type(condition)}"
@@ -335,12 +337,15 @@ class ConditionalLayers(nn.Module):
                 perm = torch.randperm(B, device=x.device)
                 route_indices = perm[:n_route]
                 cond_tensor[route_indices] = self.conditions["unknown"]
+
             elif n_route >= B:
                 cond_tensor[:] = self.conditions["unknown"]
+
         else:
             # In inference mode: for any condition that is untrained, override with 'unknown'.
             unknown_idx = self.conditions["unknown"]
             unique_ids = cond_tensor.unique().tolist()
+
             for idx in unique_ids:
                 if not self.trained_mask[idx]:
                     cond_tensor[cond_tensor == idx] = unknown_idx
