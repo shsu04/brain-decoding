@@ -186,7 +186,7 @@ class SimpleConv(nn.Module):
 
                 if self.config.transformer_input == "concat":
                     self.quantizer_compression = nn.Conv1d(
-                        final_channels, final_channels // 2, 1
+                        final_channels * 2, final_channels, 1
                     )
 
             self.rnn_encoders = RNNEncoder(
