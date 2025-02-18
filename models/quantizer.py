@@ -157,7 +157,7 @@ class GumbelQuantizer(Quantizer):
             nn.init.kaiming_uniform_(conv.weight, a=0)
             if conv.bias is not None:
                 nn.init.zeros_(conv.bias)
-                
+
         # [n_codebooks, codebook_size, chunk_size]
         self.codebooks = nn.Parameter(
             torch.empty((num_codebooks, codebook_size, self.chunk_size))
@@ -208,7 +208,7 @@ class GumbelQuantizer(Quantizer):
             )  # [codebook_size]
 
             # [B, chunk_size, T]
-            quantized = torch.einsum("bct,kc->bkt", soft_onehot, self.codebooks[k])
+            quantized = torch.einsum("bct,ck->bkt", soft_onehot, self.codebooks[k])
             quantized_chunks.append(quantized)
 
         # Update temp
