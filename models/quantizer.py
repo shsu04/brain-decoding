@@ -30,7 +30,7 @@ class Quantizer(nn.Module):
 
 class VQQuantizer(Quantizer):
     def __init__(
-        self, dim: int, num_codebooks: int, codebook_size: int, commitment: float = 0.25
+        self, dim: int, num_codebooks: int, codebook_size: int, commitment: float = 0.1
     ):
         super().__init__(dim, num_codebooks, codebook_size)
         self.commitment = commitment
@@ -88,11 +88,14 @@ class VQQuantizer(Quantizer):
         distances = x_norm + c_norm + cross_term  # [B, n_cbooks, codebook_size, T]
         indices = distances.argmin(dim=2)  # [B, n_cbooks, T]
 
-        # [B, n_cbooks, chunk_size, T]
+        # [B, n_cbooks, T, chunk_size]
         quantized = self.codebooks[
             torch.arange(self.num_codebooks).to(x.device).view(1, -1, 1),  # Codebook
             indices.to(x.device),  # Codebook entry
         ]
+
+        # [B, n_cbooks, chunk_size, T]
+        quantized = quantized.permute(0, 1, 3, 2)
 
         # Metrics
         avg_probs = torch.zeros(self.num_codebooks, self.codebook_size, device=x.device)
@@ -120,7 +123,7 @@ class VQQuantizer(Quantizer):
         return (
             quantized.reshape(B, -1, T),  # [B, dim, T]
             {
-                "commit_loss": commit_loss,
+                "commitment_loss": commit_loss,
                 "perplexity": perplexity,
             },
         )
@@ -150,8 +153,11 @@ class GumbelQuantizer(Quantizer):
         self.projections = nn.ModuleList(
             [nn.Conv1d(self.chunk_size, codebook_size, 1) for _ in range(num_codebooks)]
         )
-        nn.init.kaiming_uniform_(self.projections, a=0)
-
+        for conv in self.projections:
+            nn.init.kaiming_uniform_(conv.weight, a=0)
+            if conv.bias is not None:
+                nn.init.zeros_(conv.bias)
+                
         # [n_codebooks, codebook_size, chunk_size]
         self.codebooks = nn.Parameter(
             torch.empty((num_codebooks, codebook_size, self.chunk_size))
