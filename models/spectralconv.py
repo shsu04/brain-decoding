@@ -296,7 +296,6 @@ class SpectralConv(torch.nn.Module):
                 x_i.size(2) // self.config.hop_length,
             )
             x_i = torch.log1p(self.spectrogram_transform(x_i))
-
             x_i = x_i[..., :M, :T]  #  ensure correct size [B, C, mel, T]
 
             # [B, C, mel, T] -> [B, C, mel * T]

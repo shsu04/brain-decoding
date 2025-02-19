@@ -111,7 +111,7 @@ class SpectralConvSequence(nn.Module):
                 (freq_kernel, time_kernel),
                 (freq_stride, time_stride),
                 (freq_pad, time_pad),
-                dilation=dilation,
+                dilation=(1, dilation),
                 groups=1,
             )
             nn.init.kaiming_uniform_(conv_layer.weight, a=0)
