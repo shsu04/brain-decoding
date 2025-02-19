@@ -149,8 +149,6 @@ class SpectralConv(torch.nn.Module):
         self.rnn_encoders, self.quantizer, self.layer_norm = False, False, False
         if self.config.transformer_encoder_layers > 0:
 
-            self.layer_norm = nn.LayerNorm(normalized_shape=final_channels)
-
             assert self.config.transformer_input in [
                 "continuous",
                 "quantized",
@@ -158,6 +156,7 @@ class SpectralConv(torch.nn.Module):
             ], f"Invalid transformer input {self.config.transformer_input}"
 
             # Quantizer
+            self.quantizer_compression = None
             if self.config.quantizer:
 
                 assert self.config.quantizer in [
@@ -183,7 +182,9 @@ class SpectralConv(torch.nn.Module):
                     )
 
                 if self.config.transformer_input == "concat":
-                    final_channels *= 2
+                    self.quantizer_compression = nn.Conv1d(
+                        final_channels * 2, final_channels, 1
+                    )
 
             self.rnn_encoders = RNNEncoder(
                 d_model=final_channels,
@@ -251,7 +252,7 @@ class SpectralConv(torch.nn.Module):
         )
 
         # Leave the temp param
-        self.clip_loss = CLIPLoss()
+        self.clip_loss = CLIPLoss(dim=self.config.out_channels)
 
     def forward(
         self,
@@ -369,15 +370,11 @@ class SpectralConv(torch.nn.Module):
         decoder_inference, quantizer_metrics = False, None
         if self.rnn_encoders:
 
-            if self.layer_norm:
-                x = self.layer_norm(x.transpose(1, 2)).transpose(  # [B, T, C]
-                    1, 2
-                )  # [B, C, T]
-
             if self.quantizer:
                 quantized, quantizer_metrics = self.quantizer(x)  # [B, C, T]
                 if self.config.transformer_input == "concat":
                     x = torch.cat([x, quantized], dim=1)  # [B, 2C, T]
+                    x = self.quantizer_compression(x)  # [B, C, T]
                 elif self.config.transformer_input == "quantized":
                     x = quantized
 
@@ -483,4 +480,14 @@ class SpectralConv(torch.nn.Module):
         # x = (x + 4.0) / 4.0
 
         x = 1.25 * torch.tanh(x) + 0.75
+
+        # max_values_batch = torch.max(
+        #     x.flatten(start_dim=1, end_dim=2), dim=1
+        # ).values  # [B, C, T] -> [B, C * T] -> [B]
+
+        # # [B, 1, 1]
+        # max_values_batch = max_values_batch.unsqueeze(-1).unsqueeze(-1)
+        # # [B, C, T]
+        # x = torch.clip(x, min=max_values_batch - 3, max=max_values_batch)
+
         return x

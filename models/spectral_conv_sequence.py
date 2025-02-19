@@ -102,11 +102,7 @@ class SpectralConvSequence(nn.Module):
             )
 
             # In/out dims for freq remains identical
-            freq_kernel, freq_pad, freq_stride = (
-                kernel,
-                kernel // 2 * dilation,
-                stride,
-            )
+            freq_kernel, freq_pad, freq_stride = (bins, 0, 1)
 
             # Create conv layer
             conv_layer = Conv(
