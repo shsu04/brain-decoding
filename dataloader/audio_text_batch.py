@@ -56,6 +56,7 @@ class AudioTextBatchFetcher(BatchFetcher):
         hop_length: int,
         audio_processor: str,
         n_jobs: int = 1,
+        add_timestamps: bool = True,
     ):
         """
         Arguments:
@@ -74,6 +75,7 @@ class AudioTextBatchFetcher(BatchFetcher):
             baseline_window -- window size to use for baseline normalization
             new_freq -- new frequency to resample the brain data to
             delay -- delay to apply to the brain data
+            add_timestamps -- whether to add timestamps to the transcript for tokenization
         """
         self.notch_filter = notch_filter
         self.frequency_bands = frequency_bands
@@ -93,16 +95,18 @@ class AudioTextBatchFetcher(BatchFetcher):
         self.audio_sample_rate = audio_sample_rate
         self.hop_length = hop_length
         self.audio_processor = WhisperFeatureExtractor.from_pretrained(audio_processor)
+        self.add_timestamps = add_timestamps
 
     def fetch(self, recording: Recording, cache: bool) -> AudioTextBatch:
         """
         Load, pre-process, and slice audio, brain, and text data into batch segments.
         Loads from cache if available. Audio is returned as mel spectrogram features
         of shape [B, mel_bins, T], brain data is returned as tensor of shape [B, C, T].
-        Transcript is a list of strings of length B, contasining words preceeded by their
+        Transcript is a list of strings of length B, concat words preceeded by their
         timestamps. Not yet tokenized.
 
         cache -- whether to save the batch to disk for future use
+        add_timetamps -- whether to add timestamps to the transcript. off for testing/eval.
 
         Raises:
             ValueError: Number of brain and audio windows do not match. Skip batch.
@@ -305,36 +309,47 @@ class AudioTextBatchFetcher(BatchFetcher):
     def segment_words_with_timestamps(
         self,
         word_events: pd.DataFrame,
-        brain_window_timestamps: torch.Tensor,
+        brain_window_timestamps: list[tuple[float, float]],
         time_resolution: float = 0.02,
     ) -> list[str]:
         """For each brain window, produce a transcript string that includes
         timestamp tokens for alignment.
 
         Each word is preceded by a token indicating its onset, converted to the
-        nearest multiple of `time_resolution`.
+        nearest multiple of `time_resolution`, unless it is switched off.
         """
         transcript_list = []
         word_events = word_events.copy()
         word_events["end"] = word_events["onset"] + word_events["duration"]
 
+        # Convert columns to numpy arrays for faster masking.
+        onsets = word_events["onset"].values
+        ends = word_events["end"].values
+        words = word_events["word"].values
+
         for start, end in brain_window_timestamps:
-            # Find word occurrences of each window, as df
-            window_words = word_events[
-                (word_events["onset"] >= start) & (word_events["end"] <= end)
-            ]
-            tokens = []
-            for _, row in window_words.iterrows():
-                # Convert onset (or relative onset) to a discrete timestamp
-                relative_onset = row["onset"] - start
 
-                # Round to nearest multiple of time_resolution:
-                rounded_time = round(relative_onset / time_resolution) * time_resolution
+            # Create a boolean mask for words within the window.
+            mask = (onsets >= start) & (ends <= end)
+            if not mask.any():
+                transcript_list.append("")
+                continue
 
-                # Create a timestamp token. Adjust the format to match your token vocabulary.
-                timestamp_token = f"<|{rounded_time:.2f}|>"
-                tokens.append(timestamp_token)
-                tokens.append(row["word"])
+            window_onsets, window_words = onsets[mask], words[mask]
+
+            if self.add_timestamps:
+
+                # Round each onset to time_resolution.
+                relative_onsets = window_onsets - start
+                rounded_times = (
+                    relative_onsets / time_resolution
+                ).round() * time_resolution
+
+                tokens = [
+                    f"<|{rt:.2f}|> {w}" for rt, w in zip(rounded_times, window_words)
+                ]
+            else:
+                tokens = window_words.tolist()
 
             transcript = " ".join(tokens)
             transcript_list.append(transcript)
