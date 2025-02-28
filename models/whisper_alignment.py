@@ -39,10 +39,13 @@ class WhisperAlignment(nn.Module):
             self.brain_module_config = brain_module_config
             self.brain_module = SpectralConv(brain_module_config)
 
-        if torch.cuda.get_device_capability() in [(7, 0), (8, 0), (9, 0)]:
-            torch_dtype = torch.bfloat16
-        elif torch.cuda.is_available():
-            torch_dtype = torch.float16
+        if torch.cuda.is_available():
+            major, _ = torch.cuda.get_device_capability()
+            # Ampere or beyond uses bfloat16
+            if major >= 8:
+                torch_dtype = torch.bfloat16
+            else:
+                torch_dtype = torch.float16
         else:
             torch_dtype = torch.float32
 
@@ -113,7 +116,7 @@ class WhisperAlignment(nn.Module):
 
         Returns:
             x - predicted mel [B, 80, 3000]
-            Quantizer metrics [B, 80, 3000]
+            Quantizer metrics
             Channel weights [B, C, C']
             Hidden outputs [B, 80, 3000] of length brain encoder layers
 
@@ -122,7 +125,7 @@ class WhisperAlignment(nn.Module):
 
         x, quantizer_metrics, channel_weights, hidden_outputs = self.brain_module(
             x, recording, conditions, mel, train, return_hidden_outputs
-        )  # [B, self.d_model, T]
+        )  # [B, 80, T]
         B, C, T = x.size()
 
         assert C == 80, f"Expected {80} channels, got {C}"
