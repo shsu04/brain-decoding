@@ -1,13 +1,6 @@
-"""
-AudioBatch and its fetcher, used by DataLoader for parallel data loading.
-Specifies the format and pre-processing steps to transform a study recording 
-into batch of brain and audio segment pairs, sliced by window size and stride.
-"""
-
 import copy
 import os
 import pickle
-from re import A
 import shutil
 from attr import dataclass
 import mne
@@ -16,26 +9,34 @@ import pandas as pd
 import ray
 import torch
 from transformers import WhisperFeatureExtractor
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple
 import torch
 import shutil
 from ray.exceptions import RayTaskError
 import traceback
+import pandas as pd
+
 
 from studies import Study, Recording
-from .batch import Batch, BatchFetcher
+
+# Change back when in .py file
+from dataloader.batch import Batch, BatchFetcher
 
 
 @dataclass
-class AudioBatch(Batch):
+class AudioTextBatch(Batch):
     brain_segments: dict[str, torch.Tensor]
     audio_segments: torch.Tensor
+    transcript: list[str]
     recording: Recording
 
 
 @ray.remote
-class AudioBatchFetcher(BatchFetcher):
-    """Fetches a single recording from an audio and brain pair dataset."""
+class AudioTextBatchFetcher(BatchFetcher):
+    """
+    Fetches a single recording from an audio and brain pair dataset, with the
+    corresponsding text input ids. Tokenizing is done in the training loop.
+    """
 
     def __init__(
         self,
@@ -74,7 +75,6 @@ class AudioBatchFetcher(BatchFetcher):
             new_freq -- new frequency to resample the brain data to
             delay -- delay to apply to the brain data
         """
-
         self.notch_filter = notch_filter
         self.frequency_bands = frequency_bands
         self.scaling = scaling
@@ -94,11 +94,13 @@ class AudioBatchFetcher(BatchFetcher):
         self.hop_length = hop_length
         self.audio_processor = WhisperFeatureExtractor.from_pretrained(audio_processor)
 
-    def fetch(self, recording: Recording, cache: bool) -> AudioBatch:
+    def fetch(self, recording: Recording, cache: bool) -> AudioTextBatch:
         """
-        Load, pre-process, and slice audio and brain data into batch segments.
+        Load, pre-process, and slice audio, brain, and text data into batch segments.
         Loads from cache if available. Audio is returned as mel spectrogram features
         of shape [B, mel_bins, T], brain data is returned as tensor of shape [B, C, T].
+        Transcript is a list of strings of length B, contasining words preceeded by their
+        timestamps. Not yet tokenized.
 
         cache -- whether to save the batch to disk for future use
 
@@ -117,6 +119,7 @@ class AudioBatchFetcher(BatchFetcher):
                     brain_window_timestamps,
                     brain_start_time,
                     info,
+                    word_events,
                 ) = self.fetch_cached_data(recording)
 
                 recording.start_time = brain_start_time
@@ -130,17 +133,28 @@ class AudioBatchFetcher(BatchFetcher):
                         brain_window_timestamps=brain_window_timestamps,
                         batch_size=256,
                     )
+
             # Alternatively, process raw data
             except (ValueError, RayTaskError, FileNotFoundError) as e:
-                brain_segments, audio_window_timestamps, brain_window_timestamps = (
-                    self.fetch_raw_data(recording, cache=cache)
-                )
+                (
+                    brain_segments,
+                    audio_window_timestamps,
+                    brain_window_timestamps,
+                    word_events,
+                ) = self.fetch_raw_data(recording, cache=cache)
 
             # AUDIO
             audio_segments = self.segment_audio(
                 recording=recording,
                 audio_window_timestamps=audio_window_timestamps,
             )
+            # WORD
+            transcript = self.segment_words_with_timestamps(
+                word_events=word_events,
+                brain_window_timestamps=brain_window_timestamps,
+                time_resolution=0.02,
+            )
+
             # DIMENSION CHECKS
             # if not all of the brain segments are the same length
             if not all(
@@ -154,17 +168,22 @@ class AudioBatchFetcher(BatchFetcher):
                     f"Brain segments are not the same length: {recording.cache_path}"
                     + f" {brain_segments[list(self.frequency_bands.keys())[0]].shape[-1]}"
                 )
-
             # B mismatch between brain and audio
             if (
                 brain_segments[list(self.frequency_bands.keys())[0]].shape[0]
                 != audio_segments.shape[0]
             ):
                 raise ValueError("Number of brain and audio windows do not match")
+            # B mismatch between brain and text
+            if brain_segments[list(self.frequency_bands.keys())[0]].shape[0] != len(
+                transcript
+            ):
+                raise ValueError("Number of brain and text windows do not match")
 
-            return AudioBatch(
+            return AudioTextBatch(
                 brain_segments=brain_segments,
                 audio_segments=audio_segments,
+                transcript=transcript,
                 recording=recording,
             )
 
@@ -182,10 +201,15 @@ class AudioBatchFetcher(BatchFetcher):
                 f"Error fetching batch for {recording.cache_path}: {error_msg}"
             )
 
-    def fetch_cached_data(
-        self, recording: Recording
-    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor, float, mne.Info]:
-        """Loads unsliced brain tensor and timestamps from cache.
+    def fetch_cached_data(self, recording: Recording) -> Tuple[
+        Dict[str, torch.Tensor],
+        torch.Tensor,
+        torch.Tensor,
+        float,
+        mne.Info,
+        pd.DataFrame,
+    ]:
+        """Loads unsliced brain tensor, timestamps, and word_events from cache.
         Brain start time saved in case of recording does not start at 0,
         causing indexing issues when slicing brain tensor.
         """
@@ -200,6 +224,9 @@ class AudioBatchFetcher(BatchFetcher):
             )  # Load timestamps
 
             info = pickle.load(open(recording.cache_path + "/info.pkl", "rb"))
+            word_events = pickle.load(
+                open(recording.cache_path + "/word_events.pkl", "rb")
+            )
 
             return (
                 brain_segments,
@@ -207,16 +234,18 @@ class AudioBatchFetcher(BatchFetcher):
                 timestamps["brain_window_timestamps"],
                 timestamps["brain_start_time"],
                 info,
+                word_events,
             )
         except Exception as e:
             raise ValueError(f"Cache loading failed: {str(e)}")
 
     def fetch_raw_data(
         self, recording: Recording, cache: bool
-    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
+    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor, pd.DataFrame]:
         """Load raw, pre-process, and segment into tensors if not cached.
         Saves brain tensor and timestamps to cache for future use, including
-        brain start time in case of recording does not start at 0.
+        brain start time in case of recording does not start at 0. Word events
+        saved as pandas df with columns = ["onset", "duration", "word"].
         """
         raw = None
         try:
@@ -227,8 +256,8 @@ class AudioBatchFetcher(BatchFetcher):
             # IF not cached
             # Load the raw data
             raw = recording.load_raw(load_data=True)
-            events = recording.load_events(raw=raw, options="sound")
-            sound_events = events["sound"]
+            events = recording.load_events(raw=raw, options="both")
+            sound_events, word_events = events["sound"], events["word"]
 
             # Generate time stamps for the windows
             audio_window_timestamps, brain_window_timestamps = (
@@ -256,14 +285,61 @@ class AudioBatchFetcher(BatchFetcher):
                 pickle.dump(
                     recording.info, open(recording.cache_path + "/info.pkl", "wb")
                 )
+                pickle.dump(
+                    word_events, open(recording.cache_path + "/word_events.pkl", "wb")
+                )
 
-            return brain_segments, audio_window_timestamps, brain_window_timestamps
+            return (
+                brain_segments,
+                audio_window_timestamps,
+                brain_window_timestamps,
+                word_events,
+            )
 
         except Exception as e:
             raise ValueError(f"Raw data processing failed: {str(e)}")
         finally:
             if raw is not None:
                 del raw
+
+    def segment_words_with_timestamps(
+        self,
+        word_events: pd.DataFrame,
+        brain_window_timestamps: torch.Tensor,
+        time_resolution: float = 0.02,
+    ) -> list[str]:
+        """For each brain window, produce a transcript string that includes
+        timestamp tokens for alignment.
+
+        Each word is preceded by a token indicating its onset, converted to the
+        nearest multiple of `time_resolution`.
+        """
+        transcript_list = []
+        word_events = word_events.copy()
+        word_events["end"] = word_events["onset"] + word_events["duration"]
+
+        for start, end in brain_window_timestamps:
+            # Find word occurrences of each window, as df
+            window_words = word_events[
+                (word_events["onset"] >= start) & (word_events["end"] <= end)
+            ]
+            tokens = []
+            for _, row in window_words.iterrows():
+                # Convert onset (or relative onset) to a discrete timestamp
+                relative_onset = row["onset"] - start
+
+                # Round to nearest multiple of time_resolution:
+                rounded_time = round(relative_onset / time_resolution) * time_resolution
+
+                # Create a timestamp token. Adjust the format to match your token vocabulary.
+                timestamp_token = f"<|{rounded_time:.2f}|>"
+                tokens.append(timestamp_token)
+                tokens.append(row["word"])
+
+            transcript = " ".join(tokens)
+            transcript_list.append(transcript)
+
+        return transcript_list
 
     def generate_time_stamps(
         self, sound_events: pd.DataFrame

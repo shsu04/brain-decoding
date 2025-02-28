@@ -1,8 +1,10 @@
 from .audio_batch import AudioBatchFetcher
+from .audio_text_batch import AudioTextBatchFetcher
 
 # String names have to match recording types
 BATCHTYPES = {
     "audio": AudioBatchFetcher,
+    "audiotext": AudioTextBatchFetcher,
 }
 
 

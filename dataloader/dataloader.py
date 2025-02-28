@@ -137,7 +137,7 @@ class DataLoader:
         """
 
         def _fetch_worker():
-                        
+
             for recording in recordings:
                 if self.stop_event.is_set():
                     break
