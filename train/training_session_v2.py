@@ -185,7 +185,7 @@ class TrainingSessionV2(TrainingSession):
                 if batch is None:
                     break
                 try:
-                    results, num_batches = self.train_batch(batch, train=True)
+                    results, num_batches = self.run_batch(batch, train=True)
                     all_metrics.append(results)
                     total_batches += num_batches
                 except Exception as e:
@@ -305,7 +305,7 @@ class TrainingSessionV2(TrainingSession):
                 f"BLEU: {metric['nlp_metrics']['bleu']:.4f}, ROUGE-1: {metric['nlp_metrics']['rouge-f']:.4f}, BERT: {metric['nlp_metrics']['bert_score']:.4f}, CER: {metric['nlp_metrics']['cer']:.4f}, SELF-BLEU: {metric['nlp_metrics']['self_bleu']:.4f}"
             )
 
-    def train_batch(self, batch: AudioTextBatch, train: bool) -> tp.Tuple[dict, int]:
+    def run_batch(self, batch: AudioTextBatch, train: bool) -> tp.Tuple[dict, int]:
         """
         The main place we do forward/backward.
         """
@@ -588,7 +588,7 @@ class TrainingSessionV2(TrainingSession):
                         missed_batches += 1
 
                 except Exception as ex:
-                    self.log_print(f"Error in train_batch: {ex}")
+                    self.log_print(f"Error in run_batch: {ex}")
                     missed_recordings += end - start
                     missed_batches += 1
                     raise ex
