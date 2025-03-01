@@ -1,3 +1,4 @@
+import re
 import shutil
 import typing as tp
 import gc
@@ -8,7 +9,7 @@ import json
 from torch.optim import AdamW
 import os
 import torch
-from transformers import WhisperForConditionalGeneration
+from transformers import WhisperModel
 import torch.nn as nn
 from peft import PeftModel, PeftConfig
 
@@ -82,12 +83,16 @@ class TrainingSessionV2(TrainingSession):
         )
 
         # Frozen whisper model for alignment
-        self.frozen_encoder = WhisperForConditionalGeneration.from_pretrained(
-            self.config.audio_model,
+        frozen_whisper_model = WhisperModel.from_pretrained(
+            config.audio_model,
             low_cpu_mem_usage=True,
             use_safetensors=True,
         ).to(device)
+        self.frozen_encoder = frozen_whisper_model.get_encoder()
         self.frozen_encoder._freeze_parameters()
+
+        del frozen_whisper_model.decoder
+        del frozen_whisper_model
 
         self.adalora_steps = 0
         self.lowest_cer = float("inf")
@@ -208,6 +213,343 @@ class TrainingSessionV2(TrainingSession):
                 brain_segments, audio_segments, transcripts, transcript_attn_masks
             )
         )
+
+        # Accumulators for mel and total losses
+        recording_loss = 0.0
+        recording_mel_loss = 0.0
+        recording_clip_loss = 0.0
+        recording_mse_loss = 0.0
+
+        # Encoder Alignment losses
+        recording_encoder_cosine_similarity_losses = 0.0
+        recording_encoder_mse_losses = 0.0
+        recording_encoder_clip_losses = 0.0
+        recording_encoder_mmd_losses = 0.0
+        recording_encoder_total_losses = 0.0
+
+        # Decoder losses
+        recording_ce_loss = 0.0
+
+        # For mel-level clip correctness
+        recording_correct = 0.0
+        recording_top_5 = 0.0
+        recording_top_10 = 0.0
+
+        # For latent-level clip correctness
+        recording_encoder_correct = 0.0
+        recording_encoder_top5 = 0.0
+        recording_encoder_top10 = 0.0
+
+        # To correctly average the losses
+        total_samples = brain_segments.shape[0]
+        missed_recordings = 0
+        missed_batches = 0
+
+        conditions = {
+            "study": f"{recording.study_name}",
+            "subject": f"{recording.study_name}_{recording.subject_id}",
+        }
+
+        # Random shuffle
+        shuffle_idx = torch.randperm(total_samples)
+        brain_segments = brain_segments[shuffle_idx]  # [B, C, T]
+        audio_segments = audio_segments[shuffle_idx]  # [B, 80, T']
+        transcripts = transcripts[shuffle_idx]  # [B, T']
+        transcript_attn_masks = transcript_attn_masks[shuffle_idx]  # [B, T']
+
+        # For slicing
+        batch_indices = [
+            (i, min(i + self.config.batch_size, total_samples))
+            for i in range(0, total_samples, self.config.batch_size)
+        ]
+
+        with torch.autocast(device_type=device, dtype=self.autocast_dtype):
+            for start, end in batch_indices:
+                try:
+                    if train:
+                        self.optimizer.zero_grad()
+
+                    brain_batch = brain_segments[start:end].to(device)
+                    audio_batch = audio_segments[start:end].to(device)
+                    transcript_batch = transcripts[start:end].to(device)
+                    transcript_attn_mask_batch = transcript_attn_masks[start:end].to(
+                        device
+                    )
+
+                    # Encoder attention mask
+                    pad_len = 3000 - audio_batch.size(2)
+                    encoder_attention_mask = torch.zeros(
+                        audio_batch.size(0), 3000, device=device
+                    )  # [B, T]
+                    encoder_attention_mask[:, : audio_batch.size(2)] = 1
+
+                    (
+                        x,  # predicted mel
+                        _,
+                        _,
+                        _,
+                        encoder_last_hidden_state,
+                        ce_loss,
+                    ) = self.model(
+                        x=[brain_batch],
+                        recording=[recording],
+                        conditions=[conditions],
+                        mel=[audio_batch],
+                        train=train,
+                        # Set true using this function only when testing in isolation
+                        return_hidden_outputs=False,
+                        attention_mask=encoder_attention_mask,
+                        labels=transcript_batch,
+                        decoder_attention_mask=transcript_attn_mask_batch,
+                    )
+
+                    # Frozen encoder
+                    with torch.no_grad():
+                        outputs = self.frozen_encoder(
+                            nn.functional.pad(
+                                audio_batch,
+                                (0, pad_len),
+                                mode="constant",
+                                value=-0.2,
+                            ),
+                            output_hidden_states=False,
+                            attention_mask=encoder_attention_mask,
+                        )
+                        # [B, T, D]
+                        frozen_encoder_last_hidden_state = outputs.last_hidden_state[
+                            :, : audio_batch.size(2), :
+                        ]
+                        del outputs, encoder_attention_mask, transcript_attn_mask_batch
+                        gc.collect()
+
+                    # Mel alignment objectives
+                    if self.config.mel_alignment_objectives["mse_loss"] > 0:
+                        mse_l = self.mse_loss(pred=x, target=audio_batch)
+                    else:
+                        mse_l = torch.tensor(0.0).to(device)
+
+                    if self.config.mel_alignment_objectives["clip_loss"] > 0:
+                        clip_mel = self.clip_loss_mel(x_1=x, x_2=audio_batch, mel=True)
+                        mel_clip_loss, mel_clip_metrics = (
+                            clip_mel["loss"],
+                            clip_mel["metrics"],
+                        )
+                    else:
+                        mel_clip_loss = torch.tensor(0.0).to(device)
+                        mel_clip_metrics = {
+                            "correct": 0,
+                            "top_5_correct": 0,
+                            "top_10_correct": 0,
+                        }
+
+                    mel_loss = (
+                        self.config.mel_alignment_objectives["mse_loss"] * mse_l
+                        + self.config.mel_alignment_objectives["clip_loss"]
+                        * mel_clip_loss
+                    )
+
+                    # Encoder alignment objectives
+                    if self.config.latent_alignment_objectives["cosine_similarity"] > 0:
+                        encoder_cos_sim_loss = cosine_similarity_loss(
+                            frozen_encoder_last_hidden_state, encoder_last_hidden_state
+                        )
+                    else:
+                        encoder_cos_sim_loss = torch.tensor(0.0).to(device)
+
+                    if self.config.latent_alignment_objectives["mse_loss"] > 0:
+                        encoder_mse_loss = mse_loss_per_batch(
+                            frozen_encoder_last_hidden_state, encoder_last_hidden_state
+                        )
+                    else:
+                        encoder_mse_loss = torch.tensor(0.0).to(device)
+
+                    if self.config.latent_alignment_objectives["clip_loss"] > 0:
+                        # [B, T, D] -> [B, D, T]
+                        encoder_clip_loss = self.clip_loss_latent(
+                            x_1=encoder_last_hidden_state.transpose(1, 2),
+                            x_2=frozen_encoder_last_hidden_state.transpose(1, 2),
+                            mel=False,
+                        )
+                        encoder_clip_loss, encoder_clip_metrics = (
+                            encoder_clip_loss["loss"],
+                            encoder_clip_loss["metrics"],
+                        )
+                    else:
+                        encoder_clip_loss = torch.tensor(0.0).to(device)
+                        encoder_clip_metrics = {
+                            "correct": 0,
+                            "top_5_correct": 0,
+                            "top_10_correct": 0,
+                        }
+
+                    if self.config.latent_alignment_objectives["mmd_loss"] > 0:
+                        encoder_mmd_loss = self.mmd_loss(
+                            encoder_last_hidden_state, frozen_encoder_last_hidden_state
+                        )
+                    else:
+                        encoder_mmd_loss = torch.tensor(0.0).to(device)
+
+                    encoder_loss = (
+                        self.config.latent_alignment_objectives["cosine_similarity"]
+                        * encoder_cos_sim_loss
+                        + self.config.latent_alignment_objectives["mse_loss"]
+                        * encoder_mse_loss
+                        + self.config.latent_alignment_objectives["clip_loss"]
+                        * encoder_clip_loss
+                        + self.config.latent_alignment_objectives["mmd_loss"]
+                        * encoder_mmd_loss
+                    )
+
+                    total_loss = mel_loss + encoder_loss + ce_loss
+
+                    # Optimize
+                    if not torch.isnan(total_loss).any() and train:
+                        self.scaler.scale(total_loss).backward()
+
+                        # Clip gradients
+                        self.scaler.unscale_(self.optimizer)
+                        torch.nn.utils.clip_grad_norm_(
+                            self.model.parameters(), max_norm=3.0
+                        )
+
+                        if self.adalora_steps >= self.config.adalora_config.tinit:
+                            self.model.encoder.base_model.update_and_allocate(
+                                self.adalora_steps
+                            )
+                        if self.adalora_steps == self.config.adalora_config.tinit:
+                            self.log_print(
+                                f"Starting rank reallocation at recording {self.adalora_steps}."
+                            )
+
+                        # Step
+                        self.scaler.step(self.optimizer)
+                        self.scaler.update()
+                        self.optimizer.zero_grad()
+
+                        self.adalora_steps += 1
+                        self.scheduler.step()
+
+                        # Accumulate losses
+                        recording_mel_loss += mel_loss.detach().cpu().item()
+                        recording_clip_loss += mel_clip_loss.detach().cpu().item()
+                        recording_mse_loss += mse_l.detach().cpu().item()
+
+                        recording_encoder_cosine_similarity_losses += (
+                            encoder_cos_sim_loss.detach().cpu().item()
+                        )
+                        recording_encoder_mse_losses += (
+                            encoder_mse_loss.detach().cpu().item()
+                        )
+                        recording_encoder_clip_losses += (
+                            encoder_clip_loss.detach().cpu().item()
+                        )
+                        recording_encoder_mmd_losses += (
+                            encoder_mmd_loss.detach().cpu().item()
+                        )
+                        recording_encoder_total_losses += (
+                            encoder_loss.detach().cpu().item()
+                        )
+
+                        recording_ce_loss += ce_loss.detach().cpu().item()
+                        recording_loss += total_loss.detach().cpu().item()
+
+                        # Accumulate correctness
+                        recording_correct += mel_clip_metrics["correct"]
+                        recording_top_5 += mel_clip_metrics["top_5_correct"]
+                        recording_top_10 += mel_clip_metrics["top_10_correct"]
+
+                        recording_encoder_correct += encoder_clip_metrics["correct"]
+                        recording_encoder_top5 += encoder_clip_metrics["top_5_correct"]
+                        recording_encoder_top10 += encoder_clip_metrics[
+                            "top_10_correct"
+                        ]
+
+                    else:
+                        self.log_print(
+                            f"NaN loss on {recording.study_name} subj {recording.subject_id} task {recording.task_id}."
+                        )
+                        missed_recordings += end - start
+                        missed_batches += 1
+
+                except Exception as ex:
+                    self.log_print(f"Error in run_batch: {ex}")
+                    missed_recordings += end - start
+                    missed_batches += 1
+                    raise ex
+
+        # End of batch loop
+        total_samples -= missed_recordings
+        batches = len(batch_indices) - missed_batches
+
+        metrics = {
+            "loss": recording_loss / batches if batches > 0 else 0.0,
+            "mel_loss": recording_mel_loss / batches if batches > 0 else 0.0,
+            "clip_loss": recording_clip_loss / batches if batches > 0 else 0.0,
+            "mse_loss": recording_mse_loss / batches if batches > 0 else 0.0,
+            # Encoder alignment losses
+            "encoder_cosine_similarity_loss": (
+                recording_encoder_cosine_similarity_losses / batches
+                if batches > 0
+                else 0.0
+            ),
+            "encoder_mse_loss": (
+                recording_encoder_mse_losses / batches if batches > 0 else 0.0
+            ),
+            "encoder_clip_loss": (
+                recording_encoder_clip_losses / batches if batches > 0 else 0.0
+            ),
+            "encoder_mmd_loss": (
+                recording_encoder_mmd_losses / batches if batches > 0 else 0.0
+            ),
+            "encoder_total_loss": (
+                recording_encoder_total_losses / batches if batches > 0 else 0.0
+            ),
+            # Decoder losses
+            "ce_loss": recording_ce_loss / batches if batches > 0 else 0.0,
+            # Accuracy
+            "accuracy": recording_correct / total_samples if total_samples > 0 else 0.0,
+            "top_5_accuracy": (
+                recording_top_5 / total_samples if total_samples > 0 else 0.0
+            ),
+            "top_10_accuracy": (
+                recording_top_10 / total_samples if total_samples > 0 else 0.0
+            ),
+            # Encoder accuracy
+            "encoder_accuracy": (
+                recording_encoder_correct / total_samples if total_samples > 0 else 0.0
+            ),
+            "encoder_top_5_accuracy": (
+                recording_encoder_top5 / total_samples if total_samples > 0 else 0.0
+            ),
+            "encoder_top_10_accuracy": (
+                recording_encoder_top10 / total_samples if total_samples > 0 else 0.0
+            ),
+        }
+
+        self.logger.info(
+            f"{recording.study_name} {recording.subject_id} sess {recording.session_id}, Loss: {metrics['loss']:.4f}"
+        )
+        # Mel
+        self.logger.info(
+            f"Mel Loss: {metrics['mel_loss']:.4f}, Clip Loss: {metrics['clip_loss']:.4f}, MSE: {metrics['mse_loss']:.4f}"
+        )
+        self.logger.info(
+            f"Mel Accuracy: {metrics['accuracy']:.4f}, Top 5: {metrics['top_5_accuracy']:.4f}, Top 10: {metrics['top_10_accuracy']:.4f}"
+        )
+        # Encoder
+        self.logger.info(
+            f"Encoder Loss: {metrics['encoder_total_loss']:.4f}, Cos Sim: {metrics['encoder_cosine_similarity_loss']:.4f}, MSE: {metrics['encoder_mse_loss']:.4f}, Clip: {metrics['encoder_clip_loss']:.4f}, MMD: {metrics['encoder_mmd_loss']:.4f}"
+        )
+        self.logger.info(
+            f"Encoder Accuracy: {metrics['encoder_accuracy']:.4f}, Top 5: {metrics['encoder_top_5_accuracy']:.4f}, Top 10: {metrics['encoder_top_10_accuracy']:.4f}"
+        )
+        # Decoder
+        self.logger.info(f"CE Loss: {metrics['ce_loss']:.4f}")
+
+        gc.collect()
+        torch.cuda.empty_cache()
+
+        return metrics, total_samples
 
     def test(self, buffer_size: int, num_workers: int, max_cache_size: int):
         pass
