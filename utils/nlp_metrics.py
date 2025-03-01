@@ -78,7 +78,8 @@ def nlp_metrics(
     use_bert_score: bool = True,
     use_cer: bool = True,
     use_self_bleu: bool = True,
-    bert_model_type: str = "bert-base-uncased",
+    bert_model_type: str = "microsoft/MiniLM-L12-H384-uncased",
+    batch_size: int = 256,
 ) -> dict:
     """
     Computes various NLP metrics over a batch of prediction-reference pairs (same length).
@@ -129,9 +130,11 @@ def nlp_metrics(
     # 3) BERTScore in one batch (avoids per-sample overhead)
     if use_bert_score:
         P, R, F1 = score(
-            predictions,
-            references,
+            cands=predictions,
+            refs=references,
             model_type=bert_model_type,
+            lang="en",
+            use_fast_tokenizer=True,
         )
         avg_f1 = float(sum(F1) / len(F1))
         metrics["bert_score"] = avg_f1

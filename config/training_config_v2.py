@@ -51,8 +51,6 @@ class TrainingConfigV2(TrainingConfig):
         mel_alignment_objectives: dict[str, float] = {
             "clip_loss": 0.0,
             "mse_loss": 0.0,
-            "commitment_loss": 0.0,
-            "cosine_similarity": 0.0,
         },
         latent_alignment_objectives: dict[str, float] = {
             "cosine_similarity": 0.0,
@@ -60,7 +58,8 @@ class TrainingConfigV2(TrainingConfig):
             "clip_loss": 0.0,
             "mmd_loss": 0.0,
         },
-        latent_alignment_layers: tp.List[int] = [-1],
+        # Decoding params
+        decode_timestamps: bool = True,
     ):
         self.brain_encoder_config = brain_encoder_config
         # key: study_name, value: dict with keys: "testing_subjects", "testing_tasks",
@@ -123,10 +122,7 @@ class TrainingConfigV2(TrainingConfig):
             [v >= 0 for v in mel_alignment_objectives.values()]
         ), "Weighting must be non-negative"
         assert all(
-            [
-                k in ["clip_loss", "mse_loss", "commitment_loss", "cosine_similarity"]
-                for k in mel_alignment_objectives.keys()
-            ]
+            [k in ["clip_loss", "mse_loss"] for k in mel_alignment_objectives.keys()]
         ), "Invalid objective"
         self.mel_alignment_objectives = mel_alignment_objectives
 
@@ -142,8 +138,9 @@ class TrainingConfigV2(TrainingConfig):
         ), "Invalid objective"
 
         self.latent_alignment_objectives = latent_alignment_objectives
-        assert all([i < 32 for i in latent_alignment_layers]), "Invalid layer index"
-        self.latent_alignment_layers = latent_alignment_layers
+
+        # Decoding params
+        self.decode_timestamps = decode_timestamps
 
     # does not overide parent method
     def to_dict(self):
@@ -186,7 +183,7 @@ class TrainingConfigV2(TrainingConfig):
         self.seed = config["seed"]
         self.mel_alignment_objectives = config["mel_alignment_objectives"]
         self.latent_alignment_objectives = config["latent_alignment_objectives"]
-        self.latent_alignment_layers = config["latent_alignment_layers"]
+        self.decode_timestamps = config["decode_timestamps"]
         self.adalora_config = AdaLoraConfig(
             peft_type="ADALORA",
             task_type="SPEECH_RECOGNITION",
