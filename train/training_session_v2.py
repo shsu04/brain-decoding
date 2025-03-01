@@ -102,7 +102,7 @@ class TrainingSessionV2(TrainingSession):
 
         self.adalora_steps = 0
         self.lowest_cer = float("inf")
-        self.highest_bert = float("-inf")
+        self.highest_bleu = float("-inf")
 
         gpu_ok = False
         if torch.cuda.is_available():
@@ -257,17 +257,17 @@ class TrainingSessionV2(TrainingSession):
                 )
                 / 3
             )
-            average_bert = (
+            average_bleu = (
                 sum(
-                    self.metrics["test"][test][-1]["nlp_metrics"]["bert_score"]
+                    self.metrics["test"][test][-1]["nlp_metrics"]["bleu"]
                     for test in self.metrics["test"]
                 )
                 / 3
             )
 
-            if average_cer < self.lowest_cer and average_bert > self.highest_bert:
+            if average_cer < self.lowest_cer and average_bleu > self.highest_bleu:
                 self.lowest_cer = average_cer
-                self.highest_bert = average_bert
+                self.highest_bleu = average_bleu
                 self.highest_epoch = epoch
                 self.highest_metrics = {
                     test: self.metrics["test"][test][-1]
@@ -275,7 +275,7 @@ class TrainingSessionV2(TrainingSession):
                 }
 
                 self.log_print(
-                    f"New best epoch {epoch} with CER {average_cer:.4f} and BERT {average_bert:.4f}."
+                    f"New best epoch {epoch} with CER {average_cer:.4f} and BLEU {average_bleu:.4f}."
                 )
                 self.log_print(
                     f"Mel Loss: {final_metrics['mel_loss']:.4f}, Clip Loss: {final_metrics['clip_loss']:.4f}, MSE: {final_metrics['mse_loss']:.4f}"
@@ -1073,7 +1073,7 @@ class TrainingSessionV2(TrainingSession):
                     "highest_epoch": self.highest_epoch,
                     "highest_metrics": self.highest_metrics,
                     "lowest_cer": self.lowest_cer,
-                    "highest_bert": self.highest_bert,
+                    "highest_bleu": self.highest_bleu,
                     "optimizer": self.optimizer.state_dict(),
                     "adalora_steps": self.adalora_steps,
                     "scaler": self.scaler.state_dict(),
@@ -1149,7 +1149,7 @@ def load_training_session(
         ts.highest_metrics = loaded.get("highest_metrics", {})
 
         ts.lowest_cer = loaded.get("lowest_cer", float("inf"))
-        ts.highest_bert = loaded.get("highest_bert", float("-inf"))
+        ts.highest_bleu = loaded.get("highest_bleu", float("-inf"))
         ts.adalora_steps = loaded.get("adalora_steps", 0)
 
         if "optimizer" in loaded:
