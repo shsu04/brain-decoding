@@ -239,6 +239,68 @@ class TrainingSessionV2(TrainingSession):
                 self.save(f"error_epoch_{epoch}")
                 raise e
 
+            elapsed_minutes = (time.time() - epoch_start_time) / 60
+            self.log_print(
+                f"Epoch {epoch} done in {elapsed_minutes:.2f}m. {elapsed_minutes / training_size:.2f}m/recording."
+            )
+            self.save(f"epoch_{epoch}")
+
+            # Early stopping logic
+            average_cer = (
+                sum(
+                    self.metrics["test"][test][-1]["nlp_metrics"]["cer"]
+                    for test in self.metrics["test"]
+                )
+                / 3
+            )
+            average_bert = (
+                sum(
+                    self.metrics["test"][test][-1]["nlp_metrics"]["bert_score"]
+                    for test in self.metrics["test"]
+                )
+                / 3
+            )
+
+            if average_cer < self.lowest_cer and average_bert > self.highest_bert:
+                self.lowest_cer = average_cer
+                self.highest_bert = average_bert
+                self.highest_epoch = epoch
+                self.highest_metrics = {
+                    test: self.metrics["test"][test][-1]
+                    for test in self.metrics["test"].keys()
+                }
+
+                self.log_print(
+                    f"New best epoch {epoch} with CER {average_cer:.4f} and BERT {average_bert:.4f}."
+                )
+                self.log_print(
+                    f"Mel Loss: {final_metrics['mel_loss']:.4f}, Clip Loss: {final_metrics['clip_loss']:.4f}, MSE: {final_metrics['mse_loss']:.4f}"
+                )
+                self.log_print(
+                    f"Mel accuracy: {final_metrics['accuracy']:.4f}, Top 5: {final_metrics['top_5_accuracy']:.4f}, Top 10: {final_metrics['top_10_accuracy']:.4f}"
+                )
+
+            if epoch - self.highest_epoch > 10:
+                self.log_print(
+                    f"Early stopping at epoch {epoch}. Highest metrics at epoch {self.highest_epoch}."
+                )
+                break
+
+        self.log_print("\n")
+        self.log_print(f"Training completed. Highest epoch at {self.highest_epoch}.")
+
+        for test, metric in self.highest_metrics.items():
+            self.log_print("\n")
+            self.log_print(
+                f"Test {test} at epoch {self.highest_epoch}. Mel Loss: {metric['mel_loss']:.4f}, Clip Loss: {metric['clip_loss']:.4f}, MSE: {metric['mse_loss']:.4f}"
+            )
+            self.log_print(
+                f"Mel accuracy: {metric['accuracy']:.4f}, Top 5: {metric['top_5_accuracy']:.4f}, Top 10: {metric['top_10_accuracy']:.4f}"
+            )
+            self.log_print(
+                f"BLEU: {metric['nlp_metrics']['bleu']:.4f}, ROUGE-1: {metric['nlp_metrics']['rouge-f']:.4f}, BERT: {metric['nlp_metrics']['bert_score']:.4f}, CER: {metric['nlp_metrics']['cer']:.4f}, SELF-BLEU: {metric['nlp_metrics']['self_bleu']:.4f}"
+            )
+
     def train_batch(self, batch: AudioTextBatch, train: bool) -> tp.Tuple[dict, int]:
         """
         The main place we do forward/backward.
@@ -647,6 +709,28 @@ class TrainingSessionV2(TrainingSession):
 
                 if test_sizes[test] == 0:
                     continue
+
+                final_metrics = {
+                    key: sum([m[key] for m in all_metrics]) / test_sizes[test]
+                    for key in all_metrics[0].keys()
+                }
+                self.metrics["test"][test].append(final_metrics)
+
+                self.log_no_print("\n")
+                self.log_no_print(
+                    f'Test {test} done. Mel Loss: {final_metrics["mel_loss"]:.4f}, Clip Loss: {final_metrics["clip_loss"]:.4f}, MSE: {final_metrics["mse_loss"]:.4f}'
+                )
+                self.log_no_print(
+                    f"Mel Accuracy: {final_metrics['accuracy']:.4f}, Top 5: {final_metrics['top_5_accuracy']:.4f}, Top 10: {final_metrics['top_10_accuracy']:.4f}"
+                )
+                self.log_no_print(
+                    f"BLEU: {final_metrics['nlp_metrics']['bleu']:.4f}, ROUGE-1: {final_metrics['nlp_metrics']['rouge-f']:.4f}, BERT: {final_metrics['nlp_metrics']['bert_score']:.4f}, CER: {final_metrics['nlp_metrics']['cer']:.4f}, SELF-BLEU: {final_metrics['nlp_metrics']['self_bleu']:.4f}"
+                )
+
+                test_dataloader[test].stop()
+
+        elaps = (time.time() - start_time) / 60
+        self.log_print(f"Testing done in {elaps:.2f}m.")
 
     def test_batch(self, batch: AudioTextBatch) -> tp.Tuple[dict, int]:
         """
