@@ -103,7 +103,7 @@ class TrainingSessionV1(TrainingSession):
         gpu_ok = False
         if torch.cuda.is_available():
             major, minor = torch.cuda.get_device_capability()
-            if major >= 7:
+            if major >= 8:
                 gpu_ok = True
 
         # (Optional) compile if on modern GPU

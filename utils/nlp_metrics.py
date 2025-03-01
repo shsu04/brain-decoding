@@ -78,7 +78,7 @@ def nlp_metrics(
     use_bert_score: bool = True,
     use_cer: bool = True,
     use_self_bleu: bool = True,
-    bert_model_type: str = "microsoft/MiniLM-L12-H384-uncased",
+    bert_model_type: str = "bert-base-uncased",
     batch_size: int = 256,
 ) -> dict:
     """

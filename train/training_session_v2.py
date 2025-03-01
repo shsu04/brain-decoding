@@ -9,7 +9,11 @@ import json
 from torch.optim import AdamW
 import os
 import torch
-from transformers import WhisperModel, WhisperTokenizerFast
+from transformers import (
+    WhisperModel,
+    WhisperTokenizerFast,
+    WhisperForConditionalGeneration,
+)
 import torch.nn as nn
 from peft import PeftModel, PeftConfig
 
@@ -103,7 +107,7 @@ class TrainingSessionV2(TrainingSession):
         gpu_ok = False
         if torch.cuda.is_available():
             major, minor = torch.cuda.get_device_capability()
-            if major >= 7:
+            if major >= 8:
                 gpu_ok = True
 
         # (Optional) compile if on modern GPU
@@ -126,10 +130,10 @@ class TrainingSessionV2(TrainingSession):
             anneal_strategy="cos",
         )
 
+        # For testing, no timestamps.
         self.tokenizer = WhisperTokenizerFast.from_pretrained(
             self.config.audio_model,
             predict_timestamps=False,
-            predict_timestamps=self.config.decode_timestamps,
             add_prefix_space=True,
         )
 
@@ -525,7 +529,7 @@ class TrainingSessionV2(TrainingSession):
                             )
 
                             if self.adalora_steps >= self.config.adalora_config.tinit:
-                                self.model.encoder.base_model.update_and_allocate(
+                                self.model.decoder.base_model.update_and_allocate(
                                     self.adalora_steps
                                 )
                             if self.adalora_steps == self.config.adalora_config.tinit:
@@ -1039,7 +1043,48 @@ class TrainingSessionV2(TrainingSession):
             pbar.update(1)
 
     def save(self, name: str):
-        pass
+        with torch.no_grad():
+
+            if not os.path.exists(self.save_path):
+                os.makedirs(self.save_path)
+
+            config = self.config.to_dict()
+            with open(self.save_path + "/training_config.json", "w") as jf:
+                json.dump(config, jf, indent=4)
+            ckp_path = f"{self.save_path}/{name}"
+            os.makedirs(ckp_path, exist_ok=True)
+
+            # Save model
+            torch.save(
+                {
+                    "config": self.config.to_dict(),
+                    "brain_encoder": self.model.brain_module.cpu().state_dict(),
+                    "conditions": self.model.brain_module.condition_to_idx,
+                },
+                f"{ckp_path}/brain_encoder.pt",
+            )
+            self.model.decoder.save_pretrained(f"{ckp_path}/adalora_adapter")
+
+            # Save metrics
+            torch.save(
+                {
+                    "metrics": self.metrics,
+                    "error": str(self.error) if self.error else "No errors.",
+                    "highest_epoch": self.highest_epoch,
+                    "highest_metrics": self.highest_metrics,
+                    "lowest_cer": self.lowest_cer,
+                    "highest_bert": self.highest_bert,
+                    "optimizer": self.optimizer.state_dict(),
+                    "adalora_steps": self.adalora_steps,
+                    "scaler": self.scaler.state_dict(),
+                },
+                f"{ckp_path}/metrics.pt",
+            )
+
+        self.model.to(self.device)
+        gc.collect()
+        torch.cuda.empty_cache()
+        return
 
 
 def load_training_session(
@@ -1050,4 +1095,73 @@ def load_training_session(
     cache_name: str = None,
     max_cache_size: int = 100,
 ):
-    pass
+    if not os.path.exists(save_path):
+        raise FileNotFoundError(f"Save path {save_path} does not exist.")
+
+    brain_ckp_path = os.path.join(save_path, "brain_encoder.pt")
+    if not os.path.exists(brain_ckp_path):
+        raise ValueError(f"Cannot find {brain_ckp_path}.")
+    brain_ckp = torch.load(brain_ckp_path, map_location="cpu")
+    config_dict = brain_ckp["config"]
+    config = TrainingConfigV2(
+        brain_encoder_config=None,
+        data_partition=None,
+    ).from_dict(config_dict)
+
+    ts = TrainingSessionV2(
+        config=config,
+        studies=studies,
+        data_path=data_path,
+        save_path="temp",
+        clear_cache=clear_cache,
+        cache_name=cache_name,
+        max_cache_size=max_cache_size,
+    )
+    ts.save_path = save_path
+
+    ts.model.brain_module.load_state_dict(brain_ckp["brain_encoder"])
+    if ts.model.brain_module.condition_to_idx != brain_ckp["conditions"]:
+        raise ValueError("Condition mismatch.")
+
+    adalora_adapter_path = os.path.join(save_path, "adalora_adapter")
+    if not os.path.exists(adalora_adapter_path):
+        raise ValueError(f"No adalora_adapter in {adalora_adapter_path}.")
+
+    whisper_model = WhisperForConditionalGeneration.from_pretrained(
+        config.audio_model,
+        low_cpu_mem_usage=True,
+        use_safetensors=True,
+    ).to(device)
+
+    peft_enc = PeftModel.from_pretrained(whisper_model, adalora_adapter_path)
+    adalora_config = PeftConfig.from_pretrained(adalora_adapter_path)
+    ts.model.adalora_config = adalora_config
+    ts.model.decoder = peft_enc
+
+    metrics_path = os.path.join(save_path, "metrics.pt")
+    if os.path.exists(metrics_path):
+        loaded = torch.load(metrics_path, map_location="cpu")
+        if "metrics" in loaded:
+            ts.metrics = loaded["metrics"]
+        else:
+            ts.metrics = {}
+        ts.highest_epoch = loaded.get("highest_epoch", 0)
+        ts.highest_metrics = loaded.get("highest_metrics", {})
+
+        ts.lowest_cer = loaded.get("lowest_cer", float("inf"))
+        ts.highest_bert = loaded.get("highest_bert", float("-inf"))
+        ts.adalora_steps = loaded.get("adalora_steps", 0)
+
+        if "optimizer" in loaded:
+            ts.optimizer.load_state_dict(loaded["optimizer"])
+        if "scaler" in loaded:
+            ts.scaler.load_state_dict(loaded["scaler"])
+        ts.error = loaded.get("error", None)
+    else:
+        ts.metrics = {}
+        ts.logger.warning(f"No metrics found at {metrics_path}.")
+
+    shutil.rmtree("temp")
+    gc.collect()
+    torch.cuda.empty_cache()
+    return ts

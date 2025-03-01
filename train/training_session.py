@@ -133,7 +133,7 @@ class TrainingSession(ABC):
         gpu_ok = False
         if torch.cuda.is_available():
             major, minor = torch.cuda.get_device_capability()
-            if major >= 7:
+            if major >= 8:
                 gpu_ok = True
 
         # Compile if on NVIDIA V100, A100, or H100 for faster training
