@@ -9,12 +9,14 @@ import pandas as pd
 import ray
 import torch
 from transformers import WhisperFeatureExtractor
+from transformers import WhisperTokenizerFast
 from typing import Dict, Tuple
 import torch
 import shutil
 from ray.exceptions import RayTaskError
 import traceback
 import pandas as pd
+import typing as tp
 
 
 from studies import Study, Recording
@@ -27,7 +29,8 @@ from dataloader.batch import Batch, BatchFetcher
 class AudioTextBatch(Batch):
     brain_segments: dict[str, torch.Tensor]
     audio_segments: torch.Tensor
-    transcript: list[str]
+    transcript: tp.Union[list[str], torch.Tensor]
+    transcript_attention_masks: tp.Optional[torch.Tensor]
     recording: Recording
 
 
@@ -57,6 +60,7 @@ class AudioTextBatchFetcher(BatchFetcher):
         audio_processor: str,
         n_jobs: int = 1,
         add_timestamps: bool = True,
+        tokenize: bool = True,
     ):
         """
         Arguments:
@@ -96,6 +100,15 @@ class AudioTextBatchFetcher(BatchFetcher):
         self.hop_length = hop_length
         self.audio_processor = WhisperFeatureExtractor.from_pretrained(audio_processor)
         self.add_timestamps = add_timestamps
+        self.tokenize = tokenize
+
+        self.tokenizer = None
+        if self.tokenize:
+            self.tokenizer = WhisperTokenizerFast.from_pretrained(
+                audio_processor,
+                predict_timestamps=add_timestamps,
+                add_prefix_space=True,
+            )
 
     def fetch(self, recording: Recording, cache: bool) -> AudioTextBatch:
         """
@@ -159,6 +172,20 @@ class AudioTextBatchFetcher(BatchFetcher):
                 time_resolution=0.02,
             )
 
+            attention_mask = None
+            if self.tokenize:
+                encoded = self.tokenizer(
+                    transcript,
+                    return_tensors="pt",
+                    padding="max_length",
+                    truncation=True,
+                    max_length=16 * int(self.window_size),
+                )
+                transcript, transcript_attention_masks = (
+                    encoded["input_ids"],
+                    encoded["attention_mask"],
+                )
+
             # DIMENSION CHECKS
             # if not all of the brain segments are the same length
             if not all(
@@ -188,6 +215,7 @@ class AudioTextBatchFetcher(BatchFetcher):
                 brain_segments=brain_segments,
                 audio_segments=audio_segments,
                 transcript=transcript,
+                transcript_attention_masks=attention_mask,
                 recording=recording,
             )
 
