@@ -191,15 +191,19 @@ class WhisperDecoder(nn.Module):
             if mel.size(1) != 80:
                 raise ValueError(f"mel must be [B, 80, T], got {mel.size(1)} channels")
             input_features = self.pad_truncate(mel, max_frames=3000)
+            quantizer_metrics, channel_weights, hidden_outputs = None, None, None
         elif x is not None:
-            predicted_mel, _, _, _ = self.brain_module(
-                x,
-                recording,
-                conditions,
-                mel,
-                train=False,
-                return_hidden_outputs=return_hidden_outputs,
+            predicted_mel, quantizer_metrics, channel_weights, hidden_outputs = (
+                self.brain_module(
+                    x,
+                    recording,
+                    conditions,
+                    mel,
+                    train=False,
+                    return_hidden_outputs=return_hidden_outputs,
+                )
             )
+
             input_features = self.pad_truncate(predicted_mel, max_frames=3000)
         else:
             raise ValueError("Please provide either `x` (MEG) or `mel` to generate.")
@@ -210,7 +214,13 @@ class WhisperDecoder(nn.Module):
             max_new_tokens=max_new_tokens,
             **gen_kwargs,
         )
-        return token_ids
+        return (
+            token_ids,
+            input_features,
+            quantizer_metrics,
+            channel_weights,
+            hidden_outputs,
+        )
 
     def pad_truncate(
         self, tensor: torch.Tensor, max_frames: int = 3000

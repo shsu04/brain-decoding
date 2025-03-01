@@ -9,7 +9,7 @@ import json
 from torch.optim import AdamW
 import os
 import torch
-from transformers import WhisperModel
+from transformers import WhisperModel, WhisperTokenizerFast
 import torch.nn as nn
 from peft import PeftModel, PeftConfig
 
@@ -21,6 +21,8 @@ from losses.cos_sim import cosine_similarity_loss
 from losses.mmd import MMDLoss
 from train.training_session import TrainingSession
 from models.whisper_decoder import WhisperDecoder
+from utils.nlp_metrics import nlp_metrics
+
 
 device = "cuda"
 
@@ -115,13 +117,20 @@ class TrainingSessionV2(TrainingSession):
                 mode="reduce-overhead",
             )
 
-        # Example scheduler
+        # scheduler
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
             self.optimizer,
             max_lr=self.config.learning_rate,
             total_steps=self.config.epochs * self.config.steps_per_epoch,
             pct_start=0.10,
             anneal_strategy="cos",
+        )
+
+        self.tokenizer = WhisperTokenizerFast.from_pretrained(
+            self.config.audio_model,
+            predict_timestamps=False,
+            predict_timestamps=self.config.decode_timestamps,
+            add_prefix_space=True,
         )
 
     def train(
@@ -172,7 +181,7 @@ class TrainingSessionV2(TrainingSession):
                 if batch is None:
                     break
                 try:
-                    results, num_batches = self.run_batch(batch, train=True)
+                    results, num_batches = self.train_batch(batch, train=True)
                     all_metrics.append(results)
                     total_batches += num_batches
                 except Exception as e:
@@ -190,7 +199,47 @@ class TrainingSessionV2(TrainingSession):
             dataloader.stop()
             pbar.close()
 
-    def run_batch(self, batch: AudioTextBatch, train: bool) -> tp.Tuple[dict, int]:
+            final_metrics = {
+                key: sum([m[key] for m in all_metrics]) / training_size
+                for key in all_metrics[0].keys()
+            }
+            self.metrics["train"].append(final_metrics)
+
+            # Print
+            self.log_no_print("\n")
+            self.log_no_print(
+                f'Epoch {epoch}, Loss: {final_metrics["loss"]:.4f}, CE Loss: {final_metrics["ce_loss"]:.4f}'
+            )
+            # Mel
+            self.log_no_print(
+                f"Mel Loss: {final_metrics['mel_loss']:.4f}, Clip Loss: {final_metrics['clip_loss']:.4f}, MSE: {final_metrics['mse_loss']:.4f}"
+            )
+            self.log_no_print(
+                f"Mel Accuracy: {final_metrics['accuracy']:.4f}, Top 5: {final_metrics['top_5_accuracy']:.4f}, Top 10: {final_metrics['top_10_accuracy']:.4f}"
+            )
+            # Encoder
+            self.log_no_print(
+                f"Encoder Loss: {final_metrics['encoder_total_loss']:.4f}, Cos Sim: {final_metrics['encoder_cosine_similarity_loss']:.4f}, MSE: {final_metrics['encoder_mse_loss']:.4f}, Clip: {final_metrics['encoder_clip_loss']:.4f}, MMD: {final_metrics['encoder_mmd_loss']:.4f}"
+            )
+            self.log_no_print(
+                f"Encoder Accuracy: {final_metrics['encoder_accuracy']:.4f}, Top 5: {final_metrics['encoder_top_5_accuracy']:.4f}, Top 10: {final_metrics['encoder_top_10_accuracy']:.4f}"
+            )
+
+            # Testing
+            try:
+                with torch.no_grad():
+                    self.logger.info(f"Starting testing for epoch {epoch}.")
+                    self.test(
+                        buffer_size=buffer_size,
+                        num_workers=num_workers,
+                        max_cache_size=max_cache_size,
+                    )
+            except Exception as e:
+                self.log_print(f"Error in epoch {epoch} during testing, {e}")
+                self.save(f"error_epoch_{epoch}")
+                raise e
+
+    def train_batch(self, batch: AudioTextBatch, train: bool) -> tp.Tuple[dict, int]:
         """
         The main place we do forward/backward.
         """
@@ -403,31 +452,32 @@ class TrainingSessionV2(TrainingSession):
                     total_loss = mel_loss + encoder_loss + ce_loss
 
                     # Optimize
-                    if not torch.isnan(total_loss).any() and train:
-                        self.scaler.scale(total_loss).backward()
+                    if not torch.isnan(total_loss).any():
+                        if train:
+                            self.scaler.scale(total_loss).backward()
 
-                        # Clip gradients
-                        self.scaler.unscale_(self.optimizer)
-                        torch.nn.utils.clip_grad_norm_(
-                            self.model.parameters(), max_norm=3.0
-                        )
-
-                        if self.adalora_steps >= self.config.adalora_config.tinit:
-                            self.model.encoder.base_model.update_and_allocate(
-                                self.adalora_steps
-                            )
-                        if self.adalora_steps == self.config.adalora_config.tinit:
-                            self.log_print(
-                                f"Starting rank reallocation at recording {self.adalora_steps}."
+                            # Clip gradients
+                            self.scaler.unscale_(self.optimizer)
+                            torch.nn.utils.clip_grad_norm_(
+                                self.model.parameters(), max_norm=3.0
                             )
 
-                        # Step
-                        self.scaler.step(self.optimizer)
-                        self.scaler.update()
-                        self.optimizer.zero_grad()
+                            if self.adalora_steps >= self.config.adalora_config.tinit:
+                                self.model.encoder.base_model.update_and_allocate(
+                                    self.adalora_steps
+                                )
+                            if self.adalora_steps == self.config.adalora_config.tinit:
+                                self.log_print(
+                                    f"Starting rank reallocation at recording {self.adalora_steps}."
+                                )
 
-                        self.adalora_steps += 1
-                        self.scheduler.step()
+                            # Step
+                            self.scaler.step(self.optimizer)
+                            self.scaler.update()
+                            self.optimizer.zero_grad()
+
+                            self.adalora_steps += 1
+                            self.scheduler.step()
 
                         # Accumulate losses
                         recording_mel_loss += mel_loss.detach().cpu().item()
@@ -472,7 +522,7 @@ class TrainingSessionV2(TrainingSession):
                         missed_batches += 1
 
                 except Exception as ex:
-                    self.log_print(f"Error in run_batch: {ex}")
+                    self.log_print(f"Error in train_batch: {ex}")
                     missed_recordings += end - start
                     missed_batches += 1
                     raise ex
@@ -527,7 +577,7 @@ class TrainingSessionV2(TrainingSession):
         }
 
         self.logger.info(
-            f"{recording.study_name} {recording.subject_id} sess {recording.session_id}, Loss: {metrics['loss']:.4f}"
+            f"{recording.study_name} {recording.subject_id} sess {recording.session_id}, Loss: {metrics['loss']:.4f}, CE Loss: {metrics['ce_loss']:.4f}"
         )
         # Mel
         self.logger.info(
@@ -543,16 +593,259 @@ class TrainingSessionV2(TrainingSession):
         self.logger.info(
             f"Encoder Accuracy: {metrics['encoder_accuracy']:.4f}, Top 5: {metrics['encoder_top_5_accuracy']:.4f}, Top 10: {metrics['encoder_top_10_accuracy']:.4f}"
         )
-        # Decoder
-        self.logger.info(f"CE Loss: {metrics['ce_loss']:.4f}")
-
         gc.collect()
         torch.cuda.empty_cache()
 
         return metrics, total_samples
 
     def test(self, buffer_size: int, num_workers: int, max_cache_size: int):
-        pass
+        self.model.eval().to(self.device)
+        self.set_seed(int(self.config.seed))
+        start_time = time.time()
+
+        test_datasets, test_sizes, test_dataloader = {}, {}, {}
+
+        # Gather test set and loader
+        for test in self.dataset["test"].keys():
+
+            if len(self.dataset["test"][test]) < self.config.random_test_size:
+                test_datasets[test] = self.dataset["test"][test]
+            else:
+                test_datasets[test] = random.sample(
+                    self.dataset["test"][test], self.config.random_test_size
+                )
+
+            test_sizes[test] = len(test_datasets[test])
+            test_dataloader[test] = self.get_dataloader(
+                buffer_size=test_sizes[test],
+                num_workers=test_sizes[test],
+                max_cache_size=max_cache_size,
+                # NLP eval without timestamps
+                add_timestamps=False,
+                tokenize=False,
+            )
+            test_dataloader[test].start_fetching(test_datasets[test], cache=True)
+
+        # Test loop
+        with torch.no_grad():
+            for test in test_datasets:
+                all_metrics, total_batches = [], 0
+                while True:
+                    batch = test_dataloader[test].get_recording()
+                    if batch is None:
+                        break
+                    try:
+                        results, num_batches = self.test_batch(batch)
+                        all_metrics.append(results)
+                        total_batches += num_batches
+                    except Exception as e:
+                        self.log_print(f"Error in testing {test}, skipping. {e}")
+                        test_sizes[test] -= 1
+                        continue
+                    del batch
+                    gc.collect()
+
+                if test_sizes[test] == 0:
+                    continue
+
+    def test_batch(self, batch: AudioTextBatch) -> tp.Tuple[dict, int]:
+        """
+        New function for testing batch, eval only on mel-level and NLP metrics
+        """
+        (
+            brain_segments,
+            audio_segments,
+            transcripts,
+            transcript_attn_masks,
+            recording,
+        ) = (
+            batch.brain_segments["all"],
+            batch.audio_segments,
+            batch.transcript,
+            batch.transcript_attention_masks,
+            batch.recording,
+        )
+
+        brain_segments, audio_segments, transcripts, transcript_attn_masks = (
+            self.discard_nan(
+                brain_segments, audio_segments, transcripts, transcript_attn_masks
+            )
+        )
+
+        # Accumulators for mel and total losses
+        recording_mel_loss = 0.0
+        recording_clip_loss = 0.0
+        recording_mse_loss = 0.0
+
+        # For mel-level clip correctness
+        recording_correct = 0.0
+        recording_top_5 = 0.0
+        recording_top_10 = 0.0
+
+        # For NLP metrics
+        recording_nlp_metrics = []
+
+        # To correctly average the losses
+        total_samples = brain_segments.shape[0]
+        missed_recordings = 0
+        missed_batches = 0
+
+        conditions = {
+            "study": f"{recording.study_name}",
+            "subject": f"{recording.study_name}_{recording.subject_id}",
+        }
+
+        # Random shuffle
+        shuffle_idx = torch.randperm(total_samples)
+        brain_segments = brain_segments[shuffle_idx]  # [B, C, T]
+        audio_segments = audio_segments[shuffle_idx]  # [B, 80, T']
+        transcripts = transcripts[shuffle_idx]  # [B, T']
+        transcript_attn_masks = transcript_attn_masks[shuffle_idx]  # [B, T']
+
+        # For slicing
+        batch_indices = [
+            (i, min(i + self.config.batch_size, total_samples))
+            for i in range(0, total_samples, self.config.batch_size)
+        ]
+
+        with torch.autocast(device_type=device, dtype=self.autocast_dtype):
+            for start, end in batch_indices:
+                try:
+                    brain_batch = brain_segments[start:end].to(device)
+                    audio_batch = audio_segments[start:end].to(device)
+                    transcript_batch = transcripts[start:end].to(device)
+                    transcript_attn_mask_batch = transcript_attn_masks[start:end].to(
+                        device
+                    )
+                    # Encoder attention mask
+                    pad_len = 3000 - audio_batch.size(2)
+                    encoder_attention_mask = torch.zeros(
+                        audio_batch.size(0), 3000, device=device
+                    )  # [B, T]
+                    encoder_attention_mask[:, : audio_batch.size(2)] = 1
+
+                    # Model generate
+                    (
+                        token_ids,  # [B, T]
+                        x,  # [B, 80, T']
+                        quantizer_metrics,
+                        channel_weights,
+                        hidden_outputs,
+                    ) = self.model.generate(
+                        x=[brain_batch],
+                        recording=[recording],
+                        conditions=[conditions],
+                        mel=None,
+                        max_new_tokens=128,
+                        attention_mask=encoder_attention_mask,
+                        return_hidden_outputs=False,
+                    )
+                    del (
+                        quantizer_metrics,
+                        encoder_attention_mask,
+                        transcript_attn_mask_batch,
+                        channel_weights,
+                        hidden_outputs,
+                    )
+                    gc.collect()
+
+                    # Mel alignment objectives
+                    if self.config.mel_alignment_objectives["mse_loss"] > 0:
+                        mse_l = self.mse_loss(pred=x, target=audio_batch)
+                    else:
+                        mse_l = torch.tensor(0.0).to(device)
+
+                    if self.config.mel_alignment_objectives["clip_loss"] > 0:
+                        clip_mel = self.clip_loss_mel(x_1=x, x_2=audio_batch, mel=True)
+                        mel_clip_loss, mel_clip_metrics = (
+                            clip_mel["loss"],
+                            clip_mel["metrics"],
+                        )
+                    else:
+                        mel_clip_loss = torch.tensor(0.0).to(device)
+                        mel_clip_metrics = {
+                            "correct": 0,
+                            "top_5_correct": 0,
+                            "top_10_correct": 0,
+                        }
+
+                    mel_loss = (
+                        self.config.mel_alignment_objectives["mse_loss"] * mse_l
+                        + self.config.mel_alignment_objectives["clip_loss"]
+                        * mel_clip_loss
+                    )
+
+                    # Decode and clean up
+                    token_ids = self.tokenizer.batch_decode(
+                        sequences=token_ids,
+                        skip_special_tokens=True,
+                        decode_with_timestamps=False,
+                        clean_up_tokenization_spaces=True,
+                    )
+
+                    # Accumulate Mel
+                    recording_mel_loss += mel_loss.detach().cpu().item()
+                    recording_clip_loss += mel_clip_loss.detach().cpu().item()
+                    recording_mse_loss += mse_l.detach().cpu().item()
+                    recording_correct += mel_clip_metrics["correct"]
+                    recording_top_5 += mel_clip_metrics["top_5_correct"]
+                    recording_top_10 += mel_clip_metrics["top_10_correct"]
+
+                    # Accumulate NLP metrics
+                    recording_nlp_metrics.append(
+                        nlp_metrics(
+                            predictions=token_ids,
+                            references=transcript_batch,
+                            batch_size=self.config.batch_size,
+                        )
+                    )
+
+                except Exception as ex:
+                    self.log_print(f"Error in test_batch: {ex}")
+                    missed_recordings += end - start
+                    missed_batches += 1
+                    raise ex
+
+        # End of batch loop
+        total_samples -= missed_recordings
+        batches = len(batch_indices) - missed_batches
+
+        metrics = {
+            "mel_loss": recording_mel_loss / batches if batches > 0 else 0.0,
+            "clip_loss": recording_clip_loss / batches if batches > 0 else 0.0,
+            "mse_loss": recording_mse_loss / batches if batches > 0 else 0.0,
+            # Accuracy
+            "accuracy": recording_correct / total_samples if total_samples > 0 else 0.0,
+            "top_5_accuracy": (
+                recording_top_5 / total_samples if total_samples > 0 else 0.0
+            ),
+            "top_10_accuracy": (
+                recording_top_10 / total_samples if total_samples > 0 else 0.0
+            ),
+            # NLP metrics
+            "nlp_metrics": {
+                key: sum([m[key] for m in recording_nlp_metrics]) / batches
+                for key in recording_nlp_metrics[0].keys()
+            },
+        }
+
+        self.logger.info(
+            f"Test {recording.study_name} {recording.subject_id} sess {recording.session_id}"
+        )
+        self.logger.info(
+            f"Mel Loss: {metrics['mel_loss']:.4f}, Clip Loss: {metrics['clip_loss']:.4f}, MSE: {metrics['mse_loss']:.4f}"
+        )
+        self.logger.info(
+            f"Mel Accuracy: {metrics['accuracy']:.4f}, Top 5: {metrics['top_5_accuracy']:.4f}, Top 10: {metrics['top_10_accuracy']:.4f}"
+        )
+        self.logger.info(
+            f"BLEU: {metrics['nlp_metrics']['bleu']:.4f}, ROUGE-1: {metrics['nlp_metrics']['rouge-f']:.4f}, BERT: {metrics['nlp_metrics']['bert_score']:.4f}, CER: {metrics['nlp_metrics']['cer']:.4f}, SELF-BLEU: {metrics['nlp_metrics']['self_bleu']:.4f}"
+        )
+
+        gc.collect()
+        torch.cuda.empty_cache()
+
+        return metrics, total_samples
 
     def get_dataloader(
         self,
