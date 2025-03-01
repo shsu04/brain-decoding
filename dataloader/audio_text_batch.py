@@ -18,11 +18,8 @@ import traceback
 import pandas as pd
 import typing as tp
 
-
 from studies import Study, Recording
-
-# Change back when in .py file
-from dataloader.batch import Batch, BatchFetcher
+from .batch import Batch, BatchFetcher
 
 
 @dataclass
