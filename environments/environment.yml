@@ -1,11 +1,17 @@
 name: brain
 channels:
-  - conda-forge
+  - pytorch
   - defaults
+  - conda-forge
+  - nvidia
 dependencies:
   # Core direct requirements
-  - python=3.11.7
+  - python=3.11
   - transformers=4.37.2
+  - pytorch::pytorch=2.4.1
+  - pytorch::torchvision
+  - pytorch::torchaudio
+  - pytorch::pytorch-cuda=11.8
   - numpy=1.26.3
   - pandas=2.1.4
   - scipy=1.12.0
