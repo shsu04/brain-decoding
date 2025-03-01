@@ -172,7 +172,7 @@ class AudioTextBatchFetcher(BatchFetcher):
                 time_resolution=0.02,
             )
 
-            attention_mask = None
+            transcript_attention_masks = None
             if self.tokenize:
                 encoded = self.tokenizer(
                     transcript,
@@ -215,7 +215,7 @@ class AudioTextBatchFetcher(BatchFetcher):
                 brain_segments=brain_segments,
                 audio_segments=audio_segments,
                 transcript=transcript,
-                transcript_attention_masks=attention_mask,
+                transcript_attention_masks=transcript_attention_masks,
                 recording=recording,
             )
 
