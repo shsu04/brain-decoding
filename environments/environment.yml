@@ -26,6 +26,7 @@ dependencies:
   # Utils (direct)
   - tqdm=4.66.4
   - ipykernel
+  - nltk
   
   # Pip packages (direct)
   - pip
@@ -40,4 +41,7 @@ dependencies:
     - seaborn
     - osfclient
     - peft==0.10.0
+    - rouge-score
+    - python-Levenshtein
+    - bert-score
 
