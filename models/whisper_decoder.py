@@ -211,10 +211,10 @@ class WhisperDecoder(nn.Module):
     @torch.no_grad()
     def generate(
         self,
-        x: Optional[torch.Tensor] = None,
-        recording: tp.List[Recording] = None,
-        conditions: tp.List[tp.Dict[str, str]] = None,
-        mel: tp.List[torch.Tensor] = None,
+        x: torch.Tensor = None,
+        recording: Recording = None,
+        conditions: tp.Dict[str, str] = None,
+        mel: torch.Tensor = None,
         max_new_tokens: int = 128,
         attention_mask: Optional[torch.Tensor] = None,
         return_hidden_outputs: bool = False,
@@ -242,10 +242,10 @@ class WhisperDecoder(nn.Module):
         elif x is not None:
             predicted_mel, quantizer_metrics, channel_weights, hidden_outputs = (
                 self.brain_module(
-                    x,
-                    recording,
-                    conditions,
-                    mel,
+                    [x],
+                    [recording],
+                    [conditions],
+                    mel=None,
                     train=False,
                     return_hidden_outputs=return_hidden_outputs,
                 )

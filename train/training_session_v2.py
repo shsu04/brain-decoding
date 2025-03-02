@@ -302,7 +302,7 @@ class TrainingSessionV2(TrainingSession):
                 f"Mel accuracy: {metric['accuracy']:.4f}, Top 5: {metric['top_5_accuracy']:.4f}, Top 10: {metric['top_10_accuracy']:.4f}"
             )
             self.log_print(
-                f"BLEU: {metric['nlp_metrics']['bleu']:.4f}, ROUGE-1: {metric['nlp_metrics']['rouge-f']:.4f}, BERT: {metric['nlp_metrics']['bert_score']:.4f}, CER: {metric['nlp_metrics']['cer']:.4f}, SELF-BLEU: {metric['nlp_metrics']['self_bleu']:.4f}"
+                f"BLEU: {metric['nlp_metrics']['bleu']:.4f}, ROUGE-1: {metric['nlp_metrics']['rouge_f']:.4f}, BERT: {metric['nlp_metrics']['bert_score']:.4f}, CER: {metric['nlp_metrics']['cer']:.4f}, SELF-BLEU: {metric['nlp_metrics']['self_bleu']:.4f}"
             )
 
     def run_batch(self, batch: AudioTextBatch, train: bool) -> tp.Tuple[dict, int]:
@@ -688,7 +688,8 @@ class TrainingSessionV2(TrainingSession):
                 max_cache_size=max_cache_size,
                 # NLP eval without timestamps
                 add_timestamps=False,
-                tokenize=False,
+                # We decode when needed to avoid indexing issues
+                tokenize=True,
             )
             test_dataloader[test].start_fetching(test_datasets[test], cache=True)
 
@@ -728,7 +729,7 @@ class TrainingSessionV2(TrainingSession):
                     f"Mel Accuracy: {final_metrics['accuracy']:.4f}, Top 5: {final_metrics['top_5_accuracy']:.4f}, Top 10: {final_metrics['top_10_accuracy']:.4f}"
                 )
                 self.log_no_print(
-                    f"BLEU: {final_metrics['nlp_metrics']['bleu']:.4f}, ROUGE-1: {final_metrics['nlp_metrics']['rouge-f']:.4f}, BERT: {final_metrics['nlp_metrics']['bert_score']:.4f}, CER: {final_metrics['nlp_metrics']['cer']:.4f}, SELF-BLEU: {final_metrics['nlp_metrics']['self_bleu']:.4f}"
+                    f"BLEU: {final_metrics['nlp_metrics']['bleu']:.4f}, ROUGE-1: {final_metrics['nlp_metrics']['rouge_f']:.4f}, BERT: {final_metrics['nlp_metrics']['bert_score']:.4f}, CER: {final_metrics['nlp_metrics']['cer']:.4f}, SELF-BLEU: {final_metrics['nlp_metrics']['self_bleu']:.4f}"
                 )
 
                 test_dataloader[test].stop()
@@ -820,9 +821,9 @@ class TrainingSessionV2(TrainingSession):
                         channel_weights,
                         hidden_outputs,
                     ) = self.model.generate(
-                        x=[brain_batch],
-                        recording=[recording],
-                        conditions=[conditions],
+                        x=brain_batch,
+                        recording=recording,
+                        conditions=conditions,
                         mel=None,
                         max_new_tokens=int(16 * self.config.window_size),
                         attention_mask=encoder_attention_mask,
@@ -862,15 +863,21 @@ class TrainingSessionV2(TrainingSession):
                         + self.config.mel_alignment_objectives["clip_loss"]
                         * mel_clip_loss
                     )
-
-                    # Decode and clean up
+                    
+                    # Decode and clean up predictions and references
                     token_ids = self.tokenizer.batch_decode(
                         sequences=token_ids,
                         skip_special_tokens=True,
                         decode_with_timestamps=False,
                         clean_up_tokenization_spaces=True,
                     )
-
+                    transcript_batch = self.tokenizer.batch_decode(
+                        sequences=transcript_batch,
+                        skip_special_tokens=True,
+                        decode_with_timestamps=False,
+                        clean_up_tokenization_spaces=True,
+                    )
+                    
                     # Accumulate Mel
                     recording_mel_loss += mel_loss.detach().cpu().item()
                     recording_clip_loss += mel_clip_loss.detach().cpu().item()
@@ -878,7 +885,7 @@ class TrainingSessionV2(TrainingSession):
                     recording_correct += mel_clip_metrics["correct"]
                     recording_top_5 += mel_clip_metrics["top_5_correct"]
                     recording_top_10 += mel_clip_metrics["top_10_correct"]
-
+                    
                     # Accumulate NLP metrics
                     recording_nlp_metrics.append(
                         nlp_metrics(
@@ -927,7 +934,7 @@ class TrainingSessionV2(TrainingSession):
             f"Mel Accuracy: {metrics['accuracy']:.4f}, Top 5: {metrics['top_5_accuracy']:.4f}, Top 10: {metrics['top_10_accuracy']:.4f}"
         )
         self.logger.info(
-            f"BLEU: {metrics['nlp_metrics']['bleu']:.4f}, ROUGE-1: {metrics['nlp_metrics']['rouge-f']:.4f}, BERT: {metrics['nlp_metrics']['bert_score']:.4f}, CER: {metrics['nlp_metrics']['cer']:.4f}, SELF-BLEU: {metrics['nlp_metrics']['self_bleu']:.4f}"
+            f"BLEU: {metrics['nlp_metrics']['bleu']:.4f}, ROUGE-1: {metrics['nlp_metrics']['rouge_f']:.4f}, BERT: {metrics['nlp_metrics']['bert_score']:.4f}, CER: {metrics['nlp_metrics']['cer']:.4f}, SELF-BLEU: {metrics['nlp_metrics']['self_bleu']:.4f}"
         )
 
         gc.collect()

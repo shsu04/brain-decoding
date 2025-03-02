@@ -68,7 +68,6 @@ def compute_self_bleu(generated_texts: list[str]) -> float:
         all_scores.append(avg_score)
     return sum(all_scores) / len(all_scores) if all_scores else 0
 
-
 def nlp_metrics(
     predictions: list[str],
     references: list[str],
@@ -84,6 +83,9 @@ def nlp_metrics(
     """
     Computes various NLP metrics over a batch of prediction-reference pairs (same length).
 
+    Before any metric is computed, this function filters out any prediction-reference pair
+    where either the prediction or the reference is an empty string.
+    
     :param predictions: List of predicted strings of length N.
     :param references: List of reference strings of length N.
     :param use_normalization: If True, applies basic_tokenize for metrics that benefit from it.
@@ -93,10 +95,23 @@ def nlp_metrics(
     :param use_cer: If True, computes Character Error Rate (CER) across samples.
     :param use_self_bleu: If True, computes Self-BLEU over all predictions (measures diversity).
     :param bert_model_type: Model to use for BERTScore (default is "bert-base-uncased").
-                           e.g., "microsoft/MiniLM-L12-H384-uncased" is smaller/faster.
-
+    :param batch_size: Batch size to use for BERTScore computation.
     :return: Dictionary with average metric values.
     """
+    # Filter out pairs with empty predictions or references
+    filtered = [(p, r) for p, r in zip(predictions, references) if p.strip() != "" and r.strip() != ""]
+    if not filtered:
+        return {
+            "bleu": 0,
+            "rouge_f": 0,
+            "bert_score": 0,
+            "cer": 0,
+            "self_bleu": 0,
+        }
+    predictions, references = zip(*filtered)
+    predictions = list(predictions)
+    references = list(references)
+
     metrics = {}
     n = len(predictions)
 
@@ -123,12 +138,11 @@ def nlp_metrics(
     if use_rouge_f:
         for ref_toks, pred_toks in zip(tokenized_refs, tokenized_preds):
             rouge_f_scores.append(compute_rouge_1_f(ref_toks, pred_toks))
-        metrics["rouge_f"] = (
-            sum(rouge_f_scores) / len(rouge_f_scores) if rouge_f_scores else 0
-        )
+        metrics["rouge_f"] = sum(rouge_f_scores) / len(rouge_f_scores) if rouge_f_scores else 0
 
     # 3) BERTScore in one batch (avoids per-sample overhead)
     if use_bert_score:
+        from bert_score import score  # in case not imported yet
         P, R, F1 = score(
             cands=predictions,
             refs=references,
