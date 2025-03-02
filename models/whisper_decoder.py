@@ -188,9 +188,11 @@ class WhisperDecoder(nn.Module):
             output_hidden_states=False,  # we only want final encoder hidden state
             return_dict=True,
         )
+        
+        x = self.pad_truncate(x, max_frames=T)
 
         # final encoder hidden state -> outputs.encoder_last_hidden_state
-        encoder_last_hidden_state = outputs.encoder_last_hidden_state
+        encoder_last_hidden_state = outputs.encoder_last_hidden_state[:, :T, :]
 
         ce_loss = outputs.loss if labels is not None else None
 
@@ -236,7 +238,7 @@ class WhisperDecoder(nn.Module):
             if mel.size(1) != 80:
                 raise ValueError(f"mel must be [B, 80, T], got {mel.size(1)} channels")
             input_features = self.pad_truncate(mel, max_frames=3000)
-            quantizer_metrics, channel_weights, hidden_outputs = None, None, None
+            quantizer_metrics, channel_weights, hidden_outputs, T = None, None, None, mel.size(2)
         elif x is not None:
             predicted_mel, quantizer_metrics, channel_weights, hidden_outputs = (
                 self.brain_module(
@@ -248,8 +250,8 @@ class WhisperDecoder(nn.Module):
                     return_hidden_outputs=return_hidden_outputs,
                 )
             )
-
             input_features = self.pad_truncate(predicted_mel, max_frames=3000)
+            T = predicted_mel.size(2)
         else:
             raise ValueError("Please provide either `x` (MEG) or `mel` to generate.")
 
@@ -259,6 +261,9 @@ class WhisperDecoder(nn.Module):
             max_new_tokens=max_new_tokens,
             **gen_kwargs,
         )
+        
+        input_features = self.pad_truncate(input_features, max_frames=T)
+        
         return (
             token_ids,
             input_features,

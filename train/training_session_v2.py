@@ -465,14 +465,14 @@ class TrainingSessionV2(TrainingSession):
 
                     # Encoder alignment objectives
                     if self.config.latent_alignment_objectives["cosine_similarity"] > 0:
-                        encoder_cos_sim_loss = cosine_similarity_loss(
+                        encoder_cos_sim_loss = self.cosine_similarity_loss(
                             frozen_encoder_last_hidden_state, encoder_last_hidden_state
                         )
                     else:
                         encoder_cos_sim_loss = torch.tensor(0.0).to(device)
 
                     if self.config.latent_alignment_objectives["mse_loss"] > 0:
-                        encoder_mse_loss = mse_loss_per_batch(
+                        encoder_mse_loss = self.mse_loss_per_batch(
                             frozen_encoder_last_hidden_state, encoder_last_hidden_state
                         )
                     else:
@@ -824,7 +824,7 @@ class TrainingSessionV2(TrainingSession):
                         recording=[recording],
                         conditions=[conditions],
                         mel=None,
-                        max_new_tokens=128,
+                        max_new_tokens=int(16 * self.config.window_size),
                         attention_mask=encoder_attention_mask,
                         return_hidden_outputs=False,
                     )
