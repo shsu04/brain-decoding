@@ -76,7 +76,7 @@ def download_radboud(
         os.makedirs(root_dir)
 
     # Download
-    child = pexpect.spawn(f"{downloader} get {repo_path} {root_dir}")
+    child = pexpect.spawn(f"{downloader} get -n 20 {repo_path} {root_dir}")
     done = False
     while not done:
         try:
@@ -262,43 +262,43 @@ def compute_sha256(filepath):
 
 
 def verify_manifest(manifest_path, root_dir="."):
-    """
-    Verify the integrity of files listed in a manifest.
-
-    :param manifest_path: Path to the manifest file.
-    :param root_dir: Root directory where files are located.
-    """
+    
     if not os.path.isfile(manifest_path):
         print(f"Manifest file not found: {manifest_path}")
         return
 
+    # Step 1: Gather lines from the manifest
+    entries = []
     with open(manifest_path, "r") as manifest:
         for line_number, line in enumerate(manifest, start=1):
             line = line.strip()
-            if not line or line.startswith("#"):  # Skip empty lines and comments
+            if not line or line.startswith("#"):
                 continue
-
-            parts = line.split(" ", 1)  # Split into two parts: hash and filename
+            parts = line.split(" ", 1)
             if len(parts) != 2:
                 print(f"INVALID FORMAT on line {line_number}: {line}")
                 continue
-
             recorded_hash, filename = parts
-            # Remove any leading/trailing whitespace from filename
             filename = filename.strip()
-
-            # Construct the full path to the file
             file_path = os.path.join(root_dir, filename)
+            entries.append((file_path, recorded_hash, filename))
+            
+    print(f"Found {len(entries)} entries in the manifest. Computing checksums...")
 
-            # Compute the actual checksum
-            actual_hash = compute_sha256(file_path)
-
-            if actual_hash is None:
-                # File is missing or unreadable
-                if "emptyroom" not in filename:
-                    print(f"MISSING: {filename}")
-            elif actual_hash.lower() != recorded_hash.lower():
-                # Hashes do not match
-                if "emptyroom" not in filename:
-                    print(f"FAILED:   {filename}")
-    return
+    # Step 2: Use a process pool to compute checksums in parallel with a progress bar
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        future_to_entry = {executor.submit(compute_sha256, e[0]): e for e in entries}
+        
+        # Create a progress bar with total number of futures
+        with tqdm.tqdm(total=len(future_to_entry), desc="Checksums") as pbar:
+            for future in concurrent.futures.as_completed(future_to_entry):
+                actual_hash = future.result()
+                file_path, recorded_hash, filename = future_to_entry[future]
+                # Check the results
+                if actual_hash is None:
+                    if "emptyroom" not in filename:
+                        print(f"MISSING: {filename}")
+                elif actual_hash.lower() != recorded_hash.lower():
+                    if "emptyroom" not in filename:
+                        print(f"FAILED:   {filename}")
+                pbar.update(1)
