@@ -252,14 +252,14 @@ class TrainingSessionV2(TrainingSession):
             # Early stopping logic
             average_cer = (
                 sum(
-                    self.metrics["test"][test][-1]["nlp_metrics"]["cer"]
+                    self.metrics["test"][test][-1]["cer"]
                     for test in self.metrics["test"]
                 )
                 / 3
             )
             average_bleu = (
                 sum(
-                    self.metrics["test"][test][-1]["nlp_metrics"]["bleu"]
+                    self.metrics["test"][test][-1]["bleu"]
                     for test in self.metrics["test"]
                 )
                 / 3
@@ -302,7 +302,7 @@ class TrainingSessionV2(TrainingSession):
                 f"Mel accuracy: {metric['accuracy']:.4f}, Top 5: {metric['top_5_accuracy']:.4f}, Top 10: {metric['top_10_accuracy']:.4f}"
             )
             self.log_print(
-                f"BLEU: {metric['nlp_metrics']['bleu']:.4f}, ROUGE-1: {metric['nlp_metrics']['rouge_f']:.4f}, BERT: {metric['nlp_metrics']['bert_score']:.4f}, CER: {metric['nlp_metrics']['cer']:.4f}, SELF-BLEU: {metric['nlp_metrics']['self_bleu']:.4f}"
+                f"BLEU: {metric['bleu']:.4f}, ROUGE-1: {metric['rouge_f']:.4f}, BERT: {metric['bert_score']:.4f}, CER: {metric['cer']:.4f}, SELF-BLEU: {metric['self_bleu']:.4f}"
             )
 
     def run_batch(self, batch: AudioTextBatch, train: bool) -> tp.Tuple[dict, int]:
@@ -714,7 +714,7 @@ class TrainingSessionV2(TrainingSession):
 
                 if test_sizes[test] == 0:
                     continue
-
+                
                 final_metrics = {
                     key: sum([m[key] for m in all_metrics]) / test_sizes[test]
                     for key in all_metrics[0].keys()
@@ -729,7 +729,7 @@ class TrainingSessionV2(TrainingSession):
                     f"Mel Accuracy: {final_metrics['accuracy']:.4f}, Top 5: {final_metrics['top_5_accuracy']:.4f}, Top 10: {final_metrics['top_10_accuracy']:.4f}"
                 )
                 self.log_no_print(
-                    f"BLEU: {final_metrics['nlp_metrics']['bleu']:.4f}, ROUGE-1: {final_metrics['nlp_metrics']['rouge_f']:.4f}, BERT: {final_metrics['nlp_metrics']['bert_score']:.4f}, CER: {final_metrics['nlp_metrics']['cer']:.4f}, SELF-BLEU: {final_metrics['nlp_metrics']['self_bleu']:.4f}"
+                    f"BLEU: {final_metrics['bleu']:.4f}, ROUGE-1: {final_metrics['rouge_f']:.4f}, BERT: {final_metrics['bert_score']:.4f}, CER: {final_metrics['cer']:.4f}, SELF-BLEU: {final_metrics['self_bleu']:.4f}"
                 )
 
                 test_dataloader[test].stop()
@@ -904,6 +904,11 @@ class TrainingSessionV2(TrainingSession):
         # End of batch loop
         total_samples -= missed_recordings
         batches = len(batch_indices) - missed_batches
+        
+        final_nlp_metrics = {
+            key: sum([m[key] for m in recording_nlp_metrics]) / batches if batches > 0 else 0.0
+            for key in recording_nlp_metrics[0].keys()
+        }
 
         metrics = {
             "mel_loss": recording_mel_loss / batches if batches > 0 else 0.0,
@@ -917,12 +922,8 @@ class TrainingSessionV2(TrainingSession):
             "top_10_accuracy": (
                 recording_top_10 / total_samples if total_samples > 0 else 0.0
             ),
-            # NLP metrics
-            "nlp_metrics": {
-                key: sum([m[key] for m in recording_nlp_metrics]) / batches
-                for key in recording_nlp_metrics[0].keys()
-            },
         }
+        metrics.update(final_nlp_metrics)
 
         self.logger.info(
             f"Test {recording.study_name} {recording.subject_id} sess {recording.session_id}"
@@ -934,7 +935,7 @@ class TrainingSessionV2(TrainingSession):
             f"Mel Accuracy: {metrics['accuracy']:.4f}, Top 5: {metrics['top_5_accuracy']:.4f}, Top 10: {metrics['top_10_accuracy']:.4f}"
         )
         self.logger.info(
-            f"BLEU: {metrics['nlp_metrics']['bleu']:.4f}, ROUGE-1: {metrics['nlp_metrics']['rouge_f']:.4f}, BERT: {metrics['nlp_metrics']['bert_score']:.4f}, CER: {metrics['nlp_metrics']['cer']:.4f}, SELF-BLEU: {metrics['nlp_metrics']['self_bleu']:.4f}"
+            f"BLEU: {metrics['bleu']:.4f}, ROUGE-1: {metrics['rouge_f']:.4f}, BERT: {metrics['bert_score']:.4f}, CER: {metrics['cer']:.4f}, SELF-BLEU: {metrics['self_bleu']:.4f}"
         )
 
         gc.collect()
