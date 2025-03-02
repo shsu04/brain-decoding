@@ -472,7 +472,7 @@ class TrainingSessionV2(TrainingSession):
                         encoder_cos_sim_loss = torch.tensor(0.0).to(device)
 
                     if self.config.latent_alignment_objectives["mse_loss"] > 0:
-                        encoder_mse_loss = self.mse_loss_per_batch(
+                        encoder_mse_loss = self.mse_loss(
                             frozen_encoder_last_hidden_state, encoder_last_hidden_state
                         )
                     else:
