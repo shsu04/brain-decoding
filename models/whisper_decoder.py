@@ -169,6 +169,7 @@ class WhisperDecoder(nn.Module):
         # x = self.pad_channels(x, desired_channels=269, pad_value=0.0)
 
         # # Option 2: Simple Linear layer [B, C, T] -> [B, C', T]
+        # x = self.linear_layer(x, recording)
 
         x, quantizer_metrics, channel_weights, hidden_outputs = self.brain_module(
             x, recording, conditions, mel, train, return_hidden_outputs
