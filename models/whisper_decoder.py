@@ -91,6 +91,45 @@ class WhisperDecoder(nn.Module):
         trainable = sum(p.numel() for p in self.decoder.parameters() if p.requires_grad)
         print(f"AdaLora has {trainable} trainable params after target module setup.")
 
+        # # Simple Linear layer for studies, [B, C, T] -> [B, C', T]
+        # self.gwilliams2023_linear = nn.Conv1d(
+        #     208, 256, kernel_size=1, stride=1, padding=0, bias=False
+        # )
+        # self.armeini2022_linear = nn.Conv1d(
+        #     269, 256, kernel_size=1, stride=1, padding=0, bias=False
+        # )
+
+    def pad_channels(
+        self, x: list[torch.Tensor], desired_channels: int, pad_value: float = 0.0
+    ) -> List[torch.Tensor]:
+        out = []
+
+        for x_i in x:
+            B, C, T = x_i.shape
+            if C < desired_channels:
+                pad_channels = desired_channels - C
+                pad_tensor = torch.full(
+                    (B, pad_channels, T), pad_value, device=x_i.device, dtype=x_i.dtype
+                )
+                x_i = torch.cat([x_i, pad_tensor], dim=1)
+            elif C > desired_channels:
+                x_i = x_i[:, :desired_channels, :]
+            out.append(x_i)
+
+        return out
+
+    def linear_layer(
+        self, x: List[torch.Tensor], recording: List[Recording]
+    ) -> List[torch.Tensor]:
+        out = []
+        for i in range(len(x)):
+            if recording[i].study_name == "gwilliams2023":
+                out.append(self.gwilliams2023_linear(x[i]))
+            elif recording[i].study_name == "armeini2022":
+                out.append(self.armeini2022_linear(x[i]))
+            else:
+                raise ValueError(f"Unknown study name: {recording[0].study_name}")
+
     def forward(
         self,
         x: tp.List[torch.Tensor],
@@ -107,7 +146,7 @@ class WhisperDecoder(nn.Module):
         Forward pass for alignment + token-level cross-entropy.
 
         Args:
-            x: MEG data, shape [B, C, T]
+            x: MEG data, list of shape [B, C, T]
             recording: list of Recording object with the layout and subject index
             conditions: optional condition dict of conditions_type : condition_name
             mel: ground-truth mel for alignment, shape [B, 80, T_mel]
@@ -126,6 +165,11 @@ class WhisperDecoder(nn.Module):
               ce_loss: cross-entropy if labels' is provided, else None
             )
         """
+        # # Option 1: Pad to the same number of channels [B, C, T] -> [B, C', T]
+        # x = self.pad_channels(x, desired_channels=269, pad_value=0.0)
+
+        # # Option 2: Simple Linear layer [B, C, T] -> [B, C', T]
+
         x, quantizer_metrics, channel_weights, hidden_outputs = self.brain_module(
             x, recording, conditions, mel, train, return_hidden_outputs
         )  # [B, 80, T']
