@@ -265,7 +265,7 @@ class TrainingSessionV2(TrainingSession):
                 / 3
             )
 
-            if average_cer < self.lowest_cer and average_bleu > self.highest_bleu:
+            if average_cer < self.lowest_cer or average_bleu > self.highest_bleu:
                 self.lowest_cer = average_cer
                 self.highest_bleu = average_bleu
                 self.highest_epoch = epoch
@@ -274,6 +274,7 @@ class TrainingSessionV2(TrainingSession):
                     for test in self.metrics["test"].keys()
                 }
 
+                self.log_print("\n")
                 self.log_print(
                     f"New best epoch {epoch} with CER {average_cer:.4f} and BLEU {average_bleu:.4f}."
                 )
@@ -720,8 +721,7 @@ class TrainingSessionV2(TrainingSession):
                     for key in all_metrics[0].keys()
                 }
                 self.metrics["test"][test].append(final_metrics)
-
-                self.log_no_print("\n")
+                
                 self.log_no_print(
                     f'Test {test} done. Mel Loss: {final_metrics["mel_loss"]:.4f}, Clip Loss: {final_metrics["clip_loss"]:.4f}, MSE: {final_metrics["mse_loss"]:.4f}'
                 )
