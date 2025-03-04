@@ -44,25 +44,34 @@ class TrainingSession(ABC):
         # Batch logger
         general_logger = logging.getLogger(f"general_logger_{save_path}")
         general_logger.setLevel(logging.INFO)
-        if not general_logger.handlers:
-            fh = logging.FileHandler(
-                os.path.join(save_path, "training_log.log"), mode="w"
-            )
-            formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-            fh.setFormatter(formatter)
-            general_logger.addHandler(fh)
-            general_logger.propagate = False
 
+        # Remove any existing handlers from the logger so we can re-add in append mode
+        for h in list(general_logger.handlers):
+            general_logger.removeHandler(h)
+            h.close()
+
+        # Now add a fresh handler in append mode
+        fh = logging.FileHandler(
+            os.path.join(save_path, "training_log.log"), mode="a"  # <-- 'a' for append
+        )
+        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        fh.setFormatter(formatter)
+        general_logger.addHandler(fh)
+        general_logger.propagate = False
+        
         # Epoch Results Logger
         epoch_logger = logging.getLogger(f"epoch_logger_{save_path}")
         epoch_logger.setLevel(logging.INFO)
-        if not epoch_logger.handlers:
-            fh = logging.FileHandler(os.path.join(save_path, "epoch_log.log"), mode="w")
-            formatter = logging.Formatter("%(message)s")
-            fh.setFormatter(formatter)
-            epoch_logger.addHandler(fh)
-            epoch_logger.propagate = False
 
+        for h in list(epoch_logger.handlers):
+            epoch_logger.removeHandler(h)
+            h.close()
+
+        fh_epoch = logging.FileHandler(os.path.join(save_path, "epoch_log.log"), mode="a")
+        fh_epoch.setFormatter(logging.Formatter("%(message)s"))
+        epoch_logger.addHandler(fh_epoch)
+        epoch_logger.propagate = False
+        
         self.logger = general_logger
         self.epoch_logger = epoch_logger
 
