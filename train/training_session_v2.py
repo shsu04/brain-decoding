@@ -265,7 +265,7 @@ class TrainingSessionV2(TrainingSession):
                 / 3
             )
 
-            if average_cer < self.lowest_cer or average_bleu > self.highest_bleu:
+            if average_bleu > self.highest_bleu:
                 self.lowest_cer = average_cer
                 self.highest_bleu = average_bleu
                 self.highest_epoch = epoch
@@ -516,7 +516,7 @@ class TrainingSessionV2(TrainingSession):
                         * encoder_mmd_loss
                     )
 
-                    total_loss = mel_loss + encoder_loss + 5 * ce_loss
+                    total_loss = mel_loss + 0.01 * encoder_loss + 5 * ce_loss
 
                     # Optimize
                     if not torch.isnan(total_loss).any():
@@ -530,9 +530,8 @@ class TrainingSessionV2(TrainingSession):
                             )
 
                             if self.adalora_steps >= self.config.adalora_config.tinit:
-                                self.model.decoder.base_model.update_and_allocate(
-                                    self.adalora_steps
-                                )
+                                self.model.decoder.update_and_allocate(self.adalora_steps)
+                                
                             if self.adalora_steps == self.config.adalora_config.tinit:
                                 self.log_print(
                                     f"Starting rank reallocation at recording {self.adalora_steps}."
@@ -1120,12 +1119,12 @@ def load_training_session(
         config=config,
         studies=studies,
         data_path=data_path,
-        save_path="temp",
+        save_path=save_path,
         clear_cache=clear_cache,
         cache_name=cache_name,
         max_cache_size=max_cache_size,
     )
-    ts.save_path = save_path
+    # ts.save_path = save_path
 
     ts.model.brain_module.load_state_dict(brain_ckp["brain_encoder"])
     if ts.model.brain_module.condition_to_idx != brain_ckp["conditions"]:
@@ -1169,7 +1168,7 @@ def load_training_session(
         ts.metrics = {}
         ts.logger.warning(f"No metrics found at {metrics_path}.")
 
-    shutil.rmtree("temp")
+    # shutil.rmtree("temp")
     gc.collect()
     torch.cuda.empty_cache()
     return ts

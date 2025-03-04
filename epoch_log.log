@@ -1,0 +1,838 @@
+Data partitioned on studies ['gwilliams2023'].
+Train: 135, Unseen Task: 45, Unseen Subject: 12, Unseen Both: 4.
+
+
+
+Epoch 1, Loss: 25.5159, CE Loss: 3.8575
+Mel Loss: 6.2283, Clip Loss: 9.4892, MSE: 1.3369
+Mel Accuracy: 0.0049, Top 5: 0.0242, Top 10: 0.0469
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.9382, Clip Loss: 9.4637, MSE: 0.6499
+Mel Accuracy: 0.0063, Top 5: 0.0290, Top 10: 0.0535
+BLEU: 0.0000, ROUGE-1: 0.0744, BERT: 0.3779, CER: 0.9495, SELF-BLEU: 0.0000
+Test unseen_task done. Mel Loss: 5.9247, Clip Loss: 9.4453, MSE: 0.6437
+Mel Accuracy: 0.0040, Top 5: 0.0277, Top 10: 0.0558
+BLEU: 0.0000, ROUGE-1: 0.0879, BERT: 0.3900, CER: 0.9305, SELF-BLEU: 0.0000
+Test unseen_both done. Mel Loss: 5.9227, Clip Loss: 9.4453, MSE: 0.6388
+Mel Accuracy: 0.0049, Top 5: 0.0271, Top 10: 0.0530
+BLEU: 0.0000, ROUGE-1: 0.0922, BERT: 0.3850, CER: 0.9274, SELF-BLEU: 0.0000
+Testing done in 2.31m.
+Epoch 1 done in 13.00m. 0.10m/recording.
+
+
+New best epoch 1 with CER 0.9358 and BLEU 0.0000.
+Mel Loss: 6.2283, Clip Loss: 9.4892, MSE: 1.3369
+Mel accuracy: 0.0049, Top 5: 0.0242, Top 10: 0.0469
+
+
+Epoch 2, Loss: 14.6109, CE Loss: 1.7462
+Mel Loss: 5.8798, Clip Loss: 9.4891, MSE: 0.4659
+Mel Accuracy: 0.0054, Top 5: 0.0252, Top 10: 0.0499
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.7934, Clip Loss: 9.4619, MSE: 0.2907
+Mel Accuracy: 0.0050, Top 5: 0.0277, Top 10: 0.0560
+BLEU: 0.0000, ROUGE-1: 0.0087, BERT: 0.1872, CER: 0.5717, SELF-BLEU: 0.0000
+Test unseen_task done. Mel Loss: 5.7760, Clip Loss: 9.4429, MSE: 0.2757
+Mel Accuracy: 0.0059, Top 5: 0.0281, Top 10: 0.0603
+BLEU: 0.0000, ROUGE-1: 0.0000, BERT: 0.1752, CER: 0.5000, SELF-BLEU: 0.0000
+Test unseen_both done. Mel Loss: 5.7760, Clip Loss: 9.4429, MSE: 0.2756
+Mel Accuracy: 0.0062, Top 5: 0.0283, Top 10: 0.0517
+BLEU: 0.0000, ROUGE-1: 0.0000, BERT: 0.1766, CER: 0.5000, SELF-BLEU: 0.0000
+Testing done in 1.10m.
+Epoch 2 done in 11.45m. 0.08m/recording.
+
+
+New best epoch 2 with CER 0.5239 and BLEU 0.0000.
+Mel Loss: 5.8798, Clip Loss: 9.4891, MSE: 0.4659
+Mel accuracy: 0.0054, Top 5: 0.0252, Top 10: 0.0499
+
+
+Epoch 3, Loss: 12.6394, CE Loss: 1.3682
+Mel Loss: 5.7985, Clip Loss: 9.4821, MSE: 0.2731
+Mel Accuracy: 0.0122, Top 5: 0.0480, Top 10: 0.0857
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.7695, Clip Loss: 9.4352, MSE: 0.2709
+Mel Accuracy: 0.0289, Top 5: 0.1067, Top 10: 0.1755
+BLEU: 0.0000, ROUGE-1: 0.0754, BERT: 0.3437, CER: 3.1808, SELF-BLEU: 0.2045
+Test unseen_task done. Mel Loss: 5.7562, Clip Loss: 9.4226, MSE: 0.2566
+Mel Accuracy: 0.0208, Top 5: 0.0884, Top 10: 0.1629
+BLEU: 0.0000, ROUGE-1: 0.0695, BERT: 0.3389, CER: 3.0633, SELF-BLEU: 0.2149
+Test unseen_both done. Mel Loss: 5.7565, Clip Loss: 9.4228, MSE: 0.2571
+Mel Accuracy: 0.0246, Top 5: 0.0924, Top 10: 0.1650
+BLEU: 0.0000, ROUGE-1: 0.0684, BERT: 0.3375, CER: 2.8184, SELF-BLEU: 0.2098
+Testing done in 1.97m.
+Epoch 3 done in 12.42m. 0.09m/recording.
+
+
+New best epoch 3 with CER 3.0208 and BLEU 0.0000.
+Mel Loss: 5.7985, Clip Loss: 9.4821, MSE: 0.2731
+Mel accuracy: 0.0122, Top 5: 0.0480, Top 10: 0.0857
+Starting rank reallocation at recording 1350.
+
+
+Epoch 4, Loss: 12.2515, CE Loss: 1.2963
+Mel Loss: 5.7701, Clip Loss: 9.4453, MSE: 0.2572
+Mel Accuracy: 0.0403, Top 5: 0.1290, Top 10: 0.2010
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.7371, Clip Loss: 9.3942, MSE: 0.2515
+Mel Accuracy: 0.0598, Top 5: 0.1778, Top 10: 0.2698
+BLEU: 0.0000, ROUGE-1: 0.0708, BERT: 0.3579, CER: 3.8772, SELF-BLEU: 0.1942
+Test unseen_task done. Mel Loss: 5.7487, Clip Loss: 9.4185, MSE: 0.2439
+Mel Accuracy: 0.0538, Top 5: 0.1853, Top 10: 0.2657
+BLEU: 0.0000, ROUGE-1: 0.0715, BERT: 0.3559, CER: 3.7998, SELF-BLEU: 0.1882
+Test unseen_both done. Mel Loss: 5.7421, Clip Loss: 9.4090, MSE: 0.2417
+Mel Accuracy: 0.0616, Top 5: 0.1650, Top 10: 0.2623
+BLEU: 0.0000, ROUGE-1: 0.0721, BERT: 0.3562, CER: 3.4913, SELF-BLEU: 0.1896
+Testing done in 5.01m.
+Epoch 4 done in 15.59m. 0.12m/recording.
+
+
+Epoch 5, Loss: 11.8995, CE Loss: 1.2303
+Mel Loss: 5.7480, Clip Loss: 9.4235, MSE: 0.2348
+Mel Accuracy: 0.0546, Top 5: 0.1651, Top 10: 0.2512
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.7520, Clip Loss: 9.4341, MSE: 0.2289
+Mel Accuracy: 0.0368, Top 5: 0.1153, Top 10: 0.1761
+BLEU: 0.0000, ROUGE-1: 0.0762, BERT: 0.3724, CER: 2.1574, SELF-BLEU: 0.0571
+Test unseen_task done. Mel Loss: 5.7410, Clip Loss: 9.4227, MSE: 0.2185
+Mel Accuracy: 0.0498, Top 5: 0.1429, Top 10: 0.2140
+BLEU: 0.0000, ROUGE-1: 0.0842, BERT: 0.3813, CER: 2.0827, SELF-BLEU: 0.0514
+Test unseen_both done. Mel Loss: 5.7422, Clip Loss: 9.4250, MSE: 0.2179
+Mel Accuracy: 0.0394, Top 5: 0.1330, Top 10: 0.1970
+BLEU: 0.0000, ROUGE-1: 0.0840, BERT: 0.3768, CER: 1.9270, SELF-BLEU: 0.0627
+Testing done in 3.70m.
+Epoch 5 done in 14.12m. 0.10m/recording.
+
+
+New best epoch 5 with CER 2.0557 and BLEU 0.0000.
+Mel Loss: 5.7480, Clip Loss: 9.4235, MSE: 0.2348
+Mel accuracy: 0.0546, Top 5: 0.1651, Top 10: 0.2512
+
+
+Epoch 6, Loss: 11.4737, CE Loss: 1.1489
+Mel Loss: 5.7292, Clip Loss: 9.3961, MSE: 0.2289
+Mel Accuracy: 0.0743, Top 5: 0.2109, Top 10: 0.3091
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6985, Clip Loss: 9.3528, MSE: 0.2171
+Mel Accuracy: 0.0933, Top 5: 0.2457, Top 10: 0.3505
+BLEU: 0.0001, ROUGE-1: 0.0820, BERT: 0.3718, CER: 3.8049, SELF-BLEU: 0.2992
+Test unseen_task done. Mel Loss: 5.7239, Clip Loss: 9.4000, MSE: 0.2098
+Mel Accuracy: 0.0973, Top 5: 0.2345, Top 10: 0.3180
+BLEU: 0.0000, ROUGE-1: 0.0800, BERT: 0.3624, CER: 3.6855, SELF-BLEU: 0.2918
+Test unseen_both done. Mel Loss: 5.7211, Clip Loss: 9.3959, MSE: 0.2087
+Mel Accuracy: 0.0924, Top 5: 0.2291, Top 10: 0.3264
+BLEU: 0.0000, ROUGE-1: 0.0789, BERT: 0.3619, CER: 3.4236, SELF-BLEU: 0.2939
+Testing done in 4.95m.
+Epoch 6 done in 15.41m. 0.11m/recording.
+
+
+New best epoch 6 with CER 3.6380 and BLEU 0.0000.
+Mel Loss: 5.7292, Clip Loss: 9.3961, MSE: 0.2289
+Mel accuracy: 0.0743, Top 5: 0.2109, Top 10: 0.3091
+
+
+Epoch 7, Loss: 10.9639, CE Loss: 1.0500
+Mel Loss: 5.7140, Clip Loss: 9.3762, MSE: 0.2208
+Mel Accuracy: 0.0938, Top 5: 0.2494, Top 10: 0.3535
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6901, Clip Loss: 9.3332, MSE: 0.2255
+Mel Accuracy: 0.0964, Top 5: 0.2725, Top 10: 0.3914
+BLEU: 0.0001, ROUGE-1: 0.0798, BERT: 0.3711, CER: 3.7240, SELF-BLEU: 0.1017
+Test unseen_task done. Mel Loss: 5.7215, Clip Loss: 9.3906, MSE: 0.2180
+Mel Accuracy: 0.0988, Top 5: 0.2355, Top 10: 0.3274
+BLEU: 0.0000, ROUGE-1: 0.0750, BERT: 0.3629, CER: 3.6409, SELF-BLEU: 0.0970
+Test unseen_both done. Mel Loss: 5.7124, Clip Loss: 9.3761, MSE: 0.2169
+Mel Accuracy: 0.1047, Top 5: 0.2525, Top 10: 0.3547
+BLEU: 0.0000, ROUGE-1: 0.0737, BERT: 0.3607, CER: 3.3506, SELF-BLEU: 0.1009
+Testing done in 5.11m.
+Epoch 7 done in 15.72m. 0.12m/recording.
+
+
+New best epoch 7 with CER 3.5718 and BLEU 0.0000.
+Mel Loss: 5.7140, Clip Loss: 9.3762, MSE: 0.2208
+Mel accuracy: 0.0938, Top 5: 0.2494, Top 10: 0.3535
+
+
+Epoch 8, Loss: 10.5346, CE Loss: 0.9657
+Mel Loss: 5.7059, Clip Loss: 9.3647, MSE: 0.2177
+Mel Accuracy: 0.1034, Top 5: 0.2659, Top 10: 0.3726
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.7283, Clip Loss: 9.4020, MSE: 0.2177
+Mel Accuracy: 0.0624, Top 5: 0.1760, Top 10: 0.2609
+BLEU: 0.0001, ROUGE-1: 0.0763, BERT: 0.3806, CER: 3.8287, SELF-BLEU: 0.2541
+Test unseen_task done. Mel Loss: 5.7136, Clip Loss: 9.3856, MSE: 0.2056
+Mel Accuracy: 0.0803, Top 5: 0.2224, Top 10: 0.3121
+BLEU: 0.0000, ROUGE-1: 0.0694, BERT: 0.3724, CER: 3.7503, SELF-BLEU: 0.2307
+Test unseen_both done. Mel Loss: 5.7263, Clip Loss: 9.4059, MSE: 0.2069
+Mel Accuracy: 0.0591, Top 5: 0.1712, Top 10: 0.2500
+BLEU: 0.0000, ROUGE-1: 0.0677, BERT: 0.3721, CER: 3.4077, SELF-BLEU: 0.2629
+Testing done in 5.09m.
+Epoch 8 done in 15.59m. 0.12m/recording.
+
+
+Epoch 9, Loss: 10.1664, CE Loss: 0.8940
+Mel Loss: 5.6961, Clip Loss: 9.3501, MSE: 0.2152
+Mel Accuracy: 0.1149, Top 5: 0.2919, Top 10: 0.4012
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.7083, Clip Loss: 9.3630, MSE: 0.2263
+Mel Accuracy: 0.1153, Top 5: 0.2806, Top 10: 0.3946
+BLEU: 0.0002, ROUGE-1: 0.0733, BERT: 0.3826, CER: 3.0439, SELF-BLEU: 0.0477
+Test unseen_task done. Mel Loss: 5.7653, Clip Loss: 9.4559, MSE: 0.2295
+Mel Accuracy: 0.1076, Top 5: 0.2475, Top 10: 0.3315
+BLEU: 0.0000, ROUGE-1: 0.0727, BERT: 0.3763, CER: 2.8862, SELF-BLEU: 0.0428
+Test unseen_both done. Mel Loss: 5.7380, Clip Loss: 9.4151, MSE: 0.2222
+Mel Accuracy: 0.0850, Top 5: 0.2574, Top 10: 0.3621
+BLEU: 0.0000, ROUGE-1: 0.0746, BERT: 0.3750, CER: 2.6822, SELF-BLEU: 0.0507
+Testing done in 4.70m.
+Epoch 9 done in 15.21m. 0.11m/recording.
+
+
+New best epoch 9 with CER 2.8708 and BLEU 0.0001.
+Mel Loss: 5.6961, Clip Loss: 9.3501, MSE: 0.2152
+Mel accuracy: 0.1149, Top 5: 0.2919, Top 10: 0.4012
+
+
+Epoch 10, Loss: 9.8972, CE Loss: 0.8414
+Mel Loss: 5.6904, Clip Loss: 9.3420, MSE: 0.2130
+Mel Accuracy: 0.1274, Top 5: 0.3091, Top 10: 0.4198
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.7609, Clip Loss: 9.4447, MSE: 0.2351
+Mel Accuracy: 0.0876, Top 5: 0.2424, Top 10: 0.3436
+BLEU: 0.0003, ROUGE-1: 0.0760, BERT: 0.3772, CER: 3.4820, SELF-BLEU: 0.0858
+Test unseen_task done. Mel Loss: 5.8270, Clip Loss: 9.5554, MSE: 0.2344
+Mel Accuracy: 0.0814, Top 5: 0.2147, Top 10: 0.3084
+BLEU: 0.0000, ROUGE-1: 0.0725, BERT: 0.3694, CER: 3.3516, SELF-BLEU: 0.0807
+Test unseen_both done. Mel Loss: 5.8018, Clip Loss: 9.5166, MSE: 0.2297
+Mel Accuracy: 0.0813, Top 5: 0.2081, Top 10: 0.3054
+BLEU: 0.0000, ROUGE-1: 0.0742, BERT: 0.3678, CER: 3.0623, SELF-BLEU: 0.0873
+Testing done in 4.95m.
+Epoch 10 done in 15.45m. 0.11m/recording.
+
+
+New best epoch 10 with CER 3.2986 and BLEU 0.0001.
+Mel Loss: 5.6904, Clip Loss: 9.3420, MSE: 0.2130
+Mel accuracy: 0.1274, Top 5: 0.3091, Top 10: 0.4198
+
+
+Epoch 11, Loss: 9.6765, CE Loss: 0.7981
+Mel Loss: 5.6859, Clip Loss: 9.3349, MSE: 0.2124
+Mel Accuracy: 0.1320, Top 5: 0.3203, Top 10: 0.4317
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6725, Clip Loss: 9.3097, MSE: 0.2167
+Mel Accuracy: 0.1320, Top 5: 0.3126, Top 10: 0.4366
+BLEU: 0.0003, ROUGE-1: 0.0831, BERT: 0.3795, CER: 3.1193, SELF-BLEU: 0.0839
+Test unseen_task done. Mel Loss: 5.7072, Clip Loss: 9.3726, MSE: 0.2091
+Mel Accuracy: 0.1210, Top 5: 0.2923, Top 10: 0.3835
+BLEU: 0.0000, ROUGE-1: 0.0771, BERT: 0.3720, CER: 3.1019, SELF-BLEU: 0.0838
+Test unseen_both done. Mel Loss: 5.6966, Clip Loss: 9.3560, MSE: 0.2076
+Mel Accuracy: 0.1281, Top 5: 0.3017, Top 10: 0.4187
+BLEU: 0.0000, ROUGE-1: 0.0782, BERT: 0.3717, CER: 2.7937, SELF-BLEU: 0.0995
+Testing done in 4.89m.
+Epoch 11 done in 15.34m. 0.11m/recording.
+
+
+New best epoch 11 with CER 3.0050 and BLEU 0.0001.
+Mel Loss: 5.6859, Clip Loss: 9.3349, MSE: 0.2124
+Mel accuracy: 0.1320, Top 5: 0.3203, Top 10: 0.4317
+
+
+Epoch 12, Loss: 9.5140, CE Loss: 0.7670
+Mel Loss: 5.6789, Clip Loss: 9.3195, MSE: 0.2179
+Mel Accuracy: 0.1513, Top 5: 0.3527, Top 10: 0.4669
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.7712, Clip Loss: 9.4620, MSE: 0.2351
+Mel Accuracy: 0.0691, Top 5: 0.2032, Top 10: 0.3012
+BLEU: 0.0004, ROUGE-1: 0.0702, BERT: 0.3567, CER: 2.5892, SELF-BLEU: 0.0831
+Test unseen_task done. Mel Loss: 5.8194, Clip Loss: 9.5425, MSE: 0.2347
+Mel Accuracy: 0.0528, Top 5: 0.1771, Top 10: 0.2595
+BLEU: 0.0000, ROUGE-1: 0.0554, BERT: 0.3443, CER: 2.4649, SELF-BLEU: 0.0798
+Test unseen_both done. Mel Loss: 5.7972, Clip Loss: 9.5085, MSE: 0.2301
+Mel Accuracy: 0.0505, Top 5: 0.1613, Top 10: 0.2475
+BLEU: 0.0000, ROUGE-1: 0.0551, BERT: 0.3453, CER: 2.3671, SELF-BLEU: 0.0806
+Testing done in 4.46m.
+Epoch 12 done in 14.88m. 0.11m/recording.
+
+
+New best epoch 12 with CER 2.4738 and BLEU 0.0001.
+Mel Loss: 5.6789, Clip Loss: 9.3195, MSE: 0.2179
+Mel accuracy: 0.1513, Top 5: 0.3527, Top 10: 0.4669
+
+
+Epoch 13, Loss: 9.3538, CE Loss: 0.7402
+Mel Loss: 5.6529, Clip Loss: 9.2763, MSE: 0.2177
+Mel Accuracy: 0.1871, Top 5: 0.4273, Top 10: 0.5515
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6432, Clip Loss: 9.2583, MSE: 0.2204
+Mel Accuracy: 0.1882, Top 5: 0.4276, Top 10: 0.5493
+BLEU: 0.0004, ROUGE-1: 0.0796, BERT: 0.3847, CER: 2.9360, SELF-BLEU: 0.1035
+Test unseen_task done. Mel Loss: 5.6689, Clip Loss: 9.3047, MSE: 0.2151
+Mel Accuracy: 0.1787, Top 5: 0.3702, Top 10: 0.4710
+BLEU: 0.0000, ROUGE-1: 0.0785, BERT: 0.3798, CER: 2.8018, SELF-BLEU: 0.0946
+Test unseen_both done. Mel Loss: 5.6610, Clip Loss: 9.2931, MSE: 0.2128
+Mel Accuracy: 0.1724, Top 5: 0.3978, Top 10: 0.4840
+BLEU: 0.0000, ROUGE-1: 0.0823, BERT: 0.3817, CER: 2.5194, SELF-BLEU: 0.1027
+Testing done in 4.62m.
+Epoch 13 done in 15.01m. 0.11m/recording.
+
+
+Epoch 14, Loss: 9.2228, CE Loss: 0.7170
+Mel Loss: 5.6376, Clip Loss: 9.2546, MSE: 0.2120
+Mel Accuracy: 0.2084, Top 5: 0.4658, Top 10: 0.5935
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6306, Clip Loss: 9.2423, MSE: 0.2130
+Mel Accuracy: 0.2033, Top 5: 0.4547, Top 10: 0.5872
+BLEU: 0.0007, ROUGE-1: 0.0809, BERT: 0.3779, CER: 2.8809, SELF-BLEU: 0.0541
+Test unseen_task done. Mel Loss: 5.6691, Clip Loss: 9.3126, MSE: 0.2040
+Mel Accuracy: 0.1786, Top 5: 0.3772, Top 10: 0.4838
+BLEU: 0.0000, ROUGE-1: 0.0787, BERT: 0.3735, CER: 2.8123, SELF-BLEU: 0.0466
+Test unseen_both done. Mel Loss: 5.6574, Clip Loss: 9.2935, MSE: 0.2034
+Mel Accuracy: 0.1847, Top 5: 0.3978, Top 10: 0.5148
+BLEU: 0.0000, ROUGE-1: 0.0781, BERT: 0.3695, CER: 2.5346, SELF-BLEU: 0.0538
+Testing done in 4.75m.
+Epoch 14 done in 15.18m. 0.11m/recording.
+
+
+New best epoch 14 with CER 2.7426 and BLEU 0.0002.
+Mel Loss: 5.6376, Clip Loss: 9.2546, MSE: 0.2120
+Mel accuracy: 0.2084, Top 5: 0.4658, Top 10: 0.5935
+
+
+Epoch 15, Loss: 9.1497, CE Loss: 0.7041
+Mel Loss: 5.6292, Clip Loss: 9.2436, MSE: 0.2075
+Mel Accuracy: 0.2239, Top 5: 0.4841, Top 10: 0.6093
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6554, Clip Loss: 9.2851, MSE: 0.2109
+Mel Accuracy: 0.1613, Top 5: 0.3785, Top 10: 0.4971
+BLEU: 0.0001, ROUGE-1: 0.0758, BERT: 0.3866, CER: 3.4713, SELF-BLEU: 0.1982
+Test unseen_task done. Mel Loss: 5.6676, Clip Loss: 9.3139, MSE: 0.1982
+Mel Accuracy: 0.1711, Top 5: 0.3631, Top 10: 0.4632
+BLEU: 0.0000, ROUGE-1: 0.0761, BERT: 0.3820, CER: 3.3866, SELF-BLEU: 0.1857
+Test unseen_both done. Mel Loss: 5.6610, Clip Loss: 9.3024, MSE: 0.1989
+Mel Accuracy: 0.1700, Top 5: 0.3892, Top 10: 0.4889
+BLEU: 0.0000, ROUGE-1: 0.0740, BERT: 0.3817, CER: 3.0453, SELF-BLEU: 0.1954
+Testing done in 4.79m.
+Epoch 15 done in 15.28m. 0.11m/recording.
+
+
+Epoch 16, Loss: 9.0886, CE Loss: 0.6930
+Mel Loss: 5.6235, Clip Loss: 9.2351, MSE: 0.2061
+Mel Accuracy: 0.2293, Top 5: 0.4964, Top 10: 0.6260
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6334, Clip Loss: 9.2529, MSE: 0.2042
+Mel Accuracy: 0.1774, Top 5: 0.4248, Top 10: 0.5553
+BLEU: 0.0007, ROUGE-1: 0.0796, BERT: 0.3756, CER: 2.6990, SELF-BLEU: 0.1251
+Test unseen_task done. Mel Loss: 5.6750, Clip Loss: 9.3277, MSE: 0.1959
+Mel Accuracy: 0.1761, Top 5: 0.3711, Top 10: 0.4698
+BLEU: 0.0000, ROUGE-1: 0.0800, BERT: 0.3713, CER: 2.6549, SELF-BLEU: 0.1162
+Test unseen_both done. Mel Loss: 5.6560, Clip Loss: 9.2972, MSE: 0.1943
+Mel Accuracy: 0.1897, Top 5: 0.4089, Top 10: 0.5197
+BLEU: 0.0000, ROUGE-1: 0.0801, BERT: 0.3709, CER: 2.3605, SELF-BLEU: 0.1320
+Testing done in 4.53m.
+Epoch 16 done in 15.01m. 0.11m/recording.
+
+
+New best epoch 16 with CER 2.5715 and BLEU 0.0002.
+Mel Loss: 5.6235, Clip Loss: 9.2351, MSE: 0.2061
+Mel accuracy: 0.2293, Top 5: 0.4964, Top 10: 0.6260
+
+
+Epoch 17, Loss: 9.0269, CE Loss: 0.6822
+Mel Loss: 5.6158, Clip Loss: 9.2247, MSE: 0.2026
+Mel Accuracy: 0.2446, Top 5: 0.5139, Top 10: 0.6416
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6305, Clip Loss: 9.2487, MSE: 0.2030
+Mel Accuracy: 0.1892, Top 5: 0.4308, Top 10: 0.5658
+BLEU: 0.0009, ROUGE-1: 0.0812, BERT: 0.3805, CER: 2.4391, SELF-BLEU: 0.2097
+Test unseen_task done. Mel Loss: 5.6578, Clip Loss: 9.3000, MSE: 0.1945
+Mel Accuracy: 0.1390, Top 5: 0.3308, Top 10: 0.4646
+BLEU: 0.0000, ROUGE-1: 0.0769, BERT: 0.3722, CER: 2.3468, SELF-BLEU: 0.1745
+Test unseen_both done. Mel Loss: 5.6487, Clip Loss: 9.2847, MSE: 0.1945
+Mel Accuracy: 0.1638, Top 5: 0.3867, Top 10: 0.5012
+BLEU: 0.0000, ROUGE-1: 0.0738, BERT: 0.3709, CER: 2.1751, SELF-BLEU: 0.2193
+Testing done in 4.41m.
+Epoch 17 done in 14.93m. 0.11m/recording.
+
+
+New best epoch 17 with CER 2.3203 and BLEU 0.0003.
+Mel Loss: 5.6158, Clip Loss: 9.2247, MSE: 0.2026
+Mel accuracy: 0.2446, Top 5: 0.5139, Top 10: 0.6416
+
+
+Epoch 18, Loss: 9.0086, CE Loss: 0.6811
+Mel Loss: 5.6033, Clip Loss: 9.2059, MSE: 0.1993
+Mel Accuracy: 0.2638, Top 5: 0.5419, Top 10: 0.6671
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6291, Clip Loss: 9.2466, MSE: 0.2029
+Mel Accuracy: 0.2248, Top 5: 0.4524, Top 10: 0.5618
+BLEU: 0.0007, ROUGE-1: 0.0806, BERT: 0.3787, CER: 2.5417, SELF-BLEU: 0.1475
+Test unseen_task done. Mel Loss: 5.6749, Clip Loss: 9.3253, MSE: 0.1993
+Mel Accuracy: 0.1687, Top 5: 0.3627, Top 10: 0.4698
+BLEU: 0.0000, ROUGE-1: 0.0733, BERT: 0.3688, CER: 2.4516, SELF-BLEU: 0.1290
+Test unseen_both done. Mel Loss: 5.6644, Clip Loss: 9.3085, MSE: 0.1983
+Mel Accuracy: 0.1773, Top 5: 0.3805, Top 10: 0.4963
+BLEU: 0.0000, ROUGE-1: 0.0724, BERT: 0.3695, CER: 2.2490, SELF-BLEU: 0.1639
+Testing done in 4.43m.
+Epoch 18 done in 14.92m. 0.11m/recording.
+
+
+Epoch 19, Loss: 8.9697, CE Loss: 0.6733
+Mel Loss: 5.6031, Clip Loss: 9.2063, MSE: 0.1983
+Mel Accuracy: 0.2633, Top 5: 0.5433, Top 10: 0.6686
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6017, Clip Loss: 9.2029, MSE: 0.1999
+Mel Accuracy: 0.2383, Top 5: 0.5024, Top 10: 0.6339
+BLEU: 0.0005, ROUGE-1: 0.0812, BERT: 0.3788, CER: 2.6904, SELF-BLEU: 0.1688
+Test unseen_task done. Mel Loss: 5.6486, Clip Loss: 9.2855, MSE: 0.1931
+Mel Accuracy: 0.2121, Top 5: 0.4239, Top 10: 0.5282
+BLEU: 0.0000, ROUGE-1: 0.0713, BERT: 0.3690, CER: 2.5511, SELF-BLEU: 0.1516
+Test unseen_both done. Mel Loss: 5.6373, Clip Loss: 9.2672, MSE: 0.1925
+Mel Accuracy: 0.2180, Top 5: 0.4446, Top 10: 0.5579
+BLEU: 0.0000, ROUGE-1: 0.0706, BERT: 0.3688, CER: 2.3322, SELF-BLEU: 0.1706
+Testing done in 4.44m.
+Epoch 19 done in 14.96m. 0.11m/recording.
+
+
+Epoch 20, Loss: 8.9457, CE Loss: 0.6695
+Mel Loss: 5.5981, Clip Loss: 9.1988, MSE: 0.1970
+Mel Accuracy: 0.2704, Top 5: 0.5534, Top 10: 0.6795
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6236, Clip Loss: 9.2393, MSE: 0.2001
+Mel Accuracy: 0.1918, Top 5: 0.4497, Top 10: 0.5933
+BLEU: 0.0006, ROUGE-1: 0.0772, BERT: 0.3797, CER: 2.0888, SELF-BLEU: 0.1642
+Test unseen_task done. Mel Loss: 5.6690, Clip Loss: 9.3191, MSE: 0.1939
+Mel Accuracy: 0.2067, Top 5: 0.4079, Top 10: 0.5180
+BLEU: 0.0000, ROUGE-1: 0.0692, BERT: 0.3714, CER: 2.1000, SELF-BLEU: 0.1436
+Test unseen_both done. Mel Loss: 5.6664, Clip Loss: 9.3150, MSE: 0.1934
+Mel Accuracy: 0.1835, Top 5: 0.4200, Top 10: 0.5296
+BLEU: 0.0000, ROUGE-1: 0.0700, BERT: 0.3733, CER: 1.8571, SELF-BLEU: 0.1755
+Testing done in 4.14m.
+Epoch 20 done in 14.76m. 0.11m/recording.
+
+
+New best epoch 20 with CER 2.0153 and BLEU 0.0002.
+Mel Loss: 5.5981, Clip Loss: 9.1988, MSE: 0.1970
+Mel accuracy: 0.2704, Top 5: 0.5534, Top 10: 0.6795
+
+
+Epoch 21, Loss: 8.9263, CE Loss: 0.6670
+Mel Loss: 5.5915, Clip Loss: 9.1886, MSE: 0.1958
+Mel Accuracy: 0.2890, Top 5: 0.5696, Top 10: 0.6923
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6308, Clip Loss: 9.2521, MSE: 0.1989
+Mel Accuracy: 0.1815, Top 5: 0.4366, Top 10: 0.5749
+BLEU: 0.0005, ROUGE-1: 0.0854, BERT: 0.3754, CER: 2.4093, SELF-BLEU: 0.1456
+Test unseen_task done. Mel Loss: 5.6781, Clip Loss: 9.3350, MSE: 0.1928
+Mel Accuracy: 0.1850, Top 5: 0.3966, Top 10: 0.5096
+BLEU: 0.0000, ROUGE-1: 0.0766, BERT: 0.3663, CER: 2.4581, SELF-BLEU: 0.1315
+Test unseen_both done. Mel Loss: 5.6748, Clip Loss: 9.3297, MSE: 0.1925
+Mel Accuracy: 0.1970, Top 5: 0.3904, Top 10: 0.5037
+BLEU: 0.0000, ROUGE-1: 0.0775, BERT: 0.3681, CER: 2.1042, SELF-BLEU: 0.1442
+Testing done in 4.41m.
+Epoch 21 done in 14.98m. 0.11m/recording.
+
+
+Epoch 22, Loss: 8.9299, CE Loss: 0.6699
+Mel Loss: 5.5806, Clip Loss: 9.1721, MSE: 0.1934
+Mel Accuracy: 0.2992, Top 5: 0.5913, Top 10: 0.7141
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6363, Clip Loss: 9.2573, MSE: 0.2048
+Mel Accuracy: 0.1891, Top 5: 0.4093, Top 10: 0.5349
+BLEU: 0.0007, ROUGE-1: 0.0813, BERT: 0.3809, CER: 2.5843, SELF-BLEU: 0.0796
+Test unseen_task done. Mel Loss: 5.6568, Clip Loss: 9.2965, MSE: 0.1973
+Mel Accuracy: 0.1589, Top 5: 0.3588, Top 10: 0.4646
+BLEU: 0.0000, ROUGE-1: 0.0745, BERT: 0.3726, CER: 2.5061, SELF-BLEU: 0.0737
+Test unseen_both done. Mel Loss: 5.6617, Clip Loss: 9.3045, MSE: 0.1975
+Mel Accuracy: 0.1502, Top 5: 0.3399, Top 10: 0.4618
+BLEU: 0.0000, ROUGE-1: 0.0745, BERT: 0.3720, CER: 2.2530, SELF-BLEU: 0.0778
+Testing done in 4.43m.
+Epoch 22 done in 14.96m. 0.11m/recording.
+
+
+New best epoch 22 with CER 2.4478 and BLEU 0.0002.
+Mel Loss: 5.5806, Clip Loss: 9.1721, MSE: 0.1934
+Mel accuracy: 0.2992, Top 5: 0.5913, Top 10: 0.7141
+
+
+Epoch 23, Loss: 8.9006, CE Loss: 0.6645
+Mel Loss: 5.5783, Clip Loss: 9.1688, MSE: 0.1926
+Mel Accuracy: 0.3061, Top 5: 0.5976, Top 10: 0.7192
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6143, Clip Loss: 9.2279, MSE: 0.1938
+Mel Accuracy: 0.2110, Top 5: 0.4556, Top 10: 0.5819
+BLEU: 0.0010, ROUGE-1: 0.0827, BERT: 0.3669, CER: 2.9829, SELF-BLEU: 0.1741
+Test unseen_task done. Mel Loss: 5.6665, Clip Loss: 9.3173, MSE: 0.1903
+Mel Accuracy: 0.1761, Top 5: 0.3927, Top 10: 0.4983
+BLEU: 0.0000, ROUGE-1: 0.0760, BERT: 0.3604, CER: 2.8355, SELF-BLEU: 0.1428
+Test unseen_both done. Mel Loss: 5.6512, Clip Loss: 9.2934, MSE: 0.1880
+Mel Accuracy: 0.1860, Top 5: 0.4200, Top 10: 0.5296
+BLEU: 0.0000, ROUGE-1: 0.0756, BERT: 0.3604, CER: 2.5598, SELF-BLEU: 0.1715
+Testing done in 4.58m.
+Epoch 23 done in 15.09m. 0.11m/recording.
+
+
+New best epoch 23 with CER 2.7927 and BLEU 0.0003.
+Mel Loss: 5.5783, Clip Loss: 9.1688, MSE: 0.1926
+Mel accuracy: 0.3061, Top 5: 0.5976, Top 10: 0.7192
+
+
+Epoch 24, Loss: 8.8984, CE Loss: 0.6649
+Mel Loss: 5.5740, Clip Loss: 9.1623, MSE: 0.1916
+Mel Accuracy: 0.3136, Top 5: 0.6049, Top 10: 0.7250
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6408, Clip Loss: 9.2677, MSE: 0.2005
+Mel Accuracy: 0.1799, Top 5: 0.4263, Top 10: 0.5645
+BLEU: 0.0005, ROUGE-1: 0.0738, BERT: 0.3753, CER: 2.1754, SELF-BLEU: 0.1081
+Test unseen_task done. Mel Loss: 5.6898, Clip Loss: 9.3521, MSE: 0.1963
+Mel Accuracy: 0.1940, Top 5: 0.4056, Top 10: 0.5023
+BLEU: 0.0000, ROUGE-1: 0.0691, BERT: 0.3704, CER: 2.1714, SELF-BLEU: 0.0975
+Test unseen_both done. Mel Loss: 5.6861, Clip Loss: 9.3470, MSE: 0.1948
+Mel Accuracy: 0.1675, Top 5: 0.4138, Top 10: 0.5197
+BLEU: 0.0000, ROUGE-1: 0.0685, BERT: 0.3726, CER: 1.9285, SELF-BLEU: 0.1243
+Testing done in 4.14m.
+Epoch 24 done in 14.62m. 0.11m/recording.
+
+
+New best epoch 24 with CER 2.0918 and BLEU 0.0002.
+Mel Loss: 5.5740, Clip Loss: 9.1623, MSE: 0.1916
+Mel accuracy: 0.3136, Top 5: 0.6049, Top 10: 0.7250
+
+
+Epoch 25, Loss: 8.8704, CE Loss: 0.6601
+Mel Loss: 5.5699, Clip Loss: 9.1561, MSE: 0.1905
+Mel Accuracy: 0.3205, Top 5: 0.6130, Top 10: 0.7311
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6112, Clip Loss: 9.2200, MSE: 0.1980
+Mel Accuracy: 0.2305, Top 5: 0.4763, Top 10: 0.5903
+BLEU: 0.0007, ROUGE-1: 0.0796, BERT: 0.3733, CER: 2.2503, SELF-BLEU: 0.0759
+Test unseen_task done. Mel Loss: 5.6525, Clip Loss: 9.2906, MSE: 0.1954
+Mel Accuracy: 0.1885, Top 5: 0.4150, Top 10: 0.5311
+BLEU: 0.0000, ROUGE-1: 0.0734, BERT: 0.3664, CER: 2.3111, SELF-BLEU: 0.0705
+Test unseen_both done. Mel Loss: 5.6531, Clip Loss: 9.2914, MSE: 0.1957
+Mel Accuracy: 0.2044, Top 5: 0.4163, Top 10: 0.5160
+BLEU: 0.0000, ROUGE-1: 0.0723, BERT: 0.3670, CER: 2.1219, SELF-BLEU: 0.0796
+Testing done in 4.30m.
+Epoch 25 done in 14.75m. 0.11m/recording.
+
+
+New best epoch 25 with CER 2.2278 and BLEU 0.0002.
+Mel Loss: 5.5699, Clip Loss: 9.1561, MSE: 0.1905
+Mel accuracy: 0.3205, Top 5: 0.6130, Top 10: 0.7311
+
+
+Epoch 26, Loss: 8.8347, CE Loss: 0.6557
+Mel Loss: 5.5563, Clip Loss: 9.1354, MSE: 0.1877
+Mel Accuracy: 0.3463, Top 5: 0.6428, Top 10: 0.7586
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6283, Clip Loss: 9.2496, MSE: 0.1964
+Mel Accuracy: 0.1952, Top 5: 0.4273, Top 10: 0.5601
+BLEU: 0.0007, ROUGE-1: 0.0686, BERT: 0.3749, CER: 2.6060, SELF-BLEU: 0.1651
+Test unseen_task done. Mel Loss: 5.6596, Clip Loss: 9.3071, MSE: 0.1884
+Mel Accuracy: 0.1958, Top 5: 0.4049, Top 10: 0.5255
+BLEU: 0.0000, ROUGE-1: 0.0673, BERT: 0.3668, CER: 2.5423, SELF-BLEU: 0.1601
+Test unseen_both done. Mel Loss: 5.6503, Clip Loss: 9.2920, MSE: 0.1879
+Mel Accuracy: 0.1761, Top 5: 0.4286, Top 10: 0.5456
+BLEU: 0.0000, ROUGE-1: 0.0648, BERT: 0.3661, CER: 2.2910, SELF-BLEU: 0.1640
+Testing done in 4.29m.
+Epoch 26 done in 14.73m. 0.11m/recording.
+
+
+Epoch 27, Loss: 8.8727, CE Loss: 0.6644
+Mel Loss: 5.5506, Clip Loss: 9.1268, MSE: 0.1864
+Mel Accuracy: 0.3551, Top 5: 0.6524, Top 10: 0.7656
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.5787, Clip Loss: 9.1690, MSE: 0.1933
+Mel Accuracy: 0.2830, Top 5: 0.5582, Top 10: 0.6763
+BLEU: 0.0008, ROUGE-1: 0.0834, BERT: 0.3721, CER: 2.4104, SELF-BLEU: 0.0877
+Test unseen_task done. Mel Loss: 5.6258, Clip Loss: 9.2510, MSE: 0.1881
+Mel Accuracy: 0.2389, Top 5: 0.4568, Top 10: 0.5748
+BLEU: 0.0000, ROUGE-1: 0.0762, BERT: 0.3649, CER: 2.3736, SELF-BLEU: 0.0859
+Test unseen_both done. Mel Loss: 5.6119, Clip Loss: 9.2291, MSE: 0.1861
+Mel Accuracy: 0.2537, Top 5: 0.4865, Top 10: 0.6010
+BLEU: 0.0000, ROUGE-1: 0.0769, BERT: 0.3637, CER: 2.0825, SELF-BLEU: 0.0805
+Testing done in 4.35m.
+Epoch 27 done in 14.78m. 0.11m/recording.
+
+
+New best epoch 27 with CER 2.2888 and BLEU 0.0003.
+Mel Loss: 5.5506, Clip Loss: 9.1268, MSE: 0.1864
+Mel accuracy: 0.3551, Top 5: 0.6524, Top 10: 0.7656
+
+
+Epoch 28, Loss: 8.8657, CE Loss: 0.6640
+Mel Loss: 5.5458, Clip Loss: 9.1196, MSE: 0.1851
+Mel Accuracy: 0.3652, Top 5: 0.6629, Top 10: 0.7750
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.5885, Clip Loss: 9.1859, MSE: 0.1922
+Mel Accuracy: 0.2485, Top 5: 0.5228, Top 10: 0.6479
+BLEU: 0.0004, ROUGE-1: 0.0687, BERT: 0.3820, CER: 2.1556, SELF-BLEU: 0.2493
+Test unseen_task done. Mel Loss: 5.6481, Clip Loss: 9.2881, MSE: 0.1880
+Mel Accuracy: 0.2037, Top 5: 0.4316, Top 10: 0.5433
+BLEU: 0.0000, ROUGE-1: 0.0680, BERT: 0.3743, CER: 2.0706, SELF-BLEU: 0.2390
+Test unseen_both done. Mel Loss: 5.6373, Clip Loss: 9.2716, MSE: 0.1857
+Mel Accuracy: 0.2167, Top 5: 0.4569, Top 10: 0.5899
+BLEU: 0.0000, ROUGE-1: 0.0652, BERT: 0.3751, CER: 1.8166, SELF-BLEU: 0.2665
+Testing done in 4.04m.
+Epoch 28 done in 14.54m. 0.11m/recording.
+
+
+New best epoch 28 with CER 2.0143 and BLEU 0.0001.
+Mel Loss: 5.5458, Clip Loss: 9.1196, MSE: 0.1851
+Mel accuracy: 0.3652, Top 5: 0.6629, Top 10: 0.7750
+
+
+Epoch 29, Loss: 8.8244, CE Loss: 0.6575
+Mel Loss: 5.5370, Clip Loss: 9.1060, MSE: 0.1836
+Mel Accuracy: 0.3797, Top 5: 0.6821, Top 10: 0.7907
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6046, Clip Loss: 9.2127, MSE: 0.1924
+Mel Accuracy: 0.2111, Top 5: 0.4825, Top 10: 0.6117
+BLEU: 0.0005, ROUGE-1: 0.0715, BERT: 0.3817, CER: 2.2763, SELF-BLEU: 0.2528
+Test unseen_task done. Mel Loss: 5.6484, Clip Loss: 9.2901, MSE: 0.1860
+Mel Accuracy: 0.1937, Top 5: 0.4335, Top 10: 0.5530
+BLEU: 0.0000, ROUGE-1: 0.0630, BERT: 0.3719, CER: 2.1574, SELF-BLEU: 0.2371
+Test unseen_both done. Mel Loss: 5.6492, Clip Loss: 9.2914, MSE: 0.1858
+Mel Accuracy: 0.1650, Top 5: 0.4163, Top 10: 0.5702
+BLEU: 0.0000, ROUGE-1: 0.0644, BERT: 0.3712, CER: 1.9457, SELF-BLEU: 0.2460
+Testing done in 4.18m.
+Epoch 29 done in 14.62m. 0.11m/recording.
+
+
+New best epoch 29 with CER 2.1264 and BLEU 0.0002.
+Mel Loss: 5.5370, Clip Loss: 9.1060, MSE: 0.1836
+Mel accuracy: 0.3797, Top 5: 0.6821, Top 10: 0.7907
+
+
+Epoch 30, Loss: 8.8238, CE Loss: 0.6586
+Mel Loss: 5.5306, Clip Loss: 9.0962, MSE: 0.1822
+Mel Accuracy: 0.3901, Top 5: 0.6923, Top 10: 0.7999
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6040, Clip Loss: 9.2103, MSE: 0.1946
+Mel Accuracy: 0.2262, Top 5: 0.4899, Top 10: 0.6194
+BLEU: 0.0013, ROUGE-1: 0.0836, BERT: 0.3763, CER: 2.5296, SELF-BLEU: 0.0947
+Test unseen_task done. Mel Loss: 5.6551, Clip Loss: 9.2991, MSE: 0.1891
+Mel Accuracy: 0.1993, Top 5: 0.4130, Top 10: 0.5251
+BLEU: 0.0000, ROUGE-1: 0.0743, BERT: 0.3665, CER: 2.4491, SELF-BLEU: 0.0831
+Test unseen_both done. Mel Loss: 5.6479, Clip Loss: 9.2874, MSE: 0.1886
+Mel Accuracy: 0.1860, Top 5: 0.4187, Top 10: 0.5308
+BLEU: 0.0000, ROUGE-1: 0.0748, BERT: 0.3655, CER: 2.2457, SELF-BLEU: 0.0931
+Testing done in 4.38m.
+Epoch 30 done in 14.92m. 0.11m/recording.
+
+
+New best epoch 30 with CER 2.4081 and BLEU 0.0004.
+Mel Loss: 5.5306, Clip Loss: 9.0962, MSE: 0.1822
+Mel accuracy: 0.3901, Top 5: 0.6923, Top 10: 0.7999
+
+
+Epoch 31, Loss: 8.7986, CE Loss: 0.6542
+Mel Loss: 5.5278, Clip Loss: 9.0921, MSE: 0.1814
+Mel Accuracy: 0.3956, Top 5: 0.6991, Top 10: 0.8046
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.5807, Clip Loss: 9.1735, MSE: 0.1916
+Mel Accuracy: 0.2506, Top 5: 0.5395, Top 10: 0.6705
+BLEU: 0.0008, ROUGE-1: 0.0732, BERT: 0.3813, CER: 2.3622, SELF-BLEU: 0.1879
+Test unseen_task done. Mel Loss: 5.6423, Clip Loss: 9.2795, MSE: 0.1866
+Mel Accuracy: 0.2072, Top 5: 0.4417, Top 10: 0.5632
+BLEU: 0.0000, ROUGE-1: 0.0668, BERT: 0.3726, CER: 2.3050, SELF-BLEU: 0.1759
+Test unseen_both done. Mel Loss: 5.6330, Clip Loss: 9.2652, MSE: 0.1849
+Mel Accuracy: 0.2118, Top 5: 0.4717, Top 10: 0.5973
+BLEU: 0.0000, ROUGE-1: 0.0661, BERT: 0.3709, CER: 2.1016, SELF-BLEU: 0.1881
+Testing done in 4.29m.
+Epoch 31 done in 14.85m. 0.11m/recording.
+
+
+New best epoch 31 with CER 2.2563 and BLEU 0.0003.
+Mel Loss: 5.5278, Clip Loss: 9.0921, MSE: 0.1814
+Mel accuracy: 0.3956, Top 5: 0.6991, Top 10: 0.8046
+
+
+Epoch 32, Loss: 8.8182, CE Loss: 0.6592
+Mel Loss: 5.5221, Clip Loss: 9.0835, MSE: 0.1799
+Mel Accuracy: 0.4073, Top 5: 0.7112, Top 10: 0.8160
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.5783, Clip Loss: 9.1707, MSE: 0.1896
+Mel Accuracy: 0.2654, Top 5: 0.5595, Top 10: 0.6822
+BLEU: 0.0004, ROUGE-1: 0.0755, BERT: 0.3801, CER: 2.1652, SELF-BLEU: 0.0921
+Test unseen_task done. Mel Loss: 5.6451, Clip Loss: 9.2844, MSE: 0.1860
+Mel Accuracy: 0.2167, Top 5: 0.4626, Top 10: 0.5825
+BLEU: 0.0000, ROUGE-1: 0.0735, BERT: 0.3756, CER: 2.0426, SELF-BLEU: 0.0872
+Test unseen_both done. Mel Loss: 5.6342, Clip Loss: 9.2673, MSE: 0.1845
+Mel Accuracy: 0.2488, Top 5: 0.4667, Top 10: 0.5813
+BLEU: 0.0000, ROUGE-1: 0.0738, BERT: 0.3759, CER: 1.8897, SELF-BLEU: 0.0859
+Testing done in 4.13m.
+Epoch 32 done in 14.86m. 0.11m/recording.
+
+
+New best epoch 32 with CER 2.0325 and BLEU 0.0001.
+Mel Loss: 5.5221, Clip Loss: 9.0835, MSE: 0.1799
+Mel accuracy: 0.4073, Top 5: 0.7112, Top 10: 0.8160
+
+
+Epoch 33, Loss: 8.8681, CE Loss: 0.6706
+Mel Loss: 5.5152, Clip Loss: 9.0729, MSE: 0.1786
+Mel Accuracy: 0.4224, Top 5: 0.7272, Top 10: 0.8264
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6067, Clip Loss: 9.2145, MSE: 0.1951
+Mel Accuracy: 0.2234, Top 5: 0.4789, Top 10: 0.6039
+BLEU: 0.0003, ROUGE-1: 0.0692, BERT: 0.3810, CER: 2.5129, SELF-BLEU: 0.2779
+Test unseen_task done. Mel Loss: 5.6358, Clip Loss: 9.2691, MSE: 0.1857
+Mel Accuracy: 0.1977, Top 5: 0.4297, Top 10: 0.5453
+BLEU: 0.0000, ROUGE-1: 0.0635, BERT: 0.3716, CER: 2.4300, SELF-BLEU: 0.2648
+Test unseen_both done. Mel Loss: 5.6340, Clip Loss: 9.2658, MSE: 0.1863
+Mel Accuracy: 0.1786, Top 5: 0.4384, Top 10: 0.5480
+BLEU: 0.0000, ROUGE-1: 0.0613, BERT: 0.3729, CER: 2.1540, SELF-BLEU: 0.2786
+Testing done in 4.27m.
+Epoch 33 done in 14.69m. 0.11m/recording.
+
+
+Epoch 34, Loss: 8.8458, CE Loss: 0.6667
+Mel Loss: 5.5125, Clip Loss: 9.0689, MSE: 0.1780
+Mel Accuracy: 0.4263, Top 5: 0.7316, Top 10: 0.8310
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.5815, Clip Loss: 9.1747, MSE: 0.1916
+Mel Accuracy: 0.2646, Top 5: 0.5337, Top 10: 0.6576
+BLEU: 0.0007, ROUGE-1: 0.0727, BERT: 0.3828, CER: 2.2921, SELF-BLEU: 0.1805
+Test unseen_task done. Mel Loss: 5.6375, Clip Loss: 9.2713, MSE: 0.1867
+Mel Accuracy: 0.2137, Top 5: 0.4566, Top 10: 0.5683
+BLEU: 0.0000, ROUGE-1: 0.0694, BERT: 0.3744, CER: 2.2185, SELF-BLEU: 0.1682
+Test unseen_both done. Mel Loss: 5.6355, Clip Loss: 9.2682, MSE: 0.1864
+Mel Accuracy: 0.2167, Top 5: 0.4557, Top 10: 0.5751
+BLEU: 0.0000, ROUGE-1: 0.0704, BERT: 0.3747, CER: 1.9802, SELF-BLEU: 0.1813
+Testing done in 4.17m.
+Epoch 34 done in 14.67m. 0.11m/recording.
+
+
+New best epoch 34 with CER 2.1636 and BLEU 0.0002.
+Mel Loss: 5.5125, Clip Loss: 9.0689, MSE: 0.1780
+Mel accuracy: 0.4263, Top 5: 0.7316, Top 10: 0.8310
+
+
+Epoch 35, Loss: 8.8842, CE Loss: 0.6763
+Mel Loss: 5.5024, Clip Loss: 9.0534, MSE: 0.1760
+Mel Accuracy: 0.4485, Top 5: 0.7503, Top 10: 0.8455
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.6160, Clip Loss: 9.2324, MSE: 0.1914
+Mel Accuracy: 0.2161, Top 5: 0.4577, Top 10: 0.5737
+BLEU: 0.0006, ROUGE-1: 0.0766, BERT: 0.3763, CER: 2.5717, SELF-BLEU: 0.1506
+Test unseen_task done. Mel Loss: 5.6683, Clip Loss: 9.3239, MSE: 0.1848
+Mel Accuracy: 0.1688, Top 5: 0.4025, Top 10: 0.5067
+BLEU: 0.0000, ROUGE-1: 0.0743, BERT: 0.3720, CER: 2.5055, SELF-BLEU: 0.1318
+Test unseen_both done. Mel Loss: 5.6598, Clip Loss: 9.3106, MSE: 0.1837
+Mel Accuracy: 0.1663, Top 5: 0.4002, Top 10: 0.5185
+BLEU: 0.0000, ROUGE-1: 0.0740, BERT: 0.3698, CER: 2.3171, SELF-BLEU: 0.1423
+Testing done in 4.28m.
+Epoch 35 done in 14.75m. 0.11m/recording.
+
+
+Epoch 36, Loss: 8.9486, CE Loss: 0.6898
+Mel Loss: 5.4998, Clip Loss: 9.0495, MSE: 0.1752
+Mel Accuracy: 0.4548, Top 5: 0.7582, Top 10: 0.8514
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.5794, Clip Loss: 9.1728, MSE: 0.1892
+Mel Accuracy: 0.2657, Top 5: 0.5435, Top 10: 0.6699
+BLEU: 0.0006, ROUGE-1: 0.0785, BERT: 0.3809, CER: 2.4987, SELF-BLEU: 0.1005
+Test unseen_task done. Mel Loss: 5.6392, Clip Loss: 9.2764, MSE: 0.1834
+Mel Accuracy: 0.2156, Top 5: 0.4495, Top 10: 0.5667
+BLEU: 0.0000, ROUGE-1: 0.0751, BERT: 0.3751, CER: 2.3852, SELF-BLEU: 0.0891
+Test unseen_both done. Mel Loss: 5.6359, Clip Loss: 9.2713, MSE: 0.1828
+Mel Accuracy: 0.2167, Top 5: 0.4520, Top 10: 0.5776
+BLEU: 0.0000, ROUGE-1: 0.0780, BERT: 0.3774, CER: 2.1083, SELF-BLEU: 0.0932
+Testing done in 4.25m.
+Epoch 36 done in 15.13m. 0.11m/recording.
+
+
+Epoch 37, Loss: 8.9295, CE Loss: 0.6861
+Mel Loss: 5.4990, Clip Loss: 9.0486, MSE: 0.1746
+Mel Accuracy: 0.4556, Top 5: 0.7584, Top 10: 0.8533
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.5868, Clip Loss: 9.1846, MSE: 0.1901
+Mel Accuracy: 0.2569, Top 5: 0.5260, Top 10: 0.6499
+BLEU: 0.0003, ROUGE-1: 0.0698, BERT: 0.3816, CER: 2.5451, SELF-BLEU: 0.2368
+Test unseen_task done. Mel Loss: 5.6299, Clip Loss: 9.2613, MSE: 0.1829
+Mel Accuracy: 0.2072, Top 5: 0.4545, Top 10: 0.5809
+BLEU: 0.0000, ROUGE-1: 0.0641, BERT: 0.3750, CER: 2.5083, SELF-BLEU: 0.2262
+Test unseen_both done. Mel Loss: 5.6277, Clip Loss: 9.2575, MSE: 0.1830
+Mel Accuracy: 0.2143, Top 5: 0.4680, Top 10: 0.5985
+BLEU: 0.0000, ROUGE-1: 0.0635, BERT: 0.3747, CER: 2.3256, SELF-BLEU: 0.2365
+Testing done in 4.10m.
+Epoch 37 done in 14.64m. 0.11m/recording.
+
+
+Epoch 38, Loss: 8.9278, CE Loss: 0.6865
+Mel Loss: 5.4952, Clip Loss: 9.0427, MSE: 0.1739
+Mel Accuracy: 0.4629, Top 5: 0.7652, Top 10: 0.8576
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.5896, Clip Loss: 9.1890, MSE: 0.1905
+Mel Accuracy: 0.2482, Top 5: 0.5213, Top 10: 0.6467
+BLEU: 0.0013, ROUGE-1: 0.0842, BERT: 0.3783, CER: 2.4685, SELF-BLEU: 0.0923
+Test unseen_task done. Mel Loss: 5.6409, Clip Loss: 9.2784, MSE: 0.1845
+Mel Accuracy: 0.2226, Top 5: 0.4471, Top 10: 0.5657
+BLEU: 0.0000, ROUGE-1: 0.0771, BERT: 0.3697, CER: 2.3192, SELF-BLEU: 0.0877
+Test unseen_both done. Mel Loss: 5.6449, Clip Loss: 9.2849, MSE: 0.1848
+Mel Accuracy: 0.2118, Top 5: 0.4458, Top 10: 0.5616
+BLEU: 0.0000, ROUGE-1: 0.0797, BERT: 0.3705, CER: 2.1326, SELF-BLEU: 0.0924
+Testing done in 4.11m.
+Epoch 38 done in 14.60m. 0.11m/recording.
+
+
+New best epoch 38 with CER 2.3068 and BLEU 0.0004.
+Mel Loss: 5.4952, Clip Loss: 9.0427, MSE: 0.1739
+Mel accuracy: 0.4629, Top 5: 0.7652, Top 10: 0.8576
+
+
+Epoch 39, Loss: 8.9945, CE Loss: 0.7003
+Mel Loss: 5.4928, Clip Loss: 9.0389, MSE: 0.1737
+Mel Accuracy: 0.4677, Top 5: 0.7693, Top 10: 0.8590
+Encoder Loss: 0.0000, Cos Sim: 0.0000, MSE: 0.0000, Clip: 0.0000, MMD: 0.0000
+Encoder Accuracy: 0.0000, Top 5: 0.0000, Top 10: 0.0000
+Test unseen_subject done. Mel Loss: 5.5745, Clip Loss: 9.1653, MSE: 0.1883
+Mel Accuracy: 0.2835, Top 5: 0.5542, Top 10: 0.6759
+BLEU: 0.0004, ROUGE-1: 0.0784, BERT: 0.3810, CER: 2.4865, SELF-BLEU: 0.0806
+Test unseen_task done. Mel Loss: 5.6280, Clip Loss: 9.2581, MSE: 0.1828
+Mel Accuracy: 0.2217, Top 5: 0.4753, Top 10: 0.5895
+BLEU: 0.0000, ROUGE-1: 0.0772, BERT: 0.3749, CER: 2.3987, SELF-BLEU: 0.0714
+Test unseen_both done. Mel Loss: 5.6262, Clip Loss: 9.2554, MSE: 0.1823
+Mel Accuracy: 0.2488, Top 5: 0.4791, Top 10: 0.5948
+BLEU: 0.0000, ROUGE-1: 0.0719, BERT: 0.3749, CER: 2.1488, SELF-BLEU: 0.0772
+Testing done in 4.34m.
+Epoch 39 done in 14.89m. 0.11m/recording.
+Error in run_batch: CUDA out of memory. Tried to allocate 3.17 GiB. GPU 0 has a total capacity of 79.10 GiB of which 2.71 GiB is free. Process 765772 has 7.82 GiB memory in use. Including non-PyTorch memory, this process has 49.01 GiB memory in use. Process 2881034 has 19.54 GiB memory in use. Of the allocated memory 43.55 GiB is allocated by PyTorch, with 4.82 GiB allocated in private pools (e.g., CUDA Graphs), and 4.10 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+Error in epoch 40, Gwilliams2023 17 0 2. CUDA out of memory. Tried to allocate 3.17 GiB. GPU 0 has a total capacity of 79.10 GiB of which 2.71 GiB is free. Process 765772 has 7.82 GiB memory in use. Including non-PyTorch memory, this process has 49.01 GiB memory in use. Process 2881034 has 19.54 GiB memory in use. Of the allocated memory 43.55 GiB is allocated by PyTorch, with 4.82 GiB allocated in private pools (e.g., CUDA Graphs), and 4.10 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
