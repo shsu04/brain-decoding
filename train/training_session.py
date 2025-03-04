@@ -38,6 +38,11 @@ class TrainingSession(ABC):
             max_cache_size -- The maximum number of stimulis in cache.
         """
 
+        base_name = os.path.basename(save_path)
+        if base_name.startswith("epoch_"):
+            # Then we just take the parent directory
+            save_path = os.path.dirname(save_path)
+            
         assert len(studies) > 0, "At least one study root path must be provided"
         os.makedirs(save_path, exist_ok=True)
 

@@ -1139,8 +1139,13 @@ def load_training_session(
         low_cpu_mem_usage=True,
         use_safetensors=True,
     ).to(device)
+    whisper_model.trainable_adapter_name = "default"
 
-    peft_enc = PeftModel.from_pretrained(whisper_model, adalora_adapter_path)
+    peft_enc = PeftModel.from_pretrained(
+        whisper_model,
+        adalora_adapter_path,
+    ).to(device)
+    
     adalora_config = PeftConfig.from_pretrained(adalora_adapter_path)
     ts.model.adalora_config = adalora_config
     ts.model.decoder = peft_enc

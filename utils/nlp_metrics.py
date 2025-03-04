@@ -17,6 +17,39 @@ def basic_tokenize(text: str):
     return tokens
 
 
+def normalize_for_cer(s: str) -> str:
+    """
+    Mimics jiwer-like text normalization for CER:
+    1. Strip leading/trailing whitespace
+    2. Convert multiple spaces to a single space
+    3. (Optional) Lowercase
+    """
+    s = s.strip()
+    s = re.sub(r"\s+", " ", s)  # unify multiple spaces
+    s = s.lower()               # match your existing lowercase approach, if desired
+    return s
+
+def compute_cer(reference: str, prediction: str) -> float:
+    """
+    Computes a jiwer-like Character Error Rate (CER):
+    1. Normalize and unify spaces
+    2. Remove spaces entirely for the distance calculation (optional, but often done)
+    3. Divide edit distance by length of the reference
+    """
+    ref_norm = normalize_for_cer(reference)
+    pred_norm = normalize_for_cer(prediction)
+    
+    # Remove all spaces so "the cat" -> "thecat"
+    ref_chars = ref_norm.replace(" ", "")
+    pred_chars = pred_norm.replace(" ", "")
+
+    # Compute character-level Levenshtein distance
+    distance = Levenshtein.distance(ref_chars, pred_chars)
+
+    # Avoid division by zero
+    return distance / len(ref_chars) if len(ref_chars) > 0 else 0.0
+
+
 def compute_rouge_1_f(reference_tokens: list[str], pred_tokens: list[str]) -> float:
     """
     Computes ROUGE-1 F-measure (unigram overlap). Expects tokenized input (lists of tokens).
@@ -36,20 +69,13 @@ def compute_sentence_bleu(reference_tokens: list[str], pred_tokens: list[str]) -
     Computes the sentence-level BLEU score for a single prediction-reference pair.
     Uses nltk's sentence_bleu which computes the BLEU score for the given tokens.
     """
-    return sentence_bleu([reference_tokens], pred_tokens)
-
-
-def compute_cer(reference: str, prediction: str) -> float:
-    """
-    Computes Character Error Rate (CER) on raw strings, removing leading/trailing whitespace.
-    Measures accuracy of speech recognition.
-    CER = (Levenshtein distance) / (length of reference)
-    """
-    ref = reference.strip()
-    pred = prediction.strip()
-    distance = Levenshtein.distance(ref, pred)
-    return distance / len(ref) if len(ref) > 0 else 0.0
-
+    smoother = SmoothingFunction().method1
+    
+    return sentence_bleu(
+        [reference_tokens],
+        pred_tokens,
+        smoothing_function=smoother
+    )
 
 def compute_self_bleu(generated_texts: list[str]) -> float:
     """
