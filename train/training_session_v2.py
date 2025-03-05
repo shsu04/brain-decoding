@@ -265,7 +265,7 @@ class TrainingSessionV2(TrainingSession):
                 / 3
             )
 
-            if average_bleu > self.highest_bleu:
+            if average_bleu > self.highest_bleu or average_cer < self.lowest_cer:
                 self.lowest_cer = average_cer
                 self.highest_bleu = average_bleu
                 self.highest_epoch = epoch

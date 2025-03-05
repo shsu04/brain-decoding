@@ -3,7 +3,7 @@ import nltk  # Only needed if you want Self-BLEU per sample
 from rouge_score import rouge_scorer
 from bert_score import score
 import Levenshtein
-from nltk.translate.bleu_score import sentence_bleu
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 
 
 def basic_tokenize(text: str):
