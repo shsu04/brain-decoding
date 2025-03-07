@@ -516,7 +516,7 @@ class TrainingSessionV2(TrainingSession):
                         * encoder_mmd_loss
                     )
 
-                    total_loss = mel_loss + 0.01 * encoder_loss + 5 * ce_loss
+                    total_loss = mel_loss + encoder_loss + 5 * ce_loss
 
                     # Optimize
                     if not torch.isnan(total_loss).any():
