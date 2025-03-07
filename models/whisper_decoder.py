@@ -60,7 +60,7 @@ class WhisperDecoder(nn.Module):
 
         if adalora_config is not None:
             # AdaLora target modules
-            prefixes = ["model.decoder.layers", "model.decoder.layers"]
+            prefixes = ["model.encoder.layers", "model.decoder.layers"]
             suffixes = ["k_proj", "q_proj", "v_proj", "out_proj", "fc1", "fc2"]
 
             target_modules = self.match_modules_string(

@@ -197,17 +197,22 @@ class TrainingConfigV2(TrainingConfig):
         self.mel_alignment_objectives = config["mel_alignment_objectives"]
         self.latent_alignment_objectives = config["latent_alignment_objectives"]
         self.decode_timestamps = config["decode_timestamps"]
-        self.adalora_config = AdaLoraConfig(
-            peft_type="ADALORA",
-            task_type="SPEECH_RECOGNITION",
-            target_modules=["q_proj", "v_proj"],
-            init_r=config["adalora_init_r"],
-            target_r=config["adalora_target_r"],
-            tinit=config["adalora_tinit"],
-            tfinal=config["adalora_tfinal"],
-            deltaT=config["adalora_deltaT"],
-            lora_alpha=config["adalora_lora_alpha"],
-            lora_dropout=config["adalora_lora_dropout"],
-            total_step=config["adalora_total_step"],
-        )
+        
+        if self.use_adalora:
+            self.adalora_config = AdaLoraConfig(
+                peft_type="ADALORA",
+                task_type="SPEECH_RECOGNITION",
+                target_modules=["q_proj", "v_proj"],
+                init_r=config["adalora_init_r"],
+                target_r=config["adalora_target_r"],
+                tinit=config["adalora_tinit"],
+                tfinal=config["adalora_tfinal"],
+                deltaT=config["adalora_deltaT"],
+                lora_alpha=config["adalora_lora_alpha"],
+                lora_dropout=config["adalora_lora_dropout"],
+                total_step=config["adalora_total_step"],
+            )
+        else:
+            self.adalora_config = None
+            
         return self
