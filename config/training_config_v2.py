@@ -15,6 +15,7 @@ class TrainingConfigV2(TrainingConfig):
         self,
         brain_encoder_config: tp.Union[SimpleConvConfig, SpectralConvConfig],
         data_partition: tp.Dict[str, tp.Dict[str, tp.List[str]]],
+        use_adalora: bool = True,
         adalora_init_r: int = 8,
         adalora_target_r: int = 4,
         adalora_tinit: int = 500,
@@ -66,29 +67,41 @@ class TrainingConfigV2(TrainingConfig):
         # where each value is a list of int. Ones not specified in either lists are
         # used for training.
         self.data_partition = data_partition
+        
+        self.use_adalora = use_adalora
+        if use_adalora:
+            self.adalora_config = AdaLoraConfig(
+                peft_type="ADALORA",
+                task_type="SPEECH_RECOGNITION",
+                target_modules=["q_proj", "k_proj", "v_proj", "out_proj", "fc1", "fc2"],
+                init_r=adalora_init_r,
+                target_r=adalora_target_r,
+                tinit=adalora_tinit,
+                tfinal=adalora_tfinal,
+                deltaT=adalora_deltaT,
+                lora_alpha=adalora_lora_alpha,
+                lora_dropout=adalora_lora_dropout,
+                total_step=adalora_total_step,
+            )
 
-        self.adalora_config = AdaLoraConfig(
-            peft_type="ADALORA",
-            task_type="SPEECH_RECOGNITION",
-            target_modules=["q_proj", "k_proj", "v_proj", "out_proj", "fc1", "fc2"],
-            init_r=adalora_init_r,
-            target_r=adalora_target_r,
-            tinit=adalora_tinit,
-            tfinal=adalora_tfinal,
-            deltaT=adalora_deltaT,
-            lora_alpha=adalora_lora_alpha,
-            lora_dropout=adalora_lora_dropout,
-            total_step=adalora_total_step,
-        )
-
-        self.adalora_init_r = adalora_init_r
-        self.adalora_target_r = adalora_target_r
-        self.adalora_tinit = adalora_tinit
-        self.adalora_tfinal = adalora_tfinal
-        self.adalora_deltaT = adalora_deltaT
-        self.adalora_lora_alpha = adalora_lora_alpha
-        self.adalora_lora_dropout = adalora_lora_dropout
-        self.adalora_total_step = adalora_total_step
+            self.adalora_init_r = adalora_init_r
+            self.adalora_target_r = adalora_target_r
+            self.adalora_tinit = adalora_tinit
+            self.adalora_tfinal = adalora_tfinal
+            self.adalora_deltaT = adalora_deltaT
+            self.adalora_lora_alpha = adalora_lora_alpha
+            self.adalora_lora_dropout = adalora_lora_dropout
+            self.adalora_total_step = adalora_total_step
+        else:
+            self.adalora_config = None
+            self.adalora_init_r = None
+            self.adalora_target_r = None
+            self.adalora_tinit = None
+            self.adalora_tfinal = None
+            self.adalora_deltaT = None
+            self.adalora_lora_alpha = None
+            self.adalora_lora_dropout = None
+            self.adalora_total_step = None
 
         # Pre-processing parameters
         # Brain

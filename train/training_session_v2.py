@@ -529,13 +529,14 @@ class TrainingSessionV2(TrainingSession):
                                 self.model.parameters(), max_norm=3.0
                             )
 
-                            if self.adalora_steps >= self.config.adalora_config.tinit:
-                                self.model.decoder.update_and_allocate(self.adalora_steps)
-                                
-                            if self.adalora_steps == self.config.adalora_config.tinit:
-                                self.log_print(
-                                    f"Starting rank reallocation at recording {self.adalora_steps}."
-                                )
+                            if self.config.use_adalora:
+                                if self.adalora_steps >= self.config.adalora_config.tinit:
+                                    self.model.decoder.update_and_allocate(self.adalora_steps)
+                                    
+                                if self.adalora_steps == self.config.adalora_config.tinit:
+                                    self.log_print(
+                                        f"Starting rank reallocation at recording {self.adalora_steps}."
+                                    )
 
                             # Step
                             self.scaler.step(self.optimizer)
@@ -1070,7 +1071,9 @@ class TrainingSessionV2(TrainingSession):
                 },
                 f"{ckp_path}/brain_encoder.pt",
             )
-            self.model.decoder.save_pretrained(f"{ckp_path}/adalora_adapter")
+            
+            if self.config.use_adalora:
+                self.model.decoder.save_pretrained(f"{ckp_path}/adalora_adapter")
 
             # Save metrics
             torch.save(
@@ -1130,25 +1133,26 @@ def load_training_session(
     if ts.model.brain_module.condition_to_idx != brain_ckp["conditions"]:
         raise ValueError("Condition mismatch.")
 
-    adalora_adapter_path = os.path.join(save_path, "adalora_adapter")
-    if not os.path.exists(adalora_adapter_path):
-        raise ValueError(f"No adalora_adapter in {adalora_adapter_path}.")
+    if ts.config.use_adalora:
+        adalora_adapter_path = os.path.join(save_path, "adalora_adapter")
+        if not os.path.exists(adalora_adapter_path):
+            raise ValueError(f"No adalora_adapter in {adalora_adapter_path}.")
 
-    whisper_model = WhisperForConditionalGeneration.from_pretrained(
-        config.audio_model,
-        low_cpu_mem_usage=True,
-        use_safetensors=True,
-    ).to(device)
-    whisper_model.trainable_adapter_name = "default"
+        whisper_model = WhisperForConditionalGeneration.from_pretrained(
+            config.audio_model,
+            low_cpu_mem_usage=True,
+            use_safetensors=True,
+        ).to(device)
+        whisper_model.trainable_adapter_name = "default"
 
-    peft_enc = PeftModel.from_pretrained(
-        whisper_model,
-        adalora_adapter_path,
-    ).to(device)
-    
-    adalora_config = PeftConfig.from_pretrained(adalora_adapter_path)
-    ts.model.adalora_config = adalora_config
-    ts.model.decoder = peft_enc
+        peft_enc = PeftModel.from_pretrained(
+            whisper_model,
+            adalora_adapter_path,
+        ).to(device)
+        
+        adalora_config = PeftConfig.from_pretrained(adalora_adapter_path)
+        ts.model.adalora_config = adalora_config
+        ts.model.decoder = peft_enc
 
     metrics_path = os.path.join(save_path, "metrics.pt")
     if os.path.exists(metrics_path):

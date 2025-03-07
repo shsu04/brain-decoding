@@ -58,38 +58,48 @@ class WhisperDecoder(nn.Module):
             torch_dtype=torch_dtype,
         ).to(device)
 
-        # AdaLora target modules
-        prefixes = ["model.decoder.layers", "model.decoder.layers"]
-        suffixes = ["k_proj", "q_proj", "v_proj", "out_proj", "fc1", "fc2"]
+        if adalora_config is not None:
+            # AdaLora target modules
+            prefixes = ["model.decoder.layers", "model.decoder.layers"]
+            suffixes = ["k_proj", "q_proj", "v_proj", "out_proj", "fc1", "fc2"]
 
-        target_modules = self.match_modules_string(
-            whisper_model.named_modules(), prefixes, suffixes
-        )
-        print(
-            f"Found {len(target_modules)} target modules for AdaLora: {target_modules}"
-        )
-        self.adalora_config = adalora_config
-        self.adalora_config.target_modules = target_modules
-        self.decoder = get_peft_model(whisper_model, self.adalora_config)
+            target_modules = self.match_modules_string(
+                whisper_model.named_modules(), prefixes, suffixes
+            )
+            print(
+                f"Found {len(target_modules)} target modules for AdaLora: {target_modules}"
+            )
+            self.adalora_config = adalora_config
+            self.adalora_config.target_modules = target_modules
+            self.decoder = get_peft_model(whisper_model, self.adalora_config)
 
-        # Freeze everything except LoRA
-        self.decoder.requires_grad_(False)
-        for name, param in self.decoder.named_parameters():
-            if "lora" in name.lower():
-                param.requires_grad = True
+            # Freeze everything except LoRA
+            self.decoder.requires_grad_(False)
+            for name, param in self.decoder.named_parameters():
+                if "lora" in name.lower():
+                    param.requires_grad = True
+            self.d_model = self.decoder.base_model.config.d_model
+        else:
+            print(
+                f"AdaLora not used, loading Whisper model {self.audio_model_id} normally."
+            )
+            self.adalora_config = None
+            self.decoder = whisper_model
+            self.decoder.requires_grad_(False)
+            self.d_model = self.decoder.config.d_model
 
-        self.d_model = self.decoder.base_model.config.d_model
-        self.clip_loss = CLIPLoss(dim=self.decoder.config.d_model)
+        self.clip_loss = CLIPLoss(dim=self.d_model)
 
         self.device = device
         self.to(device)
 
+        trainable = sum(p.numel() for p in self.decoder.parameters() if p.requires_grad)
         print(
             f"{self.audio_model_id} loaded with total params = "
             f"{sum(p.numel() for p in self.decoder.parameters())}."
+            f" {trainable} are trainable."
+            
         )
-        trainable = sum(p.numel() for p in self.decoder.parameters() if p.requires_grad)
-        print(f"AdaLora has {trainable} trainable params after target module setup.")
 
         # # Simple Linear layer for studies, [B, C, T] -> [B, C', T]
         # self.gwilliams2023_linear = nn.Conv1d(
