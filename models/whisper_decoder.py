@@ -74,20 +74,21 @@ class WhisperDecoder(nn.Module):
             self.decoder = get_peft_model(whisper_model, self.adalora_config)
 
             # Freeze everything except LoRA
-            self.decoder.requires_grad_(False)
             for name, param in self.decoder.named_parameters():
                 if "lora" in name.lower():
                     param.requires_grad = True
             self.d_model = self.decoder.base_model.config.d_model
+            self.encoder = self.decoder.base_model.model.model.encoder
         else:
             print(
                 f"AdaLora not used, loading Whisper model {self.audio_model_id} normally."
             )
             self.adalora_config = None
             self.decoder = whisper_model
-            self.decoder.requires_grad_(False)
             self.d_model = self.decoder.config.d_model
-
+            self.encoder = self.decoder.model.encoder
+            
+        self.train()
         self.clip_loss = CLIPLoss(dim=self.d_model)
 
         self.device = device
@@ -108,6 +109,24 @@ class WhisperDecoder(nn.Module):
         # self.armeini2022_linear = nn.Conv1d(
         #     269, 256, kernel_size=1, stride=1, padding=0, bias=False
         # )
+
+    def train(self, mode: bool = True):
+        """
+        Freeze everything except the encoder, so the encoder is trainable and
+        the decoder is frozen. 
+        """
+        super().train(mode)
+
+        if mode:
+            self.decoder.requires_grad_(False)
+            
+            # Defaults to true, then freeze (because of early conv layers)
+            self.encoder.requires_grad_(True)
+            for i, layer in enumerate(self.encoder.layers):
+                if i >= 2:
+                    layer.requires_grad_(False)
+
+        return self
 
     def pad_channels(
         self, x: list[torch.Tensor], desired_channels: int, pad_value: float = 0.0
