@@ -60,7 +60,7 @@ class WhisperDecoder(nn.Module):
 
         if adalora_config is not None:
             # AdaLora target modules
-            prefixes = ["model.encoder.layers", "model.decoder.layers"]
+            prefixes = ["model.decoder.layers", "model.encoder.layers"]
             suffixes = ["k_proj", "q_proj", "v_proj", "out_proj", "fc1", "fc2"]
 
             target_modules = self.match_modules_string(
@@ -88,7 +88,6 @@ class WhisperDecoder(nn.Module):
             self.d_model = self.decoder.config.d_model
             self.encoder = self.decoder.model.encoder
             
-        self.train()
         self.clip_loss = CLIPLoss(dim=self.d_model)
 
         self.device = device
@@ -110,23 +109,23 @@ class WhisperDecoder(nn.Module):
         #     269, 256, kernel_size=1, stride=1, padding=0, bias=False
         # )
 
-    def train(self, mode: bool = True):
-        """
-        Freeze everything except the encoder, so the encoder is trainable and
-        the decoder is frozen. 
-        """
-        super().train(mode)
+    # def train(self, mode: bool = True):
+    #     """
+    #     Freeze everything except the encoder, so the encoder is trainable and
+    #     the decoder is frozen. 
+    #     """
+    #     super().train(mode)
 
-        if mode:
-            self.decoder.requires_grad_(False)
+    #     if mode:
+    #         self.decoder.requires_grad_(False)
             
-            # Defaults to true, then freeze (because of early conv layers)
-            self.encoder.requires_grad_(True)
-            for i, layer in enumerate(self.encoder.layers):
-                if i >= 2:
-                    layer.requires_grad_(False)
+    #         # Defaults to true, then freeze (because of early conv layers)
+    #         self.encoder.requires_grad_(True)
+    #         for i, layer in enumerate(self.encoder.layers):
+    #             if i >= 2:
+    #                 layer.requires_grad_(False)
 
-        return self
+    #     return self
 
     def pad_channels(
         self, x: list[torch.Tensor], desired_channels: int, pad_value: float = 0.0
@@ -216,6 +215,7 @@ class WhisperDecoder(nn.Module):
             decoder_attention_mask=decoder_attention_mask,
             output_hidden_states=False,  # we only want final encoder hidden state
             return_dict=True,
+            return_timestamps=False,
         )
         
         x = self.pad_truncate(x, max_frames=T)

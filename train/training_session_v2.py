@@ -68,7 +68,7 @@ class TrainingSessionV2(TrainingSession):
                 lr=config.learning_rate,
                 weight_decay=config.weight_decay,
             )
-            self.scaler = torch.GradScaler(device=device, enabled=False)
+            self.scaler = torch.GradScaler(device=device, enabled=True)
         else:
             self.optimizer = None
             self.scaler = None
