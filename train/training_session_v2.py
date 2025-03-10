@@ -828,6 +828,7 @@ class TrainingSessionV2(TrainingSession):
                         max_new_tokens=int(16 * self.config.window_size),
                         attention_mask=encoder_attention_mask,
                         return_hidden_outputs=False,
+                        return_timestamps=self.config.decode_timestamps,
                     )
                     del (
                         quantizer_metrics,

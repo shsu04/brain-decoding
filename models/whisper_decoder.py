@@ -215,7 +215,6 @@ class WhisperDecoder(nn.Module):
             decoder_attention_mask=decoder_attention_mask,
             output_hidden_states=False,  # we only want final encoder hidden state
             return_dict=True,
-            return_timestamps=False,
         )
         
         x = self.pad_truncate(x, max_frames=T)
