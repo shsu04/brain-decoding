@@ -249,20 +249,22 @@ class TrainingSessionV2(TrainingSession):
             )
             self.save(f"epoch_{epoch}")
 
+            valid_tests = [test for test in self.metrics["test"] if len(self.dataset["test"][test]) != 0]
+
             # Early stopping logic
             average_cer = (
                 sum(
                     self.metrics["test"][test][-1]["cer"]
-                    for test in self.metrics["test"]
+                    for test in self.metrics["test"] if len(self.dataset["test"][test]) != 0
                 )
-                / 3
+                / len(valid_tests)
             )
             average_bleu = (
                 sum(
                     self.metrics["test"][test][-1]["bleu"]
-                    for test in self.metrics["test"]
+                    for test in self.metrics["test"] if len(self.dataset["test"][test]) != 0
                 )
-                / 3
+                / len(valid_tests)
             )
 
             if average_bleu > self.highest_bleu or average_cer < self.lowest_cer:
@@ -271,7 +273,7 @@ class TrainingSessionV2(TrainingSession):
                 self.highest_epoch = epoch
                 self.highest_metrics = {
                     test: self.metrics["test"][test][-1]
-                    for test in self.metrics["test"].keys()
+                    for test in self.metrics["test"].keys() if len(self.dataset["test"][test]) != 0
                 }
 
                 self.log_print("\n")
@@ -673,14 +675,18 @@ class TrainingSessionV2(TrainingSession):
         test_datasets, test_sizes, test_dataloader = {}, {}, {}
 
         # Gather test set and loader
-        for test in self.dataset["test"].keys():
-
+        for test in self.dataset["test"]:
+            
+            if len(self.dataset["test"][test]) == 0:
+                continue
+            
             if len(self.dataset["test"][test]) < self.config.random_test_size:
                 test_datasets[test] = self.dataset["test"][test]
             else:
                 test_datasets[test] = random.sample(
                     self.dataset["test"][test], self.config.random_test_size
                 )
+
 
             test_sizes[test] = len(test_datasets[test])
             test_dataloader[test] = self.get_dataloader(
@@ -697,6 +703,10 @@ class TrainingSessionV2(TrainingSession):
         # Test loop
         with torch.no_grad():
             for test in test_datasets:
+                
+                if len(test_datasets[test]) == 0:
+                    continue
+                
                 all_metrics, total_batches = [], 0
                 while True:
                     batch = test_dataloader[test].get_recording()

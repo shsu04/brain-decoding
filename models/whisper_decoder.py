@@ -42,11 +42,16 @@ class WhisperDecoder(nn.Module):
             major, _ = torch.cuda.get_device_capability()
             # Ampere or beyond uses bfloat16
             if major >= 8:
+                # torch_dtype = torch.float32
                 torch_dtype = torch.bfloat16
             else:
-                torch_dtype = torch.float16
+                torch_dtype = torch.float32
         else:
             torch_dtype = torch.float32
+            
+        print(
+            f"Using {torch_dtype}"
+        )
 
         self.audio_model_id = audio_model_id
 
@@ -60,7 +65,7 @@ class WhisperDecoder(nn.Module):
 
         if adalora_config is not None:
             # AdaLora target modules
-            prefixes = ["model.decoder.layers", "model.encoder.layers"]
+            prefixes = ["model.decoder.layers", "model.encoder.layers"] # 
             suffixes = ["k_proj", "q_proj", "v_proj", "out_proj", "fc1", "fc2"]
 
             target_modules = self.match_modules_string(
@@ -87,7 +92,8 @@ class WhisperDecoder(nn.Module):
             self.decoder = whisper_model
             self.d_model = self.decoder.config.d_model
             self.encoder = self.decoder.model.encoder
-            
+        
+        # self.train(mode=True)
         self.clip_loss = CLIPLoss(dim=self.d_model)
 
         self.device = device
@@ -98,7 +104,6 @@ class WhisperDecoder(nn.Module):
             f"{self.audio_model_id} loaded with total params = "
             f"{sum(p.numel() for p in self.decoder.parameters())}."
             f" {trainable} are trainable."
-            
         )
 
         # # Simple Linear layer for studies, [B, C, T] -> [B, C', T]
@@ -118,12 +123,11 @@ class WhisperDecoder(nn.Module):
 
     #     if mode:
     #         self.decoder.requires_grad_(False)
-            
     #         # Defaults to true, then freeze (because of early conv layers)
     #         self.encoder.requires_grad_(True)
-    #         for i, layer in enumerate(self.encoder.layers):
-    #             if i >= 2:
-    #                 layer.requires_grad_(False)
+    #         # for i, layer in enumerate(self.encoder.layers):
+    #         #     if i >= 2:
+    #         #         layer.requires_grad_(False)
 
     #     return self
 
