@@ -57,7 +57,7 @@ class Armeini2022(Study):
             self.subjects_info["participant_id"].str.split("-").str[1].tolist()
         )
 
-        self.sessions = [
+        self.tasks = [
             "001",
             "002",
             "003",
@@ -70,7 +70,7 @@ class Armeini2022(Study):
             "010",
         ]
 
-        self.tasks = ["compr"]  # Not taking empty room
+        self.sessions = ["compr"]  # Not taking empty room
 
         # The only valid channel types in this study
         self.channel_names = [
@@ -357,7 +357,7 @@ class Armeini2022(Study):
                 cache_enabled=cache_enabled,
                 max_cache_size=max_cache_size,
             )
-            for _ in range(len(self.sessions))
+            for _ in range(len(self.tasks))
         ]
         self.create_recordings()
 
@@ -376,8 +376,9 @@ class Armeini2022(Study):
 
             bids_path = mne_bids.BIDSPath(
                 subject=self.subjects[subject],
-                session=self.sessions[session],
-                task=self.tasks[task],
+                # Swapped here
+                session=self.tasks[task], 
+                task=self.sessions[session],
                 datatype="meg",
                 root=self.root_dir,
             )
@@ -397,7 +398,7 @@ class Armeini2022(Study):
                     session_id=self.sessions[session],
                     task_id=self.tasks[task],
                     channel_names=copy.copy(self.channel_names),
-                    stimuli=self.stimuli[session],
+                    stimuli=self.stimuli[task],
                     power_line_freq=50,
                     type=self.batch_type,
                 )
@@ -529,7 +530,7 @@ class Armeini2022Recording(Recording):
             sound_events["end"] = end_times["onset"].values
             # stimuli/{tasknum}_{num}.wav is the path to the audio file
             sound_events["sound"] = sound_events["value"].apply(
-                lambda x: f"{self.session_id[1:]}_{x[0]}.wav"
+                lambda x: f"{self.task_id[1:]}_{x[0]}.wav"
             )
             sound_events = sound_events.drop(columns=["value"])
             results["sound"] = sound_events
