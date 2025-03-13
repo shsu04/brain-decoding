@@ -26,6 +26,8 @@ class WhisperDecoder(nn.Module):
         adalora_config: AdaLoraConfig,
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         audio_model_id: str = "openai/whisper-tiny.en",
+        linear_bool: bool = True,
+        pad_channels_bool: bool = False,
     ):
         super().__init__()
 
@@ -54,6 +56,8 @@ class WhisperDecoder(nn.Module):
         )
 
         self.audio_model_id = audio_model_id
+        self.linear_bool = linear_bool
+        self.pad_channels_bool = pad_channels_bool
 
         # Whisper model, with decoder
         whisper_model = WhisperForConditionalGeneration.from_pretrained(
@@ -95,6 +99,22 @@ class WhisperDecoder(nn.Module):
         
         # self.train(mode=True)
         self.clip_loss = CLIPLoss(dim=self.d_model)
+        
+        if self.linear_bool:
+            self.gwilliams2023_linear = nn.Conv1d(
+                in_channels=208,
+                out_channels=256,
+                kernel_size=1,
+                stride=1,
+                padding=0,
+            )
+            self.armeini2022_linear = nn.Conv1d(
+                in_channels=269,
+                out_channels=256,
+                kernel_size=1,
+                stride=1,
+                padding=0,
+            )
 
         self.device = device
         self.to(device)
@@ -130,12 +150,13 @@ class WhisperDecoder(nn.Module):
     ) -> List[torch.Tensor]:
         out = []
         for i in range(len(x)):
-            if recording[i].study_name == "gwilliams2023":
+            if recording[i].study_name == "Gwilliams2023":
                 out.append(self.gwilliams2023_linear(x[i]))
-            elif recording[i].study_name == "armeini2022":
+            elif recording[i].study_name == "Armeini2022":
                 out.append(self.armeini2022_linear(x[i]))
             else:
                 raise ValueError(f"Unknown study name: {recording[0].study_name}")
+        return out
 
     def forward(
         self,
@@ -173,10 +194,12 @@ class WhisperDecoder(nn.Module):
             )
         """
         # Option 1: Pad to the same number of channels [B, C, T] -> [B, C', T]
-        x = self.pad_channels(x, desired_channels=269, pad_value=0.0)
+        if self.pad_channels_bool:
+            x = self.pad_channels(x, desired_channels=269, pad_value=0.0)
 
         # # Option 2: Simple Linear layer [B, C, T] -> [B, C', T]
-        # x = self.linear_layer(x, recording)
+        if self.linear_bool:
+            x = self.linear_layer(x, recording)
 
         x, quantizer_metrics, channel_weights, hidden_outputs = self.brain_module(
             x, recording, conditions, mel, train, return_hidden_outputs
@@ -249,7 +272,10 @@ class WhisperDecoder(nn.Module):
         elif x is not None:
             
             # output already a list of tensors
-            x = self.pad_channels([x], desired_channels=269, pad_value=0.0)
+            if self.pad_channels_bool:
+                x = self.pad_channels([x], desired_channels=269, pad_value=0.0)
+            if self.linear_bool:
+                x = self.linear_layer([x], [recording])
 
             predicted_mel, quantizer_metrics, channel_weights, hidden_outputs = (
                 self.brain_module(
