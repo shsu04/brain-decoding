@@ -26,6 +26,7 @@ from losses.mmd import MMDLoss
 from train.training_session import TrainingSession
 from models.whisper_decoder import WhisperDecoder
 from utils.nlp_metrics import nlp_metrics
+import traceback
 
 
 device = "cuda"
@@ -592,6 +593,7 @@ class TrainingSessionV2(TrainingSession):
 
                 except Exception as ex:
                     self.log_print(f"Error in run_batch: {ex}")
+                    traceback.print_exc()
                     missed_recordings += end - start
                     missed_batches += 1
                     raise ex
@@ -908,6 +910,7 @@ class TrainingSessionV2(TrainingSession):
 
                 except Exception as ex:
                     self.log_print(f"Error in test_batch: {ex}")
+                    traceback.print_exc()
                     missed_recordings += end - start
                     missed_batches += 1
                     raise ex

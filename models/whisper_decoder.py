@@ -106,31 +106,6 @@ class WhisperDecoder(nn.Module):
             f" {trainable} are trainable."
         )
 
-        # # Simple Linear layer for studies, [B, C, T] -> [B, C', T]
-        # self.gwilliams2023_linear = nn.Conv1d(
-        #     208, 256, kernel_size=1, stride=1, padding=0, bias=False
-        # )
-        # self.armeini2022_linear = nn.Conv1d(
-        #     269, 256, kernel_size=1, stride=1, padding=0, bias=False
-        # )
-
-    # def train(self, mode: bool = True):
-    #     """
-    #     Freeze everything except the encoder, so the encoder is trainable and
-    #     the decoder is frozen. 
-    #     """
-    #     super().train(mode)
-
-    #     if mode:
-    #         self.decoder.requires_grad_(False)
-    #         # Defaults to true, then freeze (because of early conv layers)
-    #         self.encoder.requires_grad_(True)
-    #         # for i, layer in enumerate(self.encoder.layers):
-    #         #     if i >= 2:
-    #         #         layer.requires_grad_(False)
-
-    #     return self
-
     def pad_channels(
         self, x: list[torch.Tensor], desired_channels: int, pad_value: float = 0.0
     ) -> List[torch.Tensor]:
@@ -197,8 +172,8 @@ class WhisperDecoder(nn.Module):
               ce_loss: cross-entropy if labels' is provided, else None
             )
         """
-        # # Option 1: Pad to the same number of channels [B, C, T] -> [B, C', T]
-        # x = self.pad_channels(x, desired_channels=269, pad_value=0.0)
+        # Option 1: Pad to the same number of channels [B, C, T] -> [B, C', T]
+        x = self.pad_channels(x, desired_channels=269, pad_value=0.0)
 
         # # Option 2: Simple Linear layer [B, C, T] -> [B, C', T]
         # x = self.linear_layer(x, recording)
@@ -272,9 +247,13 @@ class WhisperDecoder(nn.Module):
             input_features = self.pad_truncate(mel, max_frames=3000)
             quantizer_metrics, channel_weights, hidden_outputs, T = None, None, None, mel.size(2)
         elif x is not None:
+            
+            # output already a list of tensors
+            x = self.pad_channels([x], desired_channels=269, pad_value=0.0)
+
             predicted_mel, quantizer_metrics, channel_weights, hidden_outputs = (
                 self.brain_module(
-                    [x],
+                    x,
                     [recording],
                     [conditions],
                     mel=None,
