@@ -103,14 +103,14 @@ class WhisperDecoder(nn.Module):
         if self.linear_bool:
             self.gwilliams2023_linear = nn.Conv1d(
                 in_channels=208,
-                out_channels=256,
+                out_channels=brain_module_config.in_channels,
                 kernel_size=1,
                 stride=1,
                 padding=0,
             )
             self.armeini2022_linear = nn.Conv1d(
                 in_channels=269,
-                out_channels=256,
+                out_channels=brain_module_config.in_channels,
                 kernel_size=1,
                 stride=1,
                 padding=0,

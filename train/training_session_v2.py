@@ -288,7 +288,7 @@ class TrainingSessionV2(TrainingSession):
                     f"Mel accuracy: {final_metrics['accuracy']:.4f}, Top 5: {final_metrics['top_5_accuracy']:.4f}, Top 10: {final_metrics['top_10_accuracy']:.4f}"
                 )
 
-            if epoch - self.highest_epoch > 10 and epoch > 10:
+            if epoch - self.highest_epoch > 10 and self.highest_epoch > 10:
                 self.log_print(
                     f"Early stopping at epoch {epoch}. Highest metrics at epoch {self.highest_epoch}."
                 )
