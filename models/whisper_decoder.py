@@ -26,7 +26,7 @@ class WhisperDecoder(nn.Module):
         adalora_config: AdaLoraConfig,
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         audio_model_id: str = "openai/whisper-tiny.en",
-        linear_bool: bool = True,
+        linear_bool: bool = False,
         pad_channels_bool: bool = False,
     ):
         super().__init__()
@@ -271,11 +271,13 @@ class WhisperDecoder(nn.Module):
             quantizer_metrics, channel_weights, hidden_outputs, T = None, None, None, mel.size(2)
         elif x is not None:
             
+            x = [x]
+            
             # output already a list of tensors
             if self.pad_channels_bool:
-                x = self.pad_channels([x], desired_channels=269, pad_value=0.0)
+                x = self.pad_channels(x, desired_channels=269, pad_value=0.0)
             if self.linear_bool:
-                x = self.linear_layer([x], [recording])
+                x = self.linear_layer(x, [recording])
 
             predicted_mel, quantizer_metrics, channel_weights, hidden_outputs = (
                 self.brain_module(
