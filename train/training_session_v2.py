@@ -1145,6 +1145,15 @@ def load_training_session(
 
     ts.model.brain_module.load_state_dict(brain_ckp["brain_encoder"])
     if ts.model.brain_module.condition_to_idx != brain_ckp["conditions"]:
+        print(
+            'Condition mismatch!'
+        )
+        print(
+            f'ts.model.brain_module.condition_to_idx: {ts.model.brain_module.condition_to_idx}'
+        )
+        print(
+            f'brain_ckp["conditions"]: {brain_ckp["conditions"]}'
+        )
         raise ValueError("Condition mismatch.")
 
     if ts.config.use_adalora:
