@@ -262,7 +262,7 @@ def compute_sha256(filepath):
 
 
 def verify_manifest(manifest_path, root_dir="."):
-    
+
     if not os.path.isfile(manifest_path):
         print(f"Manifest file not found: {manifest_path}")
         return
@@ -282,13 +282,13 @@ def verify_manifest(manifest_path, root_dir="."):
             filename = filename.strip()
             file_path = os.path.join(root_dir, filename)
             entries.append((file_path, recorded_hash, filename))
-            
+
     print(f"Found {len(entries)} entries in the manifest. Computing checksums...")
 
     # Step 2: Use a process pool to compute checksums in parallel with a progress bar
     with concurrent.futures.ProcessPoolExecutor() as executor:
         future_to_entry = {executor.submit(compute_sha256, e[0]): e for e in entries}
-        
+
         # Create a progress bar with total number of futures
         with tqdm.tqdm(total=len(future_to_entry), desc="Checksums") as pbar:
             for future in concurrent.futures.as_completed(future_to_entry):
