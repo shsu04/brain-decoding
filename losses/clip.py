@@ -11,6 +11,8 @@ class CLIPLoss(nn.Module):
         self.linear_x1 = nn.Conv1d(in_channels=dim, out_channels=dim, kernel_size=1)
         self.linear_x2 = nn.Conv1d(in_channels=dim, out_channels=dim, kernel_size=1)
 
+        print("Using symmetric loss")
+
     def forward(
         self,
         x_1: torch.Tensor,
@@ -50,9 +52,18 @@ class CLIPLoss(nn.Module):
         )  # Diagonal targets
         segment_level_probs = F.log_softmax(segment_level_logits, dim=-1)
 
-        clip_loss = F.cross_entropy(
-            segment_level_probs, segment_level_targets, reduction="mean"
-        )
+        # Symmetric loss
+        clip_loss = (
+            F.cross_entropy(
+                segment_level_probs, segment_level_targets, reduction="mean"
+            )
+            + F.cross_entropy(
+                segment_level_probs.transpose(0, 1),
+                segment_level_targets,
+                reduction="mean",
+            )
+        ) / 2.0
+
         # Time step level, optional
         if not segment_level:
             # # Shorten time steps for efficiency since clip scales quadratically
@@ -123,8 +134,12 @@ class CLIPLoss(nn.Module):
             # Add with segment level loss
             clip_loss = (
                 F.cross_entropy(time_level_probs, time_level_targets, reduction="mean")
-                + 0.1 * clip_loss
-            )
+                + F.cross_entropy(
+                    time_level_probs.transpose(0, 1),
+                    time_level_targets,
+                    reduction="mean",
+                )
+            ) / 2.0 + 0.1 * clip_loss
 
         return {
             "loss": clip_loss,  # Still on device
