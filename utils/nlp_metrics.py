@@ -26,8 +26,9 @@ def normalize_for_cer(s: str) -> str:
     """
     s = s.strip()
     s = re.sub(r"\s+", " ", s)  # unify multiple spaces
-    s = s.lower()               # match your existing lowercase approach, if desired
+    s = s.lower()  # match your existing lowercase approach, if desired
     return s
+
 
 def compute_cer(reference: str, prediction: str) -> float:
     """
@@ -38,7 +39,7 @@ def compute_cer(reference: str, prediction: str) -> float:
     """
     ref_norm = normalize_for_cer(reference)
     pred_norm = normalize_for_cer(prediction)
-    
+
     # Remove all spaces so "the cat" -> "thecat"
     ref_chars = ref_norm.replace(" ", "")
     pred_chars = pred_norm.replace(" ", "")
@@ -70,12 +71,9 @@ def compute_sentence_bleu(reference_tokens: list[str], pred_tokens: list[str]) -
     Uses nltk's sentence_bleu which computes the BLEU score for the given tokens.
     """
     smoother = SmoothingFunction().method1
-    
-    return sentence_bleu(
-        [reference_tokens],
-        pred_tokens,
-        smoothing_function=smoother
-    )
+
+    return sentence_bleu([reference_tokens], pred_tokens, smoothing_function=smoother)
+
 
 def compute_self_bleu(generated_texts: list[str]) -> float:
     """
@@ -94,6 +92,7 @@ def compute_self_bleu(generated_texts: list[str]) -> float:
         all_scores.append(avg_score)
     return sum(all_scores) / len(all_scores) if all_scores else 0
 
+
 def nlp_metrics(
     predictions: list[str],
     references: list[str],
@@ -111,7 +110,7 @@ def nlp_metrics(
 
     Before any metric is computed, this function filters out any prediction-reference pair
     where either the prediction or the reference is an empty string.
-    
+
     :param predictions: List of predicted strings of length N.
     :param references: List of reference strings of length N.
     :param use_normalization: If True, applies basic_tokenize for metrics that benefit from it.
@@ -125,7 +124,11 @@ def nlp_metrics(
     :return: Dictionary with average metric values.
     """
     # Filter out pairs with empty predictions or references
-    filtered = [(p, r) for p, r in zip(predictions, references) if p.strip() != "" and r.strip() != ""]
+    filtered = [
+        (p, r)
+        for p, r in zip(predictions, references)
+        if p.strip() != "" and r.strip() != ""
+    ]
     if not filtered:
         return {
             "bleu": 0,
@@ -164,11 +167,14 @@ def nlp_metrics(
     if use_rouge_f:
         for ref_toks, pred_toks in zip(tokenized_refs, tokenized_preds):
             rouge_f_scores.append(compute_rouge_1_f(ref_toks, pred_toks))
-        metrics["rouge_f"] = sum(rouge_f_scores) / len(rouge_f_scores) if rouge_f_scores else 0
+        metrics["rouge_f"] = (
+            sum(rouge_f_scores) / len(rouge_f_scores) if rouge_f_scores else 0
+        )
 
     # 3) BERTScore in one batch (avoids per-sample overhead)
     if use_bert_score:
         from bert_score import score  # in case not imported yet
+
         P, R, F1 = score(
             cands=predictions,
             refs=references,
