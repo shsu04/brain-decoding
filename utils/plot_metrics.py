@@ -316,7 +316,7 @@ def display_best_performance_barchart(
             "font.size": 18,
             "axes.titlesize": 20,
             "axes.labelsize": 18,
-            "xtick.labelsize": 12,
+            "xtick.labelsize": 14,
             "ytick.labelsize": 16,
             "legend.fontsize": 18,
         }
@@ -379,12 +379,13 @@ def display_best_performance_barchart(
         ax.set_title(pretty_name)
         ax.set_ylabel(pretty_name)
 
-    #     # Legend on the last plot
-    #     if i == n_metrics - 1:
-    #         ax.legend(study_titles, loc="best", bbox_to_anchor=(1.0, 1.0))
+        # # Legend on the last plot
+        # if i == n_metrics - 1:
+        #     ax.legend(study_titles, loc="best", bbox_to_anchor=(1.0, 1.0))
 
     # plt.tight_layout()
     # plt.show()
+
     rows_desired = 3
     handles, labels = axes[0].get_legend_handles_labels()
 
@@ -396,7 +397,7 @@ def display_best_performance_barchart(
         handles,
         labels,
         loc="lower center",
-        bbox_to_anchor=(0.5, -0.2),  # move up/down if clipped
+        bbox_to_anchor=(0.5, -0.3),  # move up/down if clipped
         ncol=ncols,
         frameon=False,
         fontsize=16,
